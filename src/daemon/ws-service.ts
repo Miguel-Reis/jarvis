@@ -20,6 +20,7 @@ import { createCommitment, updateCommitmentStatus, updateCommitmentAssignee } fr
 import { WebSocketServer, type WSMessage } from '../comms/websocket.ts';
 import { StreamRelay } from '../comms/streaming.ts';
 import { getOrCreateConversation, addMessage } from '../vault/conversations.ts';
+import { createThread, saveMessage as saveThreadMessage, updateThreadTitle, getThread } from '../vault/threads.ts';
 import { maybeCreateUserProfileFollowupPrompt, recordUserProfileTurn } from '../user/profile-followup.ts';
 
 type VoiceSession = {
@@ -111,7 +112,7 @@ export class WebSocketService implements Service {
    * Register API route handlers on the underlying WebSocket server.
    * Must be called before start().
    */
-  setApiRoutes(routes: Record<string, any>): void {
+  setApiRoutes(routes: Record<string, Record<string, (req: Request) => Response | Promise<Response>>>): void {
     this.wsServer.setApiRoutes(routes);
   }
 
@@ -523,11 +524,13 @@ export class WebSocketService implements Service {
   /**
    * Handle chat messages — stream response via StreamRelay.
    * Auto-creates a task for non-trivial messages so the task board tracks agent work.
+   * Supports optional thread_id for persistent threaded chat sessions.
    */
   private async handleChat(msg: WSMessage, ws?: ServerWebSocket<unknown>): Promise<WSMessage | void> {
-    const payload = msg.payload as { text?: string; channel?: string; projectId?: string };
+    const payload = msg.payload as { text?: string; channel?: string; projectId?: string; thread_id?: string };
     const text = payload?.text;
     const projectId = payload?.projectId ?? null;
+    const incomingThreadId = payload?.thread_id ?? null;
 
     if (!text) {
       return {
@@ -610,11 +613,36 @@ If the user wants to create a new project, tell them to use the Site Builder pag
       }
     }
 
-    // Persist user message
+    // Persist user message — use explicit thread when provided, else fall back to legacy per-channel conversation
     try {
-      const conversation = getOrCreateConversation(channel);
+      let conversationId: string;
+
+      if (incomingThreadId) {
+        // Validate the thread exists
+        const thread = getThread(incomingThreadId);
+        if (!thread) {
+          return {
+            type: 'error',
+            payload: { message: `Thread not found: ${incomingThreadId}` },
+            id: requestId,
+            timestamp: Date.now(),
+          };
+        }
+        conversationId = incomingThreadId;
+        // Auto-title thread from first user message if untitled
+        if (!thread.title) {
+          const autoTitle = text.length > 80 ? text.slice(0, 77) + '…' : text;
+          updateThreadTitle(incomingThreadId, autoTitle);
+        }
+        saveThreadMessage(conversationId, 'user', text);
+      } else {
+        // Legacy: get-or-create the rolling conversation for the channel
+        const conversation = getOrCreateConversation(channel);
+        conversationId = conversation.id;
+        addMessage(conversationId, { role: 'user', content: text });
+      }
+
       recordUserProfileTurn(text);
-      addMessage(conversation.id, { role: 'user', content: text });
 
       // Set default cwd for general tools (run_command, read_file, etc.)
       // so they operate in the project directory during site builder conversations
@@ -706,13 +734,21 @@ If the user wants to create a new project, tell them to use the Site Builder pag
         // Otherwise speakNextSentence will send tts_end when queue drains
       }
 
-      // Persist assistant response
-      addMessage(conversation.id, { role: 'assistant', content: fullText });
+      // Persist assistant response using the same thread-aware path
+      if (incomingThreadId) {
+        saveThreadMessage(conversationId, 'assistant', fullText);
+      } else {
+        addMessage(conversationId, { role: 'assistant', content: fullText });
+      }
 
       const followupPrompt = maybeCreateUserProfileFollowupPrompt();
       if (followupPrompt) {
         this.broadcastAssistantMessage(followupPrompt);
-        addMessage(conversation.id, { role: 'assistant', content: followupPrompt });
+        if (incomingThreadId) {
+          saveThreadMessage(conversationId, 'assistant', followupPrompt);
+        } else {
+          addMessage(conversationId, { role: 'assistant', content: followupPrompt });
+        }
       }
 
       // Mark task as completed

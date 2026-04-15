@@ -22,13 +22,22 @@ export class TerminalExecutor {
     this.defaultTimeout = opts?.timeout ?? 30000;
   }
 
+  /** Build the shell invocation args for a command string, handling PowerShell vs POSIX shells. */
+  private buildCmd(command: string): string[] {
+    const shell = this.shell.toLowerCase();
+    const isPowerShell = shell.includes('powershell') || shell.includes('pwsh');
+    return isPowerShell
+      ? [this.shell, '-NoProfile', '-Command', command]
+      : [this.shell, '-c', command];
+  }
+
   async execute(command: string, opts?: ExecuteOptions): Promise<CommandResult> {
     const startTime = Date.now();
     const timeout = opts?.timeout ?? this.defaultTimeout;
 
     try {
       const proc = spawn({
-        cmd: [this.shell, '-c', command],
+        cmd: this.buildCmd(command),
         cwd: opts?.cwd,
         env: { ...process.env, ...opts?.env },
         stdout: 'pipe',
@@ -68,7 +77,7 @@ export class TerminalExecutor {
 
   async *stream(command: string, opts?: { cwd?: string; env?: Record<string, string> }): AsyncIterable<string> {
     const proc = spawn({
-      cmd: [this.shell, '-c', command],
+      cmd: this.buildCmd(command),
       cwd: opts?.cwd,
       env: { ...process.env, ...opts?.env },
       stdout: 'pipe',

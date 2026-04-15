@@ -11,32 +11,27 @@ function expandTilde(filepath: string): string {
   return filepath;
 }
 
-function deepMerge(target: any, source: any): any {
-  if (!source || typeof source !== 'object') {
+type PlainObject = Record<string, unknown>;
+
+function isPlainObject(v: unknown): v is PlainObject {
+  return !!v && typeof v === 'object' && !Array.isArray(v);
+}
+
+function deepMerge(target: unknown, source: unknown): unknown {
+  if (!isPlainObject(source)) {
     return source !== undefined ? source : target;
   }
 
-  if (Array.isArray(source)) {
+  if (!isPlainObject(target)) {
     return source;
   }
 
-  const result = { ...target };
+  const result: PlainObject = { ...target };
 
-  for (const key in source) {
-    if (source.hasOwnProperty(key)) {
-      if (
-        source[key] &&
-        typeof source[key] === 'object' &&
-        !Array.isArray(source[key]) &&
-        target[key] &&
-        typeof target[key] === 'object' &&
-        !Array.isArray(target[key])
-      ) {
-        result[key] = deepMerge(target[key], source[key]);
-      } else {
-        result[key] = source[key];
-      }
-    }
+  for (const key of Object.keys(source)) {
+    result[key] = isPlainObject(source[key]) && isPlainObject(target[key])
+      ? deepMerge(target[key], source[key])
+      : source[key];
   }
 
   return result;

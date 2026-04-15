@@ -26,6 +26,16 @@ import { findRelationships, getEntityRelationships } from '../vault/relationship
 import { getDb } from '../vault/schema.ts';
 import { findCommitments, getUpcoming, createCommitment, getCommitment, updateCommitmentStatus, reorderCommitments } from '../vault/commitments.ts';
 import { getOrCreateConversation, getMessages, getRecentConversation } from '../vault/conversations.ts';
+import {
+  createThread,
+  saveMessage as saveThreadMessage,
+  getThreadContext,
+  listThreads,
+  getThread,
+  updateThreadTitle,
+  deleteThread,
+  searchGlobalMemory,
+} from '../vault/threads.ts';
 import { getRecentObservations } from '../vault/observations.ts';
 import { getPersonality } from '../personality/model.ts';
 import { clearUserProfile, getUserProfile, saveUserProfile } from '../vault/user-profile.ts';
@@ -498,6 +508,85 @@ export function createApiRoutes(ctx: ApiContext): Record<string, unknown> {
         const limit = parseInt(params.get('limit') ?? '100') || 100;
         const messages = getMessages(req.params.id, { limit });
         return json(messages);
+      },
+    },
+
+    // --- Threads (Persistent Threaded Chat) ---
+
+    '/api/vault/threads': {
+      /** List all threads, newest first. */
+      GET: (req: Request) => {
+        const params = getSearchParams(req);
+        const limit = Math.min(parseInt(params.get('limit') ?? '100') || 100, 500);
+        return json(listThreads(limit));
+      },
+
+      /** Create a new thread. Body: { title?: string } */
+      POST: async (req: Request) => {
+        let title: string | undefined;
+        try {
+          const body = await req.json() as { title?: unknown };
+          if (typeof body.title === 'string' && body.title.trim()) {
+            title = body.title.trim();
+          }
+        } catch { /* empty body — title is optional */ }
+        const thread = createThread(title);
+        return json(thread, 201);
+      },
+    },
+
+    '/api/vault/threads/search': {
+      /** Search messages across all threads. Query: ?q=keyword */
+      GET: (req: Request) => {
+        const params = getSearchParams(req);
+        const q = params.get('q')?.trim();
+        if (!q) return error('Missing query parameter: q');
+        return json(searchGlobalMemory(q));
+      },
+    },
+
+    '/api/vault/threads/:id': {
+      /** Get a single thread's metadata. */
+      GET: (req: Request & { params: { id: string } }) => {
+        const thread = getThread(req.params.id);
+        if (!thread) return error('Thread not found', 404);
+        return json(thread);
+      },
+
+      /** Update thread title. Body: { title: string } */
+      PATCH: async (req: Request & { params: { id: string } }) => {
+        let body: { title?: unknown };
+        try { body = await req.json() as { title?: unknown }; } catch { return error('Invalid JSON'); }
+        if (typeof body.title !== 'string' || !body.title.trim()) return error('title is required');
+        updateThreadTitle(req.params.id, body.title.trim());
+        return json({ ok: true });
+      },
+
+      /** Delete a thread and all its messages. */
+      DELETE: (req: Request & { params: { id: string } }) => {
+        const thread = getThread(req.params.id);
+        if (!thread) return error('Thread not found', 404);
+        deleteThread(req.params.id);
+        return json({ ok: true });
+      },
+    },
+
+    '/api/vault/threads/:id/messages': {
+      /** Get messages for a thread (context window). */
+      GET: (req: Request & { params: { id: string } }) => {
+        const params = getSearchParams(req);
+        const limit = Math.min(parseInt(params.get('limit') ?? '50') || 50, 200);
+        return json(getThreadContext(req.params.id, limit));
+      },
+
+      /** Append a message to a thread. Body: { role: 'user'|'assistant'|'system', content: string } */
+      POST: async (req: Request & { params: { id: string } }) => {
+        let body: { role?: unknown; content?: unknown };
+        try { body = await req.json() as { role?: unknown; content?: unknown }; } catch { return error('Invalid JSON'); }
+        if (!['user', 'assistant', 'system'].includes(body.role as string)) return error('Invalid role');
+        if (typeof body.content !== 'string' || !body.content.trim()) return error('content is required');
+        const msg = saveThreadMessage(req.params.id, body.role as 'user' | 'assistant' | 'system', body.content.trim());
+        return json(msg, 201);
       },
     },
 

@@ -260,6 +260,9 @@ function createTables(db: Database): void {
     CREATE INDEX IF NOT EXISTS idx_conversations_channel ON conversations(channel)
   `);
 
+  // Migration: add title column for threaded chat display
+  try { db.run('ALTER TABLE conversations ADD COLUMN title TEXT'); } catch { /* column already exists */ }
+
   // Conversation messages table: individual chat messages
   db.run(`
     CREATE TABLE IF NOT EXISTS conversation_messages (

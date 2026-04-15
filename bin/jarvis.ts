@@ -76,12 +76,9 @@ ${c.bold('Examples:')}
 `);
 }
 
+/** No-op: Windows is now a supported host platform via Bun for Windows. */
 function assertSupportedPlatform(): void {
-  if (process.platform !== 'win32') return;
-  console.error(c.red('Native Windows installs are not supported for the JARVIS daemon.'));
-  console.error(c.dim('Use WSL2 for the Bun install, or run JARVIS with Docker on Windows.'));
-  console.error(c.dim('The Windows sidecar is still supported separately.'));
-  process.exit(1);
+  // All platforms (Linux, macOS, Windows) are supported.
 }
 
 async function cmdStart(args: string[]): Promise<void> {
@@ -289,26 +286,45 @@ function cmdLogs(args: string[]): void {
   let lines = 50;
   const nIdx = args.indexOf('-n') !== -1 ? args.indexOf('-n') : args.indexOf('--lines');
   if (nIdx !== -1 && args[nIdx + 1]) {
-    const n = parseInt(args[nIdx + 1], 10);
+    const n = parseInt(args[nIdx + 1]!, 10);
     if (!isNaN(n) && n > 0) lines = n;
   }
 
   console.log(c.dim(`Log file: ${logPath}\n`));
 
+  const isWindows = process.platform === 'win32';
+
   if (follow) {
-    // tail -f equivalent
-    const tailProc = Bun.spawn(['tail', '-f', '-n', String(lines), logPath], {
-      stdio: ['ignore', 'inherit', 'inherit'],
-    });
+    let tailProc: ReturnType<typeof Bun.spawn>;
+    if (isWindows) {
+      // PowerShell equivalent of tail -f
+      tailProc = Bun.spawn(
+        ['powershell.exe', '-NoProfile', '-Command',
+          `Get-Content -Path "${logPath}" -Tail ${lines} -Wait`],
+        { stdio: ['ignore', 'inherit', 'inherit'] }
+      );
+    } else {
+      tailProc = Bun.spawn(['tail', '-f', '-n', String(lines), logPath], {
+        stdio: ['ignore', 'inherit', 'inherit'],
+      });
+    }
 
     process.on('SIGINT', () => {
       tailProc.kill();
       process.exit(0);
     });
   } else {
-    // Just show last N lines
-    const tailProc = Bun.spawnSync(['tail', '-n', String(lines), logPath]);
-    process.stdout.write(tailProc.stdout);
+    if (isWindows) {
+      const result = Bun.spawnSync(
+        ['powershell.exe', '-NoProfile', '-Command',
+          `Get-Content -Path "${logPath}" -Tail ${lines}`],
+        { stdout: 'pipe' }
+      );
+      process.stdout.write(result.stdout);
+    } else {
+      const tailProc = Bun.spawnSync(['tail', '-n', String(lines), logPath]);
+      process.stdout.write(tailProc.stdout);
+    }
   }
 }
 
@@ -395,16 +411,19 @@ function openDashboard(port: number): void {
     const platform = process.platform;
     if (platform === 'darwin') {
       Bun.spawn(['open', url], { stdio: ['ignore', 'ignore', 'ignore'] });
+    } else if (platform === 'win32') {
+      // Windows native: use the built-in `start` command via cmd.exe
+      Bun.spawn(['cmd.exe', '/c', `start "" "${url}"`], { stdio: ['ignore', 'ignore', 'ignore'] });
     } else {
-      // Check WSL first
-      const { readFileSync } = require('node:fs');
+      // Linux — check WSL first
       try {
+        const { readFileSync } = require('node:fs');
         const version = readFileSync('/proc/version', 'utf-8');
         if (version.toLowerCase().includes('microsoft')) {
           Bun.spawn(['wslview', url], { stdio: ['ignore', 'ignore', 'ignore'] });
           return;
         }
-      } catch {}
+      } catch { /* not WSL */ }
       // Regular Linux
       Bun.spawn(['xdg-open', url], { stdio: ['ignore', 'ignore', 'ignore'] });
     }

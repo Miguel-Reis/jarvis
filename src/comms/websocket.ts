@@ -150,6 +150,7 @@ export class WebSocketServer {
 
     this.server = Bun.serve<{ sidecar_id?: string; proxy_target?: string; _proxyUpstream?: WebSocket }>({
       port: this.port,
+      hostname: '127.0.0.1', // bind only to loopback — sidecar and UI connect via localhost; avoids Windows firewall prompts
       idleTimeout: 30, // seconds — prevent timeout during heavy processing (OCR, PowerShell)
 
       async fetch(req, server) {
