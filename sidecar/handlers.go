@@ -186,12 +186,24 @@ func makeWriteFileHandler(cfg *SidecarConfig) RPCHandler {
 		}
 
 		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("cannot create directory %s: %w", filepath.Dir(path), err)
 		}
-		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-			return nil, err
+
+		f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+		if err != nil {
+			return nil, fmt.Errorf("cannot open file %s: %w", path, err)
 		}
-		return &RPCResult{Result: map[string]any{"success": true}}, nil
+		defer f.Close()
+
+		if _, err := f.WriteString(content); err != nil {
+			return nil, fmt.Errorf("write failed for %s: %w", path, err)
+		}
+
+		if err := f.Sync(); err != nil {
+			return nil, fmt.Errorf("sync failed for %s: %w", path, err)
+		}
+
+		return &RPCResult{Result: map[string]any{"success": true, "path": path, "bytes": len(content)}}, nil
 	}
 }
 

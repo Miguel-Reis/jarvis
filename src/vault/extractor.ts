@@ -143,8 +143,9 @@ export async function extractAndStore(
   }
 
   // Skip extraction for very short exchanges that are unlikely to contain new knowledge
+  // (e.g. single-word acks like "ok" / "yes" — not realistic conversations)
   const combinedLength = userMessage.length + assistantResponse.length;
-  if (combinedLength < 80) {
+  if (combinedLength < 20) {
     return { entities: [], facts: [], relationships: [], commitments: [] };
   }
 

@@ -50,11 +50,25 @@ export class SidecarManager implements Service {
   private sidecarConnections = new Map<string, SidecarConnection>();
   private progressListeners = new Set<(sidecarId: string, rpcId: string, progress: number, message?: string) => void>();
   private eventListeners = new Set<(sidecarId: string, event: SidecarEvent) => void>();
+  private detachedErrorCallback: ((message: string, rpcId: string) => void) | null = null;
+  private detachedCompleteCallback: ((rpcId: string) => void) | null = null;
 
   constructor(dataDir: string) {
     this.dataDir = dataDir;
     this.scheduler = new EventScheduler();
     this.rpcTracker = new RPCTracker();
+  }
+
+  /**
+   * Wire callbacks so the WS layer can surface sidecar errors to the client.
+   * Called once from the daemon after the WS service is ready.
+   */
+  setBroadcastCallbacks(
+    onError: (message: string, rpcId: string) => void,
+    onComplete: (rpcId: string) => void,
+  ): void {
+    this.detachedErrorCallback = onError;
+    this.detachedCompleteCallback = onComplete;
   }
 
   /**
@@ -109,8 +123,13 @@ export class SidecarManager implements Service {
       this.rpcTracker.onDetachedComplete((rpcId, result, error) => {
         if (error) {
           console.warn(`[SidecarManager] Detached RPC ${rpcId} failed:`, error.message);
+          this.detachedErrorCallback?.(
+            `Background sidecar operation failed: ${error.message}`,
+            rpcId,
+          );
         } else {
           console.log(`[SidecarManager] Detached RPC ${rpcId} completed`);
+          this.detachedCompleteCallback?.(rpcId);
         }
       });
 

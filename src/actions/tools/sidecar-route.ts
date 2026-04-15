@@ -166,7 +166,7 @@ export async function routeToSidecar(
     const result = await sidecarManager.dispatchRPC(sidecar.id, method, params);
 
     if (result === 'detached') {
-      return `Task dispatched to "${sidecar.name}" and running in the background.`;
+      return `[Pending] Operation sent to "${sidecar.name}" — the sidecar is still processing. Do NOT assume the file was written yet. Verify the result exists before proceeding.`;
     }
 
     return typeof result === 'string' ? result : JSON.stringify(result, null, 2);

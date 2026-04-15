@@ -39,42 +39,42 @@ test('extractSearchTerms handles empty input', () => {
 
 // --- retrieveForMessage ---
 
-test('retrieveForMessage finds entities by name', () => {
+test('retrieveForMessage finds entities by name', async () => {
   createEntity('person', 'John', { role: 'engineer' });
   createEntity('person', 'Anna');
 
-  const profiles = retrieveForMessage('Tell me about John');
+  const profiles = await retrieveForMessage('Tell me about John');
   expect(profiles.length).toBe(1);
   expect(profiles[0]!.entity.name).toBe('John');
 });
 
-test('retrieveForMessage finds entities via fact objects', () => {
+test('retrieveForMessage finds entities via fact objects', async () => {
   const john = createEntity('person', 'John');
   createFact(john.id, 'works_at', 'Google');
 
   // Search for "Google" — should find John because he has a fact with object "Google"
-  const profiles = retrieveForMessage('What do you know about Google?');
+  const profiles = await retrieveForMessage('What do you know about Google?');
   expect(profiles.length).toBeGreaterThanOrEqual(1);
   const names = profiles.map(p => p.entity.name);
   expect(names).toContain('John');
 });
 
-test('retrieveForMessage includes facts for matched entities', () => {
+test('retrieveForMessage includes facts for matched entities', async () => {
   const john = createEntity('person', 'John');
   createFact(john.id, 'works_at', 'Google');
   createFact(john.id, 'birthday', 'March 15');
 
-  const profiles = retrieveForMessage('Tell me about John');
+  const profiles = await retrieveForMessage('Tell me about John');
   expect(profiles.length).toBe(1);
   expect(profiles[0]!.facts.length).toBe(2);
 });
 
-test('retrieveForMessage includes relationships', () => {
+test('retrieveForMessage includes relationships', async () => {
   const john = createEntity('person', 'John');
   const google = createEntity('concept', 'Google');
   createRelationship(john.id, google.id, 'works_at');
 
-  const profiles = retrieveForMessage('What about John?');
+  const profiles = await retrieveForMessage('What about John?');
   expect(profiles.length).toBeGreaterThanOrEqual(1);
 
   const johnProfile = profiles.find(p => p.entity.name === 'John');
@@ -82,19 +82,19 @@ test('retrieveForMessage includes relationships', () => {
   expect(johnProfile!.relationships.length).toBeGreaterThanOrEqual(1);
 });
 
-test('retrieveForMessage returns empty for irrelevant query', () => {
+test('retrieveForMessage returns empty for irrelevant query', async () => {
   createEntity('person', 'John');
-  const profiles = retrieveForMessage('the is a');
+  const profiles = await retrieveForMessage('the is a');
   expect(profiles.length).toBe(0);
 });
 
-test('retrieveForMessage includes current user profile for self queries', () => {
+test('retrieveForMessage includes current user profile for self queries', async () => {
   saveUserProfile({
     preferred_name: 'Alex',
     interests: 'AI, cars',
   });
 
-  const profiles = retrieveForMessage('What do you know about me?');
+  const profiles = await retrieveForMessage('What do you know about me?');
   expect(profiles.length).toBeGreaterThanOrEqual(1);
   expect(profiles[0]!.entity.name).toBe('Alex');
   expect(profiles[0]!.facts.some((fact) => fact.predicate === 'interests' && fact.object === 'AI, cars')).toBe(true);
@@ -102,11 +102,11 @@ test('retrieveForMessage includes current user profile for self queries', () => 
 
 // --- formatKnowledgeContext ---
 
-test('formatKnowledgeContext formats entity with facts', () => {
+test('formatKnowledgeContext formats entity with facts', async () => {
   const john = createEntity('person', 'John');
   createFact(john.id, 'works_at', 'Google');
 
-  const profiles = retrieveForMessage('John');
+  const profiles = await retrieveForMessage('John');
   const context = formatKnowledgeContext(profiles);
 
   expect(context).toContain('**John** (person)');

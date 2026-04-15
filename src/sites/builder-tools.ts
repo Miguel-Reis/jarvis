@@ -5,6 +5,7 @@
  * These are scoped to the active project directory.
  */
 
+import { platform } from 'node:os';
 import type { ToolDefinition } from '../actions/tools/registry.ts';
 import type { ProjectManager } from './project-manager.ts';
 import type { GitManager } from './git-manager.ts';
@@ -125,7 +126,10 @@ export function createSiteBuilderTools(
         }
 
         try {
-          const proc = Bun.spawn(['sh', '-c', cmd], {
+          const shellCmd = platform() === 'win32'
+            ? ['cmd.exe', '/C', cmd]
+            : ['sh', '-c', cmd];
+          const proc = Bun.spawn(shellCmd, {
             cwd: projectPath,
             stdout: 'pipe',
             stderr: 'pipe',

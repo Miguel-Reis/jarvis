@@ -6,6 +6,7 @@
  */
 
 import { watch, type FSWatcher } from 'node:fs';
+import { join } from 'node:path';
 import type { Observer, ObserverEvent, ObserverEventHandler } from './index';
 
 type DebounceEntry = {
@@ -87,7 +88,7 @@ export class FileWatcher implements Observer {
       return;
     }
 
-    const fullPath = `${basePath}/${filename}`;
+    const fullPath = join(basePath, filename);
     const now = Date.now();
 
     // Debounce: skip if same file changed within debounceMs

@@ -5,11 +5,11 @@
  * run_command, read_file, write_file, list_directory
  */
 
-import { readFileSync, writeFileSync, readdirSync, statSync, existsSync, unlinkSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, existsSync, unlinkSync } from 'node:fs';
+import { resolve, dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import { execSync } from 'node:child_process';
-import { hostname, platform, arch, cpus, version } from 'node:os';
+import { hostname, platform, arch, cpus, version, tmpdir } from 'node:os';
 import { TerminalExecutor } from '../terminal/executor.ts';
 import { BrowserController, type PageSnapshot } from '../browser/session.ts';
 import type { ToolDefinition, ToolResult } from './registry.ts';
@@ -198,8 +198,13 @@ export const writeFileTool: ToolDefinition = {
     const filePath = resolve(baseCwd, rawPath);
     const content = params.content as string;
 
-    writeFileSync(filePath, content, 'utf-8');
-    return `File written successfully: ${filePath} (${content.length} bytes)`;
+    try {
+      mkdirSync(dirname(filePath), { recursive: true });
+      writeFileSync(filePath, content, 'utf-8');
+      return `File written successfully: ${filePath} (${content.length} bytes)`;
+    } catch (err) {
+      return `Error writing file: ${err instanceof Error ? err.message : String(err)}`;
+    }
   },
 };
 
@@ -245,7 +250,7 @@ export const listDirectoryTool: ToolDefinition = {
 
     for (const entry of entries) {
       try {
-        const entryPath = `${dirPath}/${entry}`;
+        const entryPath = join(dirPath, entry);
         const entryStat = statSync(entryPath);
         const type = entryStat.isDirectory() ? 'dir' : 'file';
         const size = entryStat.isDirectory() ? '' : ` (${entryStat.size} bytes)`;
@@ -297,7 +302,7 @@ function localClipboardWrite(content: string): void {
 
 function localCaptureScreen(): string {
   const os = platform();
-  const tmp = `/tmp/jarvis-screenshot-${Date.now()}.png`;
+  const tmp = join(tmpdir(), `jarvis-screenshot-${Date.now()}.png`);
   if (os === 'darwin') {
     execSync(`screencapture -x ${tmp}`);
   } else if (os === 'win32') {

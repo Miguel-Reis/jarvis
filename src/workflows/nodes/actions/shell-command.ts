@@ -1,3 +1,4 @@
+import { platform } from 'node:os';
 import type { NodeDefinition } from '../registry.ts';
 
 export const shellCommandAction: NodeDefinition = {
@@ -32,8 +33,11 @@ export const shellCommandAction: NodeDefinition = {
 
     ctx.logger.info(`Shell command: ${command.slice(0, 120)}`);
 
-    // Use Bun.spawn with /bin/sh -c to support full shell syntax
-    const proc = Bun.spawn(['/bin/sh', '-c', command], {
+    // Use Bun.spawn with platform-appropriate shell
+    const shellArgs = platform() === 'win32'
+      ? ['cmd.exe', '/C', command]
+      : ['/bin/sh', '-c', command];
+    const proc = Bun.spawn(shellArgs, {
       stdout: 'pipe',
       stderr: 'pipe',
     });

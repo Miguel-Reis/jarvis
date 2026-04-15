@@ -264,13 +264,18 @@ export class DevServerManager {
       const pids = JSON.parse(await file.text()) as Record<string, { pid: number; port: number }>;
       for (const [id, { pid }] of Object.entries(pids)) {
         try {
-          // Verify PID belongs to a Jarvis-spawned process before killing
-          const cmdline = readFileSync(`/proc/${pid}/cmdline`, 'utf-8');
-          const isMakeDev = cmdline.includes('make') && cmdline.includes('dev');
-          const isBunHot = cmdline.includes('bun') && cmdline.includes('--hot');
-          const isVite = cmdline.includes('vite');
-          const isNext = cmdline.includes('next');
-          if (isMakeDev || isBunHot || isVite || isNext) {
+          // Verify PID belongs to a Jarvis-spawned process before killing.
+          // /proc is Linux-only; on other platforms skip cmdline check and kill directly.
+          let isKnownDevServer = process.platform !== 'linux';
+          if (process.platform === 'linux') {
+            const cmdline = readFileSync(`/proc/${pid}/cmdline`, 'utf-8');
+            isKnownDevServer =
+              (cmdline.includes('make') && cmdline.includes('dev')) ||
+              (cmdline.includes('bun') && cmdline.includes('--hot')) ||
+              cmdline.includes('vite') ||
+              cmdline.includes('next');
+          }
+          if (isKnownDevServer) {
             process.kill(pid, 'SIGTERM');
             console.log(`[SiteBuilder] Killed orphaned process ${pid} for project "${id}"`);
           } else {

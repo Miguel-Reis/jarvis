@@ -923,6 +923,12 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
       const { setSidecarManagerRef } = await import('../actions/tools/sidecar-route.ts');
       setSidecarManagerRef(sidecarManager);
       console.log('[Daemon] Sidecar routing enabled for run_command, read_file, write_file, list_directory');
+
+      // Wire broadcast callbacks so detached RPC failures surface to the client
+      sidecarManager.setBroadcastCallbacks(
+        (message, _rpcId) => wsService.broadcastNotification(message, 'normal'),
+        (_rpcId) => { /* completion is silent — no UI noise for success */ },
+      );
     }
 
     // 10h. Wire sidecar events into event pipeline (skip awareness events — already handled by awareness service)
