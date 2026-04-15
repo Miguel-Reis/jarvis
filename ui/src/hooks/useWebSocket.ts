@@ -207,6 +207,15 @@ function formatProviderErrorMessage(raw: string | undefined): string {
   return fallback;
 }
 
+export type Thread = {
+  id: string;
+  title: string | null;
+  channel: string | null;
+  started_at: number;
+  last_message_at: number;
+  message_count: number;
+};
+
 export function useWebSocket() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isConnected, setIsConnected] = useState(false);
@@ -217,12 +226,14 @@ export function useWebSocket() {
   const [goalEvents, setGoalEvents] = useState<GoalEvent[]>([]);
   const [siteEvents, setSiteEvents] = useState<SiteEvent[]>([]);
   const [notices, setNotices] = useState<SystemNotice[]>([]);
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const streamBufferRef = useRef<string>("");
   const streamIdRef = useRef<string | null>(null);
   const toolCallsRef = useRef<ToolCall[]>([]);
   const subAgentEventsRef = useRef<SubAgentEvent[]>([]);
   const voiceCallbacksRef = useRef<VoiceCallbacks | null>(null);
+  const activeThreadIdRef = useRef<string | null>(null);
 
   const connect = useCallback(() => {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -528,10 +539,11 @@ export function useWebSocket() {
   }, [connect]);
 
   const sendMessage = useCallback(
-    (text: string, options?: { projectId?: string }) => {
+    (text: string, options?: { projectId?: string; threadId?: string }) => {
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
 
       const id = crypto.randomUUID();
+      const threadId = options?.threadId ?? activeThreadIdRef.current;
 
       // Add user message to local state
       setMessages((prev) => [
@@ -551,6 +563,7 @@ export function useWebSocket() {
         payload: {
           text,
           ...(options?.projectId ? { projectId: options.projectId } : {}),
+          ...(threadId ? { thread_id: threadId } : {}),
         },
         id,
         timestamp: Date.now(),
@@ -560,12 +573,67 @@ export function useWebSocket() {
     []
   );
 
+  /**
+   * Switch the active thread: load its messages from the API and replace
+   * the in-memory message list so the chat view shows the right history.
+   */
+  const selectThread = useCallback(async (threadId: string) => {
+    setActiveThreadId(threadId);
+    activeThreadIdRef.current = threadId;
+    try {
+      const resp = await fetch(`/api/vault/threads/${threadId}/messages?limit=100`);
+      if (resp.ok) {
+        const data = await resp.json() as Array<{
+          id: string; role: MessageRole; content: string; created_at: number;
+        }>;
+        const restored: ChatMessage[] = data.map((m) => ({
+          id: m.id,
+          role: m.role,
+          content: m.content,
+          timestamp: m.created_at,
+        }));
+        setMessages(restored);
+      }
+    } catch (err) {
+      console.warn("[WS] Failed to load thread:", err);
+    }
+  }, []);
+
+  /**
+   * Start a fresh thread: clear in-memory messages and create a new thread on the server.
+   * Returns the new thread's ID so the caller can track it.
+   */
+  const startNewThread = useCallback(async (): Promise<string | null> => {
+    try {
+      const resp = await fetch("/api/vault/threads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (resp.ok) {
+        const thread = await resp.json() as Thread;
+        setActiveThreadId(thread.id);
+        activeThreadIdRef.current = thread.id;
+        setMessages([]);
+        return thread.id;
+      }
+    } catch (err) {
+      console.warn("[WS] Failed to create thread:", err);
+    }
+    // Fallback: just clear messages without a server thread
+    setActiveThreadId(null);
+    activeThreadIdRef.current = null;
+    setMessages([]);
+    return null;
+  }, []);
+
   const dismissNotice = useCallback((noticeId: string) => {
     setNotices((prev) => prev.filter((notice) => notice.id !== noticeId));
   }, []);
 
   return {
     messages, isConnected, sendMessage, taskEvents, contentEvents, agentActivity, workflowEvents, goalEvents, siteEvents, notices, dismissNotice,
+    activeThreadId, selectThread, startNewThread,
     wsRef,
     voiceCallbacksRef,
   };

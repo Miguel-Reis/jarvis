@@ -845,3 +845,180 @@
   color: var(--text-3);
   opacity: 0.5;
 }
+
+/* ================================================================
+   CHAT PAGE LAYOUT — row wrapper that hosts sidebar + chat area
+   ================================================================ */
+
+.chat-page-layout {
+  display: flex;
+  flex-direction: row;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: #07070A;
+}
+
+/* ================================================================
+   THREAD SIDEBAR
+   ================================================================ */
+
+.thread-sidebar {
+  display: flex;
+  flex-direction: column;
+  width: 220px;
+  min-width: 180px;
+  max-width: 260px;
+  height: 100%;
+  background: rgba(12, 12, 18, 0.95);
+  border-right: 1px solid rgba(255,255,255,0.06);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.thread-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 12px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  flex-shrink: 0;
+}
+
+.thread-sidebar-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.35);
+}
+
+.thread-new-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: 1px solid rgba(139,92,246,0.30);
+  background: rgba(139,92,246,0.10);
+  color: rgba(139,92,246,0.85);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 150ms, border-color 150ms, color 150ms;
+}
+
+.thread-new-btn:hover {
+  background: rgba(139,92,246,0.20);
+  border-color: rgba(139,92,246,0.55);
+  color: #A78BFA;
+}
+
+.thread-sidebar-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.08) transparent;
+}
+
+.thread-sidebar-empty {
+  padding: 20px 14px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.22);
+  text-align: center;
+}
+
+/* Each thread row */
+.thread-item {
+  display: flex;
+  align-items: stretch;
+  position: relative;
+  border-radius: 0;
+  transition: background 120ms;
+}
+
+.thread-item:hover,
+.thread-item.active {
+  background: rgba(139,92,246,0.08);
+}
+
+.thread-item.active .thread-item-title {
+  color: rgba(255,255,255,0.88);
+}
+
+.thread-item-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 8px 10px 8px 14px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  min-width: 0;
+}
+
+.thread-item-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.60);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+  line-height: 1.3;
+}
+
+.thread-item-title em {
+  font-style: italic;
+  color: rgba(255,255,255,0.28);
+}
+
+.thread-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.thread-item-time {
+  font-size: 10px;
+  color: rgba(255,255,255,0.22);
+  letter-spacing: 0.01em;
+}
+
+.thread-item-count {
+  font-size: 10px;
+  color: rgba(139,92,246,0.55);
+  background: rgba(139,92,246,0.08);
+  padding: 0 5px;
+  border-radius: 10px;
+}
+
+/* Delete button — visible on row hover */
+.thread-delete-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  flex-shrink: 0;
+  opacity: 0;
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.30);
+  font-size: 16px;
+  cursor: pointer;
+  transition: opacity 120ms, color 120ms;
+  margin-right: 4px;
+}
+
+.thread-item:hover .thread-delete-btn {
+  opacity: 1;
+}
+
+.thread-delete-btn:hover {
+  color: #FB7185;
+}
