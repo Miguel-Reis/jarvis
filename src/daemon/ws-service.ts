@@ -912,7 +912,7 @@ If the user wants to create a new project, tell them to use the Site Builder pag
         };
 
       case 'cancel_execution': {
-        const commitmentId = (msg.payload as any)?.commitmentId;
+        const commitmentId = (msg.payload as { commitmentId?: string })?.commitmentId;
         if (this.commitmentExecutor && commitmentId) {
           const cancelled = this.commitmentExecutor.cancelExecution(commitmentId);
           return {

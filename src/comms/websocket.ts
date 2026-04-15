@@ -299,9 +299,9 @@ export class WebSocketServer {
             if (params) {
               const handler = methods[req.method];
               if (handler) {
-                // Attach params to request
-                (req as any).params = params;
-                return handler(req);
+                // Attach extracted path params to a typed request extension
+                const reqWithParams = Object.assign(req, { params }) as Request & { params: Record<string, string> };
+                return handler(reqWithParams);
               }
               return new Response('Method Not Allowed', { status: 405 });
             }
@@ -390,10 +390,10 @@ export class WebSocketServer {
 
         open(ws) {
           // HMR proxy WebSocket — bridge to dev server
-          const proxyTarget = (ws.data as any)?.proxy_target as string | undefined;
+          const proxyTarget = ws.data?.proxy_target;
           if (proxyTarget) {
             const upstream = new WebSocket(proxyTarget);
-            (ws.data as any)._proxyUpstream = upstream;
+            ws.data._proxyUpstream = upstream;
             upstream.onmessage = (e) => {
               try {
                 // Enforce size limit on upstream messages too
@@ -408,7 +408,7 @@ export class WebSocketServer {
             return;
           }
 
-          const sidecarId = (ws.data as any)?.sidecar_id as string | undefined;
+          const sidecarId = ws.data?.sidecar_id;
           if (sidecarId && self.sidecarManager) {
             self.sidecarManager.handleSidecarConnect(ws, sidecarId);
             return;
@@ -421,7 +421,7 @@ export class WebSocketServer {
 
         async message(ws, message) {
           // HMR proxy — forward to upstream dev server
-          const proxyUpstream = (ws.data as any)?._proxyUpstream as WebSocket | undefined;
+          const proxyUpstream = ws.data?._proxyUpstream;
           if (proxyUpstream) {
             if (proxyUpstream.readyState === WebSocket.OPEN) {
               proxyUpstream.send(message);
@@ -429,7 +429,7 @@ export class WebSocketServer {
             return;
           }
 
-          const sidecarId = (ws.data as any)?.sidecar_id as string | undefined;
+          const sidecarId = ws.data?.sidecar_id;
           if (sidecarId && self.sidecarManager) {
             self.sidecarManager.handleSidecarMessage(ws, message);
             return;
@@ -472,7 +472,7 @@ export class WebSocketServer {
         },
 
         pong(ws) {
-          const sidecarId = (ws.data as any)?.sidecar_id as string | undefined;
+          const sidecarId = ws.data?.sidecar_id;
           if (sidecarId && self.sidecarManager) {
             self.sidecarManager.handleSidecarPong(sidecarId);
           }
@@ -480,13 +480,13 @@ export class WebSocketServer {
 
         close(ws) {
           // HMR proxy cleanup
-          const proxyUpstream = (ws.data as any)?._proxyUpstream as WebSocket | undefined;
+          const proxyUpstream = ws.data?._proxyUpstream;
           if (proxyUpstream) {
             try { proxyUpstream.close(); } catch { /* ignore */ }
             return;
           }
 
-          const sidecarId = (ws.data as any)?.sidecar_id as string | undefined;
+          const sidecarId = ws.data?.sidecar_id;
           if (sidecarId && self.sidecarManager) {
             self.sidecarManager.handleSidecarDisconnect(sidecarId);
             return;
@@ -499,10 +499,10 @@ export class WebSocketServer {
       },
     });
 
-    console.log(`[WebSocketServer] Started on ws://localhost:${this.port}/ws`);
-    console.log(`[WebSocketServer] Health endpoint: http://localhost:${this.port}/health`);
+    console.log(`[WebSocketServer] Started on ws://127.0.0.1:${this.port}/ws`);
+    console.log(`[WebSocketServer] Health endpoint: http://127.0.0.1:${this.port}/health`);
     if (this.staticDir) {
-      console.log(`[WebSocketServer] Dashboard: http://localhost:${this.port}/`);
+      console.log(`[WebSocketServer] Dashboard: http://127.0.0.1:${this.port}/`);
     }
   }
 

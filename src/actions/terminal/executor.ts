@@ -1,4 +1,4 @@
-import { spawn, type Subprocess } from 'bun';
+import { spawn } from 'bun';
 
 export type CommandResult = {
   stdout: string;

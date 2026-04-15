@@ -245,13 +245,20 @@ export function useWebSocket() {
       console.log("[WS] Connected");
       // Load chat history from backend on connect
       try {
+        type RawMessageDTO = {
+          id: string;
+          role: MessageRole;
+          content: string;
+          created_at: number;
+          tool_calls?: ToolCall[] | null;
+        };
         const resp = await fetch("/api/vault/conversations/active?channel=websocket");
         if (resp.ok) {
-          const data = await resp.json();
+          const data = await resp.json() as { messages?: RawMessageDTO[] };
           if (data.messages && data.messages.length > 0) {
-            const restored: ChatMessage[] = data.messages.map((m: any) => ({
+            const restored: ChatMessage[] = data.messages.map((m) => ({
               id: m.id,
-              role: m.role as MessageRole,
+              role: m.role,
               content: m.content,
               timestamp: m.created_at,
               toolCalls: m.tool_calls ?? undefined,
