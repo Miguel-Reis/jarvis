@@ -242,12 +242,14 @@ export class AgentService implements Service, IAgentService {
 
   /**
    * Stream a message through the agent. Returns a stream and an onComplete callback.
+   * Async so it can pre-fetch vault knowledge before building the system prompt.
    */
-  streamMessage(text: string, channel: string = 'websocket', siteContext?: string): {
+  async streamMessage(text: string, channel: string = 'websocket', siteContext?: string): Promise<{
     stream: AsyncIterable<LLMStreamEvent>;
     onComplete: (fullText: string) => Promise<void>;
-  } {
-    let systemPrompt = this.buildFullSystemPrompt(channel, text);
+  }> {
+    const knowledge = await getKnowledgeForMessage(text).catch(() => '');
+    let systemPrompt = this.buildFullSystemPrompt(channel, text, knowledge || undefined);
     if (siteContext) {
       systemPrompt += '\n\n' + siteContext;
     }
@@ -274,7 +276,8 @@ export class AgentService implements Service, IAgentService {
    * Non-streaming message handler. Returns full response string.
    */
   async handleMessage(text: string, channel: string = 'websocket'): Promise<string> {
-    const systemPrompt = this.buildFullSystemPrompt(channel, text);
+    const knowledge = await getKnowledgeForMessage(text).catch(() => '');
+    const systemPrompt = this.buildFullSystemPrompt(channel, text, knowledge || undefined);
 
     const response = await this.orchestrator.processMessage(systemPrompt, text);
 
@@ -448,11 +451,11 @@ export class AgentService implements Service, IAgentService {
     );
   }
 
-  private buildFullSystemPrompt(channel: string, userMessage?: string): string {
+  private buildFullSystemPrompt(channel: string, userMessage?: string, precomputedKnowledge?: string): string {
     if (!this.role) return '';
 
     // Build prompt context with live data + vault knowledge
-    const context = this.buildPromptContext(userMessage);
+    const context = this.buildPromptContext(userMessage, precomputedKnowledge);
 
     // Build base system prompt from role + context
     const rolePrompt = buildSystemPrompt(this.role, context);
@@ -506,7 +509,7 @@ export class AgentService implements Service, IAgentService {
     return parts.join('\n');
   }
 
-  private buildPromptContext(userMessage?: string): PromptContext {
+  private buildPromptContext(userMessage?: string, precomputedKnowledge?: string): PromptContext {
     // Check if any sidecars are enrolled (cheap DB query, controls tool guide content)
     let hasSidecars = false;
     try {
@@ -536,15 +539,10 @@ export class AgentService implements Service, IAgentService {
       console.error('[AgentService] Error loading user profile:', err);
     }
 
-    // Retrieve relevant knowledge from vault based on user message
+    // Inject pre-fetched vault knowledge (fetched asynchronously before this sync call)
     if (userMessage) {
-      try {
-        const knowledge = getKnowledgeForMessage(userMessage);
-        if (knowledge) {
-          context.knowledgeContext = knowledge;
-        }
-      } catch (err) {
-        console.error('[AgentService] Error retrieving knowledge:', err);
+      if (precomputedKnowledge) {
+        context.knowledgeContext = precomputedKnowledge;
       }
 
       // Retrieve webapp-specific browser instructions if message mentions a known app

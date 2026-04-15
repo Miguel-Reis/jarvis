@@ -1,5 +1,6 @@
 import { getDb, generateId } from './schema.ts';
 import { findEntities } from './entities.ts';
+import { embedAndStore } from './vectors.ts';
 
 export type Fact = {
   id: string;
@@ -52,7 +53,7 @@ export function createFact(
   const objectStr = typeof object === 'string' ? object : JSON.stringify(object);
   stmt.run(id, subject_id, predicate, objectStr, confidence, source, now, null);
 
-  return {
+  const fact = {
     id,
     subject_id,
     predicate,
@@ -62,6 +63,11 @@ export function createFact(
     created_at: now,
     verified_at: null,
   };
+
+  // Background: embed the fact text for semantic search
+  embedAndStore('fact', id, `${subject_id} ${predicate} ${object}`).catch(() => {});
+
+  return fact;
 }
 
 /**

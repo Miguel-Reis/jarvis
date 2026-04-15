@@ -76,6 +76,7 @@ export {
   storeVector,
   findSimilar,
   deleteVectors,
+  embedAndStore,
 } from './vectors.ts';
 
 // Re-export extractor module

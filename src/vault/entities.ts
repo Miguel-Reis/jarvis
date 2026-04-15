@@ -1,4 +1,5 @@
 import { getDb, generateId } from './schema.ts';
+import { embedAndStore } from './vectors.ts';
 
 /** Escape SQL LIKE wildcard characters in user input */
 function escapeLike(s: string): string {
@@ -64,7 +65,7 @@ export function createEntity(
     source ?? null
   );
 
-  return {
+  const entity = {
     id,
     type,
     name,
@@ -73,6 +74,12 @@ export function createEntity(
     updated_at: now,
     source: source ?? null,
   };
+
+  // Background: generate and store an embedding for semantic search
+  const embeddingText = [name, type, properties?.description ?? ''].filter(Boolean).join(' ');
+  embedAndStore('entity', id, embeddingText).catch(() => {});
+
+  return entity;
 }
 
 /**

@@ -136,14 +136,16 @@ export async function extractAndStore(
   assistantResponse: string,
   provider?: LLMProvider
 ): Promise<ExtractionResult> {
-  // If no provider, return empty result
+  // If no provider, skip silently (extraction is best-effort)
   if (!provider) {
-    return {
-      entities: [],
-      facts: [],
-      relationships: [],
-      commitments: [],
-    };
+    console.warn('[Extractor] No LLM provider available — skipping knowledge extraction');
+    return { entities: [], facts: [], relationships: [], commitments: [] };
+  }
+
+  // Skip extraction for very short exchanges that are unlikely to contain new knowledge
+  const combinedLength = userMessage.length + assistantResponse.length;
+  if (combinedLength < 80) {
+    return { entities: [], facts: [], relationships: [], commitments: [] };
   }
 
   try {
@@ -238,9 +240,19 @@ export async function extractAndStore(
       });
     }
 
+    const totalExtracted = extraction.entities.length + extraction.facts.length
+      + extraction.relationships.length + extraction.commitments.length;
+    if (totalExtracted > 0) {
+      console.log(
+        `[Extractor] Stored: ${extraction.entities.length} entities, ` +
+        `${extraction.facts.length} facts, ${extraction.relationships.length} relationships, ` +
+        `${extraction.commitments.length} commitments`
+      );
+    }
+
     return extraction;
   } catch (error) {
-    console.error('Failed to extract and store:', error);
+    console.error('[Extractor] Failed to extract and store knowledge:', error);
 
     // Return empty result on error
     return {

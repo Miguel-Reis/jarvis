@@ -7,10 +7,13 @@
  */
 
 import { getDb } from './schema.ts';
-import { searchEntitiesByName, type Entity } from './entities.ts';
+import { searchEntitiesByName, getEntity, type Entity } from './entities.ts';
 import { findFacts, type Fact } from './facts.ts';
 import { getEntityRelationships } from './relationships.ts';
 import { USER_PROFILE_VAULT_SOURCE } from './user-profile.ts';
+import { findSimilar } from './vectors.ts';
+import { getEmbeddingService } from '../llm/embeddings.ts';
+import { findGoals } from './goals.ts';
 
 // Common stopwords to filter from search queries
 const STOPWORDS = new Set([
@@ -58,7 +61,7 @@ export function extractSearchTerms(message: string): string[] {
  * Search the vault for entities matching the given terms.
  * Searches entity names and fact objects/predicates.
  */
-export function retrieveForMessage(message: string): EntityProfile[] {
+export async function retrieveForMessage(message: string): Promise<EntityProfile[]> {
   const terms = extractSearchTerms(message);
   const entityMap = new Map<string, Entity>();
 
@@ -88,7 +91,7 @@ export function retrieveForMessage(message: string): EntityProfile[] {
     }
   }
 
-  if (terms.length === 0 && entityMap.size === 0) return [];
+  if (terms.length === 0 && entityMap.size === 0 && !getEmbeddingService()?.isAvailable()) return [];
 
   // 1. Search entity names
   for (const term of terms) {
@@ -123,7 +126,29 @@ export function retrieveForMessage(message: string): EntityProfile[] {
     // DB not available — return what we have from entity search
   }
 
-  // 3. Build full profiles for matched entities (cap at 10)
+  // 3. Vector search — enrich with semantically similar entities
+  try {
+    const svc = getEmbeddingService();
+    if (svc?.isAvailable()) {
+      const queryVec = await svc.embed(message);
+      if (queryVec) {
+        const similar = findSimilar(queryVec, 5);
+        for (const { ref_type, ref_id } of similar) {
+          if (ref_type === 'entity' && !entityMap.has(ref_id)) {
+            const entity = getEntity(ref_id);
+            if (entity) entityMap.set(entity.id, entity);
+          }
+        }
+        if (similar.length > 0) {
+          console.log(`[retrieval] vector search found ${similar.length} result(s)`);
+        }
+      }
+    }
+  } catch {
+    // Vector search is best-effort — never block keyword results
+  }
+
+  // 4. Build full profiles for matched entities (cap at 10)
   const entities = [...entityMap.values()].slice(0, 10);
   const profiles: EntityProfile[] = [];
 
@@ -187,9 +212,9 @@ export function formatKnowledgeContext(profiles: EntityProfile[]): string {
  * Main entry point: get formatted knowledge context for a user message.
  * Returns empty string if no relevant knowledge found.
  */
-export function getKnowledgeForMessage(message: string): string {
+export async function getKnowledgeForMessage(message: string): Promise<string> {
   try {
-    const profiles = retrieveForMessage(message);
+    const profiles = await retrieveForMessage(message);
     return formatKnowledgeContext(profiles);
   } catch (err) {
     console.error('[Retrieval] Error querying vault:', err);
@@ -203,7 +228,6 @@ export function getKnowledgeForMessage(message: string): string {
  */
 export function getActiveGoalsSummary(): string {
   try {
-    const { findGoals } = require('./goals.ts');
     const activeGoals = findGoals({ status: 'active' }) as Array<{
       id: string;
       parent_id: string | null;

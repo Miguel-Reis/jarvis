@@ -21,6 +21,7 @@ import { EventCoalescer } from "./event-coalescer.ts";
 import { CommitmentExecutor } from "./commitment-executor.ts";
 import { checkCommitments, classifyEvent } from "./event-classifier.ts";
 import { createApiRoutes, setCorsOrigin } from "./api-routes.ts";
+import { initEmbeddingService } from "../llm/embeddings.ts";
 import { GoogleAuth } from "../integrations/google-auth.ts";
 import { ResearchQueue } from "./research-queue.ts";
 import { researchQueueTool, setResearchQueueRef } from "../actions/tools/research.ts";
@@ -268,6 +269,9 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
     const { mergeLLMSettingsIntoConfig } = await import('./llm-settings.ts');
     mergeLLMSettingsIntoConfig(jarvisConfig);
     logWithTimestamp('LLM settings loaded from database');
+
+    // 2c. Initialize embedding service for semantic search (uses same LLM config)
+    initEmbeddingService(jarvisConfig);
 
     // 3. Create service registry
     registry = new ServiceRegistry();

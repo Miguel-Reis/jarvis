@@ -119,7 +119,7 @@ test('formatKnowledgeContext returns empty for no profiles', () => {
 
 // --- getKnowledgeForMessage (integration) ---
 
-test('getKnowledgeForMessage end-to-end', () => {
+test('getKnowledgeForMessage end-to-end', async () => {
   const john = createEntity('person', 'John');
   createFact(john.id, 'works_at', 'Google');
   createFact(john.id, 'location', 'San Francisco');
@@ -127,13 +127,13 @@ test('getKnowledgeForMessage end-to-end', () => {
   const anna = createEntity('person', 'Anna');
   createFact(anna.id, 'sister_of', 'John');
 
-  const context = getKnowledgeForMessage('Where does John live?');
+  const context = await getKnowledgeForMessage('Where does John live?');
   expect(context).toContain('John');
   expect(context).toContain('works_at: Google');
   expect(context).toContain('location: San Francisco');
 });
 
-test('getKnowledgeForMessage handles no matches gracefully', () => {
-  const context = getKnowledgeForMessage('Tell me about quantum physics');
+test('getKnowledgeForMessage handles no matches gracefully', async () => {
+  const context = await getKnowledgeForMessage('Tell me about quantum physics');
   expect(context).toBe('');
 });
