@@ -20,6 +20,7 @@ import { GroqProvider } from '../llm/groq.ts';
 import { GeminiProvider } from '../llm/gemini.ts';
 import { OllamaProvider } from '../llm/ollama.ts';
 import { OpenRouterProvider } from '../llm/openrouter.ts';
+import { LiteLLMProvider } from '../llm/litellm.ts';
 import { AgentOrchestrator } from '../agents/orchestrator.ts';
 import { loadRole } from '../roles/loader.ts';
 import { ToolRegistry } from '../actions/tools/registry.ts';
@@ -409,6 +410,18 @@ export class AgentService implements Service, IAgentService {
       this.llmManager.registerProvider(provider);
       hasProvider = true;
       console.log('[AgentService] Registered Ollama provider');
+    }
+
+    // Register LiteLLM
+    if (llm.litellm?.base_url) {
+      const provider = new LiteLLMProvider(
+        llm.litellm.base_url,
+        llm.litellm.model,
+        llm.litellm.api_key,
+      );
+      this.llmManager.registerProvider(provider);
+      hasProvider = true;
+      console.log('[AgentService] Registered LiteLLM provider');
     }
 
     if (!hasProvider) {

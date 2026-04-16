@@ -10,6 +10,7 @@ type LLMConfig = {
   gemini: { model: string; has_api_key: boolean } | null;
   ollama: { base_url: string; model: string; has_api_key: boolean } | null;
   openrouter: { model: string; has_api_key: boolean } | null;
+  litellm: { base_url: string; model: string; has_api_key: boolean } | null;
 };
 
 type TestResult = { ok: boolean; model?: string; error?: string };
@@ -75,7 +76,18 @@ const OPENROUTER_MODELS = [
   "mistralai/mistral-large",
 ];
 
-const PROVIDERS = ["anthropic", "openai", "groq", "gemini", "ollama", "openrouter"] as const;
+const LITELLM_MODELS = [
+  "gpt-4o",
+  "gpt-4o-mini",
+  "claude-sonnet-4-6",
+  "gemini/gemini-2.5-pro",
+  "ollama/llama3",
+  "ollama/mistral",
+  "bedrock/claude-sonnet-4",
+  "azure/gpt-4o",
+];
+
+const PROVIDERS = ["anthropic", "openai", "groq", "gemini", "ollama", "openrouter", "litellm"] as const;
 
 const PROVIDER_LABELS: Record<string, string> = {
   anthropic: "Anthropic",
@@ -84,6 +96,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   gemini: "Gemini",
   ollama: "Ollama",
   openrouter: "OpenRouter",
+  litellm: "LiteLLM",
 };
 
 export function LLMPanel() {
@@ -123,6 +136,12 @@ export function LLMPanel() {
   const [openrouterKey, setOpenrouterKey] = useState("");
   const [openrouterModel, setOpenrouterModel] = useState("anthropic/claude-sonnet-4");
   const [openrouterCustomModel, setOpenrouterCustomModel] = useState("");
+
+  // LiteLLM
+  const [litellmBaseUrl, setLitellmBaseUrl] = useState("http://localhost:4000");
+  const [litellmModel, setLitellmModel] = useState("gpt-4o");
+  const [litellmCustomModel, setLitellmCustomModel] = useState("");
+  const [litellmKey, setLitellmKey] = useState("");
 
   // UI state
   const [saving, setSaving] = useState(false);
@@ -198,6 +217,17 @@ export function LLMPanel() {
         setOpenrouterCustomModel(m);
       }
     }
+    if (config.litellm) {
+      setLitellmBaseUrl(config.litellm.base_url);
+      const m = config.litellm.model;
+      if (LITELLM_MODELS.includes(m)) {
+        setLitellmModel(m);
+        setLitellmCustomModel("");
+      } else {
+        setLitellmModel("custom");
+        setLitellmCustomModel(m);
+      }
+    }
   }, [config]);
 
   const resolveModel = (selected: string, custom: string) =>
@@ -235,6 +265,11 @@ export function LLMPanel() {
           model: resolveModel(openrouterModel, openrouterCustomModel),
           ...(openrouterKey ? { api_key: openrouterKey } : {}),
         },
+        litellm: {
+          base_url: litellmBaseUrl,
+          model: resolveModel(litellmModel, litellmCustomModel),
+          ...(litellmKey ? { api_key: litellmKey } : {}),
+        },
       };
       const resp = await api<{ ok: boolean; message: string }>("/api/config/llm", {
         method: "POST",
@@ -247,6 +282,7 @@ export function LLMPanel() {
       setGeminiKey("");
       setOllamaKey("");
       setOpenrouterKey("");
+      setLitellmKey("");
       refetch();
     } catch (err) {
       setMessage({ text: err instanceof Error ? err.message : "Save failed", type: "error" });
@@ -280,6 +316,10 @@ export function LLMPanel() {
       } else if (provider === "openrouter") {
         body.api_key = openrouterKey || undefined;
         body.model = resolveModel(openrouterModel, openrouterCustomModel);
+      } else if (provider === "litellm") {
+        body.base_url = litellmBaseUrl;
+        body.model = resolveModel(litellmModel, litellmCustomModel);
+        body.api_key = litellmKey || undefined;
       }
       const result = await api<TestResult>("/api/config/llm/test", {
         method: "POST",
@@ -472,6 +512,30 @@ export function LLMPanel() {
           onFallbackToggle={() => toggleFallback("groq")}
           expanded={!!expanded.groq}
           onToggleExpand={() => setExpanded((s) => ({ ...s, groq: !s.groq }))}
+        />
+
+        <ProviderSection
+          name="LiteLLM"
+          provider="litellm"
+          isPrimary={primary === "litellm"}
+          hasKey={config.litellm?.has_api_key ?? false}
+          apiKey={litellmKey}
+          onApiKeyChange={setLitellmKey}
+          apiKeyPlaceholder="API key (optional — only if your LiteLLM server requires auth)"
+          model={litellmModel}
+          customModel={litellmCustomModel}
+          onModelChange={setLitellmModel}
+          onCustomModelChange={setLitellmCustomModel}
+          models={LITELLM_MODELS}
+          testing={testing === "litellm"}
+          testResult={testResult.litellm}
+          onTest={() => handleTest("litellm")}
+          isFallback={fallback.includes("litellm")}
+          onFallbackToggle={() => toggleFallback("litellm")}
+          expanded={!!expanded.litellm}
+          onToggleExpand={() => setExpanded((s) => ({ ...s, litellm: !s.litellm }))}
+          baseUrl={litellmBaseUrl}
+          onBaseUrlChange={setLitellmBaseUrl}
         />
       </div>
 

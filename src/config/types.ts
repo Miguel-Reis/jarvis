@@ -180,6 +180,7 @@ export type JarvisConfig = {
     gemini?: { api_key: string; model?: string };
     ollama?: { base_url?: string; model?: string; api_key?: string };
     openrouter?: { api_key: string; model?: string };
+    litellm?: { base_url: string; model?: string; api_key?: string };
   };
   personality: {
     core_traits: string[];

@@ -14,6 +14,7 @@ import { GroqProvider } from '../llm/groq.ts';
 import { GeminiProvider } from '../llm/gemini.ts';
 import { OllamaProvider } from '../llm/ollama.ts';
 import { OpenRouterProvider } from '../llm/openrouter.ts';
+import { LiteLLMProvider } from '../llm/litellm.ts';
 import type { LLMProvider } from '../llm/provider.ts';
 import type { LLMManager } from '../llm/manager.ts';
 
@@ -24,6 +25,7 @@ const KEY_GROQ = 'llm.groq.api_key';
 const KEY_GEMINI = 'llm.gemini.api_key';
 const KEY_OPENROUTER = 'llm.openrouter.api_key';
 const KEY_OLLAMA = 'llm.ollama.api_key';
+const KEY_LITELLM = 'llm.litellm.api_key';
 
 // DB setting keys
 const SETTING_PRIMARY = 'llm.primary';
@@ -35,6 +37,8 @@ const SETTING_GEMINI_MODEL = 'llm.gemini.model';
 const SETTING_OLLAMA_MODEL = 'llm.ollama.model';
 const SETTING_OLLAMA_BASE_URL = 'llm.ollama.base_url';
 const SETTING_OPENROUTER_MODEL = 'llm.openrouter.model';
+const SETTING_LITELLM_MODEL = 'llm.litellm.model';
+const SETTING_LITELLM_BASE_URL = 'llm.litellm.base_url';
 
 export type LLMSettingsResponse = {
   primary: string;
@@ -45,6 +49,7 @@ export type LLMSettingsResponse = {
   gemini: { model: string; has_api_key: boolean } | null;
   ollama: { base_url: string; model: string; has_api_key: boolean } | null;
   openrouter: { model: string; has_api_key: boolean } | null;
+  litellm: { base_url: string; model: string; has_api_key: boolean } | null;
 };
 
 /**
@@ -64,6 +69,8 @@ export function getLLMSettings(config: JarvisConfig): LLMSettingsResponse {
   const ollamaBaseUrl = getSetting(SETTING_OLLAMA_BASE_URL) ?? config.llm.ollama?.base_url ?? 'http://localhost:11434';
 
   const openrouterModel = getSetting(SETTING_OPENROUTER_MODEL) ?? config.llm.openrouter?.model ?? 'anthropic/claude-sonnet-4';
+  const litellmModel = getSetting(SETTING_LITELLM_MODEL) ?? config.llm.litellm?.model ?? 'gpt-4o';
+  const litellmBaseUrl = getSetting(SETTING_LITELLM_BASE_URL) ?? config.llm.litellm?.base_url ?? 'http://localhost:4000';
 
   const hasAnthropicKey = hasSecret(KEY_ANTHROPIC) || !!config.llm.anthropic?.api_key;
   const hasOpenaiKey = hasSecret(KEY_OPENAI) || !!config.llm.openai?.api_key;
@@ -80,6 +87,7 @@ export function getLLMSettings(config: JarvisConfig): LLMSettingsResponse {
     gemini: { model: geminiModel, has_api_key: hasGeminiKey },
     ollama: { base_url: ollamaBaseUrl, model: ollamaModel, has_api_key: hasSecret(KEY_OLLAMA) || !!config.llm.ollama?.api_key },
     openrouter: { model: openrouterModel, has_api_key: hasOpenrouterKey },
+    litellm: { base_url: litellmBaseUrl, model: litellmModel, has_api_key: hasSecret(KEY_LITELLM) || !!config.llm.litellm?.api_key },
   };
 }
 
@@ -97,6 +105,7 @@ export function saveLLMSettings(
     gemini?: { api_key?: string; model?: string };
     ollama?: { base_url?: string; model?: string; api_key?: string };
     openrouter?: { api_key?: string; model?: string };
+    litellm?: { base_url?: string; model?: string; api_key?: string };
   },
 ): void {
   // Save non-secret settings to DB
@@ -202,6 +211,24 @@ export function saveLLMSettings(
       api_key: body.openrouter.api_key ?? getOpenRouterApiKey(config) ?? '',
     };
   }
+
+  // LiteLLM
+  if (body.litellm) {
+    if (body.litellm.model) {
+      setSetting(SETTING_LITELLM_MODEL, body.litellm.model);
+    }
+    if (body.litellm.base_url) {
+      setSetting(SETTING_LITELLM_BASE_URL, body.litellm.base_url);
+    }
+    if (body.litellm.api_key) {
+      setSecret(KEY_LITELLM, body.litellm.api_key);
+    }
+    config.llm.litellm = {
+      base_url: body.litellm.base_url ?? config.llm.litellm?.base_url ?? 'http://localhost:4000',
+      model: body.litellm.model ?? config.llm.litellm?.model,
+      api_key: body.litellm.api_key ?? getLiteLLMApiKey(config) ?? undefined,
+    };
+  }
 }
 
 /**
@@ -237,6 +264,10 @@ function getGeminiApiKey(config: JarvisConfig): string | null {
  */
 function getOpenRouterApiKey(config: JarvisConfig): string | null {
   return getSecret(KEY_OPENROUTER) ?? config.llm.openrouter?.api_key ?? null;
+}
+
+function getLiteLLMApiKey(config: JarvisConfig): string | null {
+  return getSecret(KEY_LITELLM) ?? config.llm.litellm?.api_key ?? null;
 }
 
 /**
@@ -338,6 +369,18 @@ export function mergeLLMSettingsIntoConfig(config: JarvisConfig): void {
       model: dbOpenrouterModel ?? config.llm.openrouter?.model,
     };
   }
+
+  // LiteLLM
+  const dbLitellmModel = getSetting(SETTING_LITELLM_MODEL);
+  const dbLitellmUrl = getSetting(SETTING_LITELLM_BASE_URL);
+  const keychainLitellmKey = getSecret(KEY_LITELLM);
+  if (dbLitellmModel || dbLitellmUrl || keychainLitellmKey) {
+    config.llm.litellm = {
+      base_url: dbLitellmUrl ?? config.llm.litellm?.base_url ?? 'http://localhost:4000',
+      model: dbLitellmModel ?? config.llm.litellm?.model,
+      api_key: keychainLitellmKey ?? config.llm.litellm?.api_key,
+    };
+  }
 }
 
 /**
@@ -371,6 +414,10 @@ export function hotReloadLLMProviders(config: JarvisConfig, llmManager: LLMManag
   if (llm.ollama) {
     providers.push(new OllamaProvider(llm.ollama.base_url, llm.ollama.model, llm.ollama.api_key));
     console.log('[LLM] Hot-reloaded Ollama provider');
+  }
+  if (llm.litellm?.base_url) {
+    providers.push(new LiteLLMProvider(llm.litellm.base_url, llm.litellm.model, llm.litellm.api_key));
+    console.log('[LLM] Hot-reloaded LiteLLM provider');
   }
 
   const fallback = llm.fallback.filter(n => providers.some(p => p.name === n));
@@ -420,6 +467,13 @@ export async function testLLMProvider(
         opts.base_url ?? config.llm.ollama?.base_url,
         opts.model ?? config.llm.ollama?.model,
         ollamaKey,
+      );
+    } else if (opts.provider === 'litellm') {
+      const litellmKey = opts.api_key || getLiteLLMApiKey(config) || undefined;
+      instance = new LiteLLMProvider(
+        opts.base_url ?? config.llm.litellm?.base_url ?? 'http://localhost:4000',
+        opts.model ?? config.llm.litellm?.model,
+        litellmKey,
       );
     } else {
       return { ok: false, error: `Unknown provider: ${opts.provider}` };
