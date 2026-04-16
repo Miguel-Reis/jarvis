@@ -30,7 +30,6 @@ export class StreamRelay {
   ): Promise<string> {
     let fullText = '';
     let sentenceBuffer = '';
-    let streamError: string | null = null;
 
     try {
       for await (const event of stream) {
@@ -82,21 +81,9 @@ export class StreamRelay {
 
           this.wsServer.broadcast(toolMessage);
         } else if (event.type === 'error') {
+          // Throw so the outer catch handles broadcasting — avoids double-broadcast
           console.error('[StreamRelay] Stream error:', event.error);
-
-          const errorMessage: WSMessage = {
-            type: 'error',
-            payload: {
-              message: event.error,
-              requestId,
-            },
-            id: requestId,
-            timestamp: Date.now(),
-          };
-
-          this.wsServer.broadcast(errorMessage);
-          streamError = event.error;
-          break;
+          throw new Error(event.error);
         } else if (event.type === 'done') {
           // Flush remaining sentence buffer
           if (options?.onSentence && sentenceBuffer.trim()) {
@@ -121,10 +108,6 @@ export class StreamRelay {
 
           this.wsServer.broadcast(doneMessage);
         }
-      }
-
-      if (streamError) {
-        throw new Error(streamError);
       }
     } catch (error) {
       console.error('[StreamRelay] Error relaying stream:', error);
