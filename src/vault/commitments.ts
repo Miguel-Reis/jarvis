@@ -1,4 +1,5 @@
 import { getDb, generateId } from './schema.ts';
+import { embedAndStore } from './vectors.ts';
 
 export type CommitmentPriority = 'low' | 'normal' | 'high' | 'critical';
 export type CommitmentStatus = 'pending' | 'active' | 'completed' | 'failed' | 'escalated';
@@ -89,7 +90,7 @@ export function createCommitment(
     null
   );
 
-  return {
+  const commitment: Commitment = {
     id,
     what,
     when_due: opts?.when_due ?? null,
@@ -104,6 +105,12 @@ export function createCommitment(
     result: null,
     sort_order: 0,
   };
+
+  // Index for semantic search — fire-and-forget
+  const embeddingText = [what, opts?.context].filter(Boolean).join(' ');
+  embedAndStore('commitment', id, embeddingText).catch(() => {});
+
+  return commitment;
 }
 
 /**

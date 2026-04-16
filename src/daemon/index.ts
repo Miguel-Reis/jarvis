@@ -483,7 +483,7 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
     };
     setCorsOrigin(jarvisConfig.daemon.port);
     const apiRoutes = createApiRoutes(apiContext);
-    wsService.setApiRoutes(apiRoutes);
+    wsService.setApiRoutes(apiRoutes as Record<string, Record<string, (req: Request) => Response | Promise<Response>>>);
 
     // Serve dashboard from ui/dist/
     wsService.setStaticDir(uiDistDir);

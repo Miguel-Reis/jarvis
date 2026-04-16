@@ -33,6 +33,15 @@ export function closeDb(): void {
 }
 
 /**
+ * Execute a function inside a SQLite transaction.
+ * All writes are committed atomically; on any error the transaction is rolled back.
+ */
+export function withTransaction<T>(fn: () => T): T {
+  const db = getDb();
+  return db.transaction(fn)();
+}
+
+/**
  * Initialize the SQLite database with all required tables
  * @param dbPath - Path to the database file. Defaults to :memory: for testing
  * @returns Database instance

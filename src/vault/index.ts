@@ -13,7 +13,7 @@
  */
 
 // Re-export schema utilities
-export { initDatabase, getDb, closeDb, generateId } from './schema.ts';
+export { initDatabase, getDb, closeDb, generateId, withTransaction } from './schema.ts';
 
 // Re-export entities module
 export type { Entity, EntityType } from './entities.ts';

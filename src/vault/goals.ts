@@ -4,6 +4,7 @@
 
 import type { SQLQueryBindings } from 'bun:sqlite';
 import { getDb, generateId } from './schema.ts';
+import { embedAndStore } from './vectors.ts';
 import type {
   Goal, GoalProgressEntry, GoalCheckIn,
   GoalLevel, GoalStatus, GoalHealth, EscalationStage,
@@ -92,7 +93,14 @@ export function createGoal(
     now, now,
   );
 
-  return getGoal(id)!;
+  const goal = getGoal(id)!;
+
+  // Index for semantic search — fire-and-forget
+  const embeddingText = [title, opts?.description, opts?.success_criteria]
+    .filter(Boolean).join(' ');
+  embedAndStore('goal', id, embeddingText).catch(() => {});
+
+  return goal;
 }
 
 export function getGoal(id: string): Goal | null {

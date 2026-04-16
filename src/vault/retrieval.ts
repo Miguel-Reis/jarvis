@@ -13,7 +13,9 @@ import { getEntityRelationships } from './relationships.ts';
 import { USER_PROFILE_VAULT_SOURCE } from './user-profile.ts';
 import { findSimilar } from './vectors.ts';
 import { getEmbeddingService } from '../llm/embeddings.ts';
-import { findGoals } from './goals.ts';
+import { findGoals, getGoal } from './goals.ts';
+import type { Goal } from '../goals/types.ts';
+import { getCommitment, type Commitment } from './commitments.ts';
 
 // Common stopwords to filter from search queries
 const STOPWORDS = new Set([
@@ -58,10 +60,14 @@ export function extractSearchTerms(message: string): string[] {
 }
 
 /**
- * Search the vault for entities matching the given terms.
- * Searches entity names and fact objects/predicates.
+ * Search the vault for entities, commitments, and goals matching the given message.
+ * Returns the full context bundle used by getKnowledgeForMessage.
  */
-export async function retrieveForMessage(message: string): Promise<EntityProfile[]> {
+async function retrieveContextForMessage(message: string): Promise<{
+  profiles: EntityProfile[];
+  commitments: Commitment[];
+  goals: Goal[];
+}> {
   const terms = extractSearchTerms(message);
   const entityMap = new Map<string, Entity>();
 
@@ -91,7 +97,8 @@ export async function retrieveForMessage(message: string): Promise<EntityProfile
     }
   }
 
-  if (terms.length === 0 && entityMap.size === 0 && !getEmbeddingService()?.isAvailable()) return [];
+  if (terms.length === 0 && entityMap.size === 0 && !getEmbeddingService()?.isAvailable())
+    return { profiles: [], commitments: [], goals: [] };
 
   // 1. Search entity names
   for (const term of terms) {
@@ -126,17 +133,30 @@ export async function retrieveForMessage(message: string): Promise<EntityProfile
     // DB not available — return what we have from entity search
   }
 
-  // 3. Vector search — enrich with semantically similar entities
+  // 3. Vector search — enrich with semantically similar entities, commitments, and goals
+  const matchedCommitments = new Map<string, Commitment>();
+  const matchedGoals = new Map<string, Goal>();
+
   try {
     const svc = getEmbeddingService();
     if (svc?.isAvailable()) {
       const queryVec = await svc.embed(message);
       if (queryVec) {
-        const similar = findSimilar(queryVec, 5);
+        const similar = findSimilar(queryVec, 8);
         for (const { ref_type, ref_id } of similar) {
           if (ref_type === 'entity' && !entityMap.has(ref_id)) {
             const entity = getEntity(ref_id);
             if (entity) entityMap.set(entity.id, entity);
+          } else if (ref_type === 'commitment' && !matchedCommitments.has(ref_id)) {
+            const c = getCommitment(ref_id);
+            if (c && c.status !== 'completed' && c.status !== 'failed') {
+              matchedCommitments.set(ref_id, c);
+            }
+          } else if (ref_type === 'goal' && !matchedGoals.has(ref_id)) {
+            const g = getGoal(ref_id);
+            if (g && g.status === 'active') {
+              matchedGoals.set(ref_id, g);
+            }
           }
         }
         if (similar.length > 0) {
@@ -170,7 +190,14 @@ export async function retrieveForMessage(message: string): Promise<EntityProfile
     profiles.push({ entity, facts, relationships });
   }
 
-  return profiles;
+  return { profiles, commitments: [...matchedCommitments.values()], goals: [...matchedGoals.values()] };
+}
+
+/**
+ * Public wrapper — returns entity profiles only (backward-compatible).
+ */
+export async function retrieveForMessage(message: string): Promise<EntityProfile[]> {
+  return (await retrieveContextForMessage(message)).profiles;
 }
 
 function looksLikeSelfQuery(message: string): boolean {
@@ -209,13 +236,48 @@ export function formatKnowledgeContext(profiles: EntityProfile[]): string {
 }
 
 /**
+ * Format a list of semantically matched commitments into readable text.
+ */
+function formatCommitmentsContext(commitments: Commitment[]): string {
+  if (commitments.length === 0) return '';
+  const lines = commitments.map(c => {
+    const dueStr = c.when_due ? ` (due: ${new Date(c.when_due).toLocaleDateString()})` : '';
+    return `  - [${c.priority}] ${c.what}${dueStr} — ${c.status}`;
+  });
+  return `**Related Commitments**\n${lines.join('\n')}`;
+}
+
+/**
+ * Format a list of semantically matched goals into readable text.
+ */
+function formatGoalsContext(goals: Goal[]): string {
+  if (goals.length === 0) return '';
+  const lines = goals.map(g => {
+    const deadlineStr = g.deadline ? ` (deadline: ${new Date(g.deadline).toLocaleDateString()})` : '';
+    return `  - [${g.level}] ${g.title} — score ${g.score.toFixed(1)}/1.0${deadlineStr}`;
+  });
+  return `**Related Goals**\n${lines.join('\n')}`;
+}
+
+/**
  * Main entry point: get formatted knowledge context for a user message.
  * Returns empty string if no relevant knowledge found.
  */
 export async function getKnowledgeForMessage(message: string): Promise<string> {
   try {
-    const profiles = await retrieveForMessage(message);
-    return formatKnowledgeContext(profiles);
+    const { profiles, commitments, goals } = await retrieveContextForMessage(message);
+    const parts: string[] = [];
+
+    const entityContext = formatKnowledgeContext(profiles);
+    if (entityContext) parts.push(entityContext);
+
+    const commitmentContext = formatCommitmentsContext(commitments);
+    if (commitmentContext) parts.push(commitmentContext);
+
+    const goalContext = formatGoalsContext(goals);
+    if (goalContext) parts.push(goalContext);
+
+    return parts.join('\n\n');
   } catch (err) {
     console.error('[Retrieval] Error querying vault:', err);
     return '';
