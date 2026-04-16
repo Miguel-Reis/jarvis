@@ -45,6 +45,7 @@ export class WebSocketService implements Service {
   private sttProvider: STTProvider | null = null;
   private voiceSessions = new Map<ServerWebSocket<unknown>, VoiceSession>();
   private siteBuilderService: import('../sites/service.ts').SiteBuilderService | null = null;
+  private triggerManager: import('../workflows/triggers/manager.ts').TriggerManager | null = null;
 
   constructor(port: number, agentService: AgentService) {
     this.port = port;
@@ -70,6 +71,13 @@ export class WebSocketService implements Service {
    */
   setSiteBuilderService(svc: import('../sites/service.ts').SiteBuilderService): void {
     this.siteBuilderService = svc;
+  }
+
+  /**
+   * Set the trigger manager so incoming chat messages can fire `trigger.message` workflows.
+   */
+  setTriggerManager(tm: import('../workflows/triggers/manager.ts').TriggerManager): void {
+    this.triggerManager = tm;
   }
 
   /**
@@ -605,6 +613,11 @@ When the user asks you to build, edit, or work on a website/app, use these tools
 If the user wants to create a new project, tell them to use the Site Builder page (Sites tab in the sidebar) to create one first.`;
         }
       } catch { /* ignore — site builder may not be fully started */ }
+    }
+
+    // Fire message-based workflow triggers (non-blocking)
+    if (text && this.triggerManager) {
+      try { this.triggerManager.checkMessage(text, channel); } catch { /* non-critical */ }
     }
 
     // Auto-create a task for non-trivial messages

@@ -26,6 +26,7 @@ import { GoogleAuth } from "../integrations/google-auth.ts";
 import { ResearchQueue } from "./research-queue.ts";
 import { researchQueueTool, setResearchQueueRef } from "../actions/tools/research.ts";
 import { ChannelService } from "./channel-service.ts";
+import { McpService } from "./mcp-service.ts";
 import { BackgroundAgentService } from "./background-agent-service.ts";
 import { AuthorityEngine } from "../authority/engine.ts";
 import { ApprovalManager } from "../authority/approval.ts";
@@ -55,6 +56,7 @@ let healthMonitor: HealthMonitor | null = null;
 let heartbeatTimer: Timer | null = null;
 let commitmentExecutor: CommitmentExecutor | null = null;
 let bgAgent: BackgroundAgentService | null = null;
+let mcpServiceInstance: McpService | null = null;
 let awarenessService: import('../awareness/service.ts').AwarenessService | null = null;
 let goalService: import('../goals/service.ts').GoalService | null = null;
 
@@ -163,6 +165,12 @@ async function handleShutdown(signal: string): Promise<void> {
     if (awarenessService) {
       await awarenessService.stop();
       awarenessService = null;
+    }
+
+    // Stop MCP servers
+    if (mcpServiceInstance) {
+      await mcpServiceInstance.stop();
+      mcpServiceInstance = null;
     }
 
     // Stop background agent (separate browser)
@@ -515,6 +523,13 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
     if (toolRegistry) {
       deferredExecutor.setToolRegistry(toolRegistry);
     }
+
+    // 10a-mcp. Start MCP service with the live tool registry
+    const mcpService = new McpService(jarvisConfig);
+    if (toolRegistry) mcpService.setToolRegistry(toolRegistry);
+    await mcpService.start();
+    mcpServiceInstance = mcpService;
+    apiContext.mcpService = mcpService;
     approvalDelivery.setBroadcaster(wsService);
     approvalDelivery.setChannelSender(channelService);
     deferredExecutor.setResultCallback((requestId, request, result) => {
@@ -825,6 +840,8 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
         // Wire into API context
         (apiContext as any).workflowEngine = workflowEngine;
         (apiContext as any).triggerManager = triggerManager;
+        // Wire message triggers into WebSocket service
+        wsService.setTriggerManager(triggerManager);
         (apiContext as any).webhookManager = triggerManager.getWebhookManager();
         (apiContext as any).nodeRegistry = nodeRegistry;
         (apiContext as any).nlBuilder = nlBuilder;

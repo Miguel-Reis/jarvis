@@ -139,6 +139,17 @@ export type AuthConfig = {
   token?: string;
 };
 
+export type McpServerConfig = {
+  /** Unique name for this MCP server (used as tool name prefix: mcp_{name}_*) */
+  name: string;
+  /** Executable to spawn (e.g. "npx", "python", "/usr/local/bin/my-mcp-server") */
+  command: string;
+  /** Arguments passed to the command */
+  args?: string[];
+  /** Extra environment variables for the server process */
+  env?: Record<string, string>;
+};
+
 export type UserConfig = {
   name?: string;
 };
@@ -187,6 +198,7 @@ export type JarvisConfig = {
   authority: AuthorityConfig;
   heartbeat: HeartbeatConfig;
   active_role: string;  // role file name
+  mcp_servers?: McpServerConfig[];
 };
 
 export const DEFAULT_CONFIG: JarvisConfig = {

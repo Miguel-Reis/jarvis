@@ -33,7 +33,15 @@ const TRIGGER_TYPES = new Set([
   'trigger.calendar',
   'trigger.notification',
   'trigger.screen',
+  'trigger.message',
 ]);
+
+type MessageTriggerEntry = {
+  workflowId: string;
+  nodeId: string;
+  pattern: RegExp;
+  channel?: string;
+};
 
 // ── TriggerManager ──
 
@@ -49,6 +57,8 @@ export class TriggerManager implements Service {
 
   /** workflowId → set of registered trigger identifiers */
   private registrations: Map<string, Set<string>> = new Map();
+  /** message triggers: matched against every incoming chat message */
+  private messagePatterns: MessageTriggerEntry[] = [];
 
   constructor(workflowEngine: WorkflowEngine) {
     this.engine = workflowEngine;
@@ -82,6 +92,7 @@ export class TriggerManager implements Service {
     this.cron.cancelAll();
     this.poller.unregisterAll();
     this.registrations.clear();
+    this.messagePatterns = [];
     // Webhooks are stateless HTTP handlers; nothing to teardown at the transport level
 
     this._status = 'stopped';
@@ -130,8 +141,29 @@ export class TriggerManager implements Service {
     }
 
     this.webhooks.unregister(workflowId);
+    this.messagePatterns = this.messagePatterns.filter(e => e.workflowId !== workflowId);
     this.registrations.delete(workflowId);
     console.log(`[TriggerManager] Unregistered triggers for workflow "${workflowId}"`);
+  }
+
+  /**
+   * Check an incoming user message against all registered `trigger.message` patterns.
+   * Fires matching workflows with the message text and channel as trigger data.
+   * Call this from ws-service whenever a user message arrives.
+   */
+  checkMessage(text: string, channel: string): void {
+    for (const entry of this.messagePatterns) {
+      if (entry.channel && entry.channel !== channel) continue;
+      if (entry.pattern.test(text)) {
+        console.log(`[TriggerManager] Message trigger matched workflow "${entry.workflowId}" (pattern: ${entry.pattern})`);
+        this.fire(entry.workflowId, 'message', {
+          text,
+          channel,
+          nodeId: entry.nodeId,
+          matchedPattern: entry.pattern.source,
+        });
+      }
+    }
   }
 
   /**
@@ -143,6 +175,7 @@ export class TriggerManager implements Service {
     this.cron.cancelAll();
     this.poller.unregisterAll();
     this.registrations.clear();
+    this.messagePatterns = [];
 
     const workflows = vault.findWorkflows({ enabled: true });
     let registered = 0;
@@ -199,6 +232,10 @@ export class TriggerManager implements Service {
         this.registerPollTrigger(workflowId, node, nodeKey);
         break;
 
+      case 'trigger.message':
+        this.registerMessageTrigger(workflowId, node);
+        break;
+
       case 'trigger.manual':
         // Manual triggers are fired programmatically via fireTrigger() — no setup needed
         console.log(`[TriggerManager] Manual trigger registered for workflow "${workflowId}" (node: ${node.id})`);
@@ -219,6 +256,28 @@ export class TriggerManager implements Service {
       default:
         console.warn(`[TriggerManager] Unknown trigger type "${node.type}" in workflow "${workflowId}"`);
     }
+  }
+
+  private registerMessageTrigger(workflowId: string, node: WorkflowNode): void {
+    const raw = (node.config.pattern as string | undefined) ?? '';
+    if (!raw) {
+      console.warn(`[TriggerManager] Message trigger node "${node.id}" in workflow "${workflowId}" has no pattern`);
+      return;
+    }
+
+    let pattern: RegExp;
+    try {
+      const flags = (node.config.flags as string | undefined) ?? 'i';
+      pattern = new RegExp(raw, flags);
+    } catch {
+      // Treat the raw string as a plain keyword match if it's not a valid regex
+      pattern = new RegExp(raw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    }
+
+    const channel = (node.config.channel as string | undefined) ?? undefined;
+
+    this.messagePatterns.push({ workflowId, nodeId: node.id, pattern, channel });
+    console.log(`[TriggerManager] Message trigger registered for workflow "${workflowId}" — pattern: ${pattern}${channel ? ` (channel: ${channel})` : ''}`);
   }
 
   private registerCronTrigger(workflowId: string, node: WorkflowNode, key: string): void {

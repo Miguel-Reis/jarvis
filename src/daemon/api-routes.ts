@@ -144,6 +144,7 @@ export type ApiContext = {
   goalService?: import('../goals/service.ts').GoalService;
   sidecarManager?: import('../sidecar/manager.ts').SidecarManager;
   siteBuilderService?: import('../sites/service.ts').SiteBuilderService;
+  mcpService?: import('./mcp-service.ts').McpService;
 };
 
 // CORS headers — scoped to the dashboard origin, not wildcard
@@ -3035,6 +3036,69 @@ export function createApiRoutes(ctx: ApiContext): Record<string, unknown> {
         } catch (err) {
           return error(err instanceof Error ? err.message : String(err));
         }
+      },
+    },
+
+    // ── MCP Servers ────────────────────────────────────────────────────
+    '/api/mcp/servers': {
+      /** List all configured MCP servers and their connection status */
+      GET: (_req: Request) => {
+        const servers = ctx.config.mcp_servers ?? [];
+        const statuses = ctx.mcpService?.getServerStatus() ?? [];
+        const statusMap = new Map(statuses.map(s => [s.name, s]));
+        return json(servers.map(s => ({
+          name: s.name,
+          command: s.command,
+          args: s.args ?? [],
+          connected: statusMap.get(s.name)?.connected ?? false,
+          toolCount: statusMap.get(s.name)?.toolCount ?? 0,
+          error: statusMap.get(s.name)?.error ?? null,
+        })));
+      },
+      /** Add a new MCP server to config */
+      POST: async (req: Request) => {
+        try {
+          const body = await req.json() as { name?: string; command?: string; args?: string[]; env?: Record<string, string> };
+          if (!body.name || !body.command) return error('name and command are required');
+          if (!/^[a-zA-Z0-9_-]+$/.test(body.name)) return error('name must be alphanumeric (a-z, 0-9, _, -)');
+
+          const { loadConfig, saveConfig } = await import('../config/loader.ts');
+          const fresh = await loadConfig();
+          if (!fresh.mcp_servers) fresh.mcp_servers = [];
+          if (fresh.mcp_servers.some(s => s.name === body.name)) return error(`Server '${body.name}' already exists`);
+
+          fresh.mcp_servers.push({ name: body.name!, command: body.command!, args: body.args, env: body.env });
+          await saveConfig(fresh);
+          return json({ ok: true, message: `Server '${body.name}' added. Restart daemon to connect.` });
+        } catch (err) { return error(err instanceof Error ? err.message : String(err)); }
+      },
+    },
+
+    '/api/mcp/servers/:name': {
+      /** Remove a configured MCP server */
+      DELETE: async (req: Request) => {
+        try {
+          const name = new URL(req.url).pathname.split('/').pop()!;
+          const { loadConfig, saveConfig } = await import('../config/loader.ts');
+          const fresh = await loadConfig();
+          const before = (fresh.mcp_servers ?? []).length;
+          fresh.mcp_servers = (fresh.mcp_servers ?? []).filter(s => s.name !== name);
+          if (fresh.mcp_servers.length === before) return error(`Server '${name}' not found`, 404);
+          await saveConfig(fresh);
+          return json({ ok: true, message: `Server '${name}' removed. Restart daemon to disconnect.` });
+        } catch (err) { return error(err instanceof Error ? err.message : String(err)); }
+      },
+    },
+
+    '/api/mcp/tools': {
+      /** List tool counts per connected MCP server */
+      GET: (_req: Request) => {
+        const statuses = ctx.mcpService?.getServerStatus() ?? [];
+        return json(statuses.map(s => ({
+          server: s.name,
+          connected: s.connected,
+          toolCount: s.toolCount,
+        })));
       },
     },
 

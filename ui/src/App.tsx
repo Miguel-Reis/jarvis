@@ -23,9 +23,9 @@ const SitesPage = React.lazy(() => import("./pages/SitesPage"));
 
 type Route = "dashboard" | "chat" | "tasks" | "pipeline" | "memory" | "calendar" | "office" | "knowledge" | "command" | "authority" | "awareness" | "workflows" | "goals" | "sites" | "settings";
 
-export type SettingsSection = "general" | "profile" | "llm" | "channels" | "integrations" | "sidecar";
+export type SettingsSection = "general" | "profile" | "llm" | "channels" | "integrations" | "sidecar" | "mcp";
 
-const SETTINGS_SECTIONS: SettingsSection[] = ["general", "profile", "llm", "channels", "integrations", "sidecar"];
+const SETTINGS_SECTIONS: SettingsSection[] = ["general", "profile", "llm", "channels", "integrations", "sidecar", "mcp"];
 
 function getRoute(): Route {
   const hash = window.location.hash.replace("#/", "");
@@ -97,6 +97,7 @@ const SETTINGS_NAV: { section: SettingsSection; label: string }[] = [
   { section: "channels", label: "Channels" },
   { section: "integrations", label: "Integrations" },
   { section: "sidecar", label: "Sidecar" },
+  { section: "mcp", label: "MCP Servers" },
 ];
 
 /* ================================================================
