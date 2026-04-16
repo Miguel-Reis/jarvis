@@ -154,10 +154,12 @@ export const readFileTool: ToolDefinition = {
       return `Error: Path is a directory, not a file: ${filePath}`;
     }
 
-    // Limit file size to 100KB
-    if (stat.size > 100 * 1024) {
-      const content = readFileSync(filePath, 'utf-8').slice(0, 100 * 1024);
-      return content + '\n... [truncated, file is ' + stat.size + ' bytes]';
+    const MAX_BYTES = 100 * 1024; // 100 KB read limit
+
+    // For large files, read only the first 100 KB — avoids allocating huge strings
+    if (stat.size > MAX_BYTES) {
+      const content = await Bun.file(filePath).slice(0, MAX_BYTES).text();
+      return content + `\n... [truncated, file is ${stat.size} bytes]`;
     }
 
     return readFileSync(filePath, 'utf-8');

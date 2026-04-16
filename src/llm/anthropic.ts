@@ -152,9 +152,6 @@ export class AnthropicProvider implements LLMProvider {
       body.tools = this.convertTools(tools);
       // Anthropic automatically uses tools when provided (no explicit tool_choice needed)
     }
-    if (tools && tools.length > 0) {
-      body.tools = this.convertTools(tools);
-    }
 
     let response: Response;
     try {

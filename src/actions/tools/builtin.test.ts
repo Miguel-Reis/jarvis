@@ -101,6 +101,15 @@ test('read_file returns error for directory path', async () => {
   expect(result).toContain('Error: Path is a directory');
 });
 
+test('read_file truncates files larger than 100 KB', async () => {
+  // Write a file that's just over 100 KB
+  const bigContent = 'x'.repeat(110 * 1024);
+  await writeFile('big.txt', bigContent);
+  const result = await readFile('big.txt');
+  expect(result).toContain('[truncated');
+  expect(result.length).toBeLessThan(bigContent.length);
+});
+
 // --- list_directory ---
 
 test('list_directory lists created files', async () => {
