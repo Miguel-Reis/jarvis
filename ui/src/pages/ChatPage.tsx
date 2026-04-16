@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import type { ChatMessage } from "../hooks/useWebSocket";
 import type { UseVoiceReturn } from "../hooks/useVoice";
 import { MessageList } from "../components/chat/MessageList";
@@ -25,6 +25,17 @@ export default function ChatPage({
   onSelectThread,
   onNewThread,
 }: ChatPageProps) {
+  const [disableImages, setDisableImages] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/config/llm')
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data?.primary === 'ollama') setDisableImages(true);
+      })
+      .catch(() => {});
+  }, []);
+
   const voiceStatus = voice
     ? voice.voiceState === "speaking" || voice.ttsAudioPlaying
       ? "JARVIS is speaking..."
@@ -102,6 +113,7 @@ export default function ChatPage({
         <ChatInput
           onSend={(text, images) => sendMessage(text, { ...(activeThreadId ? { threadId: activeThreadId } : {}), ...(images ? { images } : {}) })}
           disabled={!isConnected}
+          disableImages={disableImages}
           voice={voice ? {
             voiceState: voice.voiceState,
             startRecording: voice.startRecording,

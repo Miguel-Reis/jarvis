@@ -15,6 +15,7 @@ type VoiceProps = {
 type Props = {
   onSend: (text: string, images?: ImageAttachment[]) => void;
   disabled?: boolean;
+  disableImages?: boolean;
   voice?: VoiceProps;
 };
 
@@ -30,7 +31,7 @@ function fileToImageAttachment(file: File): Promise<ImageAttachment> {
   });
 }
 
-export function ChatInput({ onSend, disabled, voice }: Props) {
+export function ChatInput({ onSend, disabled, disableImages, voice }: Props) {
   const [text, setText] = useState("");
   const [images, setImages] = useState<ImageAttachment[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -43,7 +44,8 @@ export function ChatInput({ onSend, disabled, voice }: Props) {
   const handleSubmit = () => {
     const trimmed = text.trim();
     if ((!trimmed && images.length === 0) || disabled) return;
-    onSend(trimmed, images.length > 0 ? images : undefined);
+    const attachedImages = disableImages ? undefined : (images.length > 0 ? images : undefined);
+    onSend(trimmed, attachedImages);
     setText("");
     setImages([]);
     if (textareaRef.current) {
@@ -74,13 +76,14 @@ export function ChatInput({ onSend, disabled, voice }: Props) {
   }, []);
 
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    if (disableImages) return;
     const items = Array.from(e.clipboardData.items);
     const imageItems = items.filter((item) => item.type.startsWith("image/"));
     if (imageItems.length === 0) return;
     e.preventDefault();
     const files = imageItems.map((item) => item.getAsFile()).filter(Boolean) as File[];
     addImageFiles(files);
-  }, [addImageFiles]);
+  }, [addImageFiles, disableImages]);
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
@@ -131,7 +134,7 @@ export function ChatInput({ onSend, disabled, voice }: Props) {
   return (
     <div className="chat-input-area">
       {/* Image preview strip */}
-      {images.length > 0 && (
+      {!disableImages && images.length > 0 && (
         <div className="chat-image-previews">
           {images.map((img, i) => (
             <div key={i} className="chat-image-preview-wrap">
@@ -144,24 +147,28 @@ export function ChatInput({ onSend, disabled, voice }: Props) {
 
       <div className="chat-input-row">
         {/* Hidden file input */}
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          multiple
-          style={{ display: "none" }}
-          onChange={handleFileChange}
-        />
+        {!disableImages && (
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            style={{ display: "none" }}
+            onChange={handleFileChange}
+          />
+        )}
 
         {/* Image attach button */}
-        <button
-          className="chat-attach-btn"
-          onClick={() => fileInputRef.current?.click()}
-          title="Attach image (or paste)"
-          disabled={disabled}
-        >
-          &#x1F4CE;
-        </button>
+        {!disableImages && (
+          <button
+            className="chat-attach-btn"
+            onClick={() => fileInputRef.current?.click()}
+            title="Attach image (or paste)"
+            disabled={disabled}
+          >
+            &#x1F4CE;
+          </button>
+        )}
 
         <textarea
           ref={textareaRef}
@@ -199,7 +206,7 @@ export function ChatInput({ onSend, disabled, voice }: Props) {
         </button>
       </div>
       <div className="chat-hints">
-        Enter to send &middot; Shift+Enter for new line &middot; Paste image to attach
+        Enter to send &middot; Shift+Enter for new line{!disableImages && <> &middot; Paste image to attach</>}
       </div>
     </div>
   );

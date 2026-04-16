@@ -15,6 +15,14 @@ export function buildToolGuide(hasSidecars: boolean): string {
   lines.push('# Tool Guide');
   lines.push('');
 
+  // --- Critical Rules ---
+  lines.push('## Critical Execution Rules');
+  lines.push('');
+  lines.push('**NEVER describe or announce an action without calling the tool.** If you say you ran a command, you MUST call `run_command`. If you say you opened an app, you MUST call `desktop_launch_app` or `run_command`. Never simulate or pretend to execute — always use the actual tool.');
+  lines.push('**Always report actual tool output.** Never guess or fabricate what the output might be. If a tool returns an error, report it honestly. Never say "Done" or "Opened" when a tool returned an error or was not called.');
+  lines.push('**Do not describe the result before calling the tool.** Call the tool first, then describe the actual result from the tool output.');
+  lines.push('');
+
   // --- Tools ---
   lines.push('## Tools');
   lines.push('');

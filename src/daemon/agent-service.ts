@@ -259,7 +259,13 @@ export class AgentService implements Service, IAgentService {
       systemPrompt += '\n\n' + siteContext;
     }
 
-    const messageContent: string | ContentBlock[] = contentBlocks ?? text;
+    let effectiveBlocks = contentBlocks;
+    if (effectiveBlocks && this.config.llm.primary === 'ollama') {
+      const filtered = effectiveBlocks.filter((b) => b.type !== 'image');
+      effectiveBlocks = filtered.length > 0 ? filtered : undefined;
+    }
+
+    const messageContent: string | ContentBlock[] = effectiveBlocks ?? text;
     const stream = this.orchestrator.streamMessage(systemPrompt, messageContent);
 
     const onComplete = async (fullText: string): Promise<void> => {

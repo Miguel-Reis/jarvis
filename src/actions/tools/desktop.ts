@@ -13,6 +13,7 @@
 
 import type { ToolDefinition, ToolResult } from './registry.ts';
 import { routeToSidecarOrDefault } from './sidecar-route.ts';
+import { isNoLocalTools } from './local-tools-guard.ts';
 
 // --- Tool definitions ---
 
@@ -164,7 +165,45 @@ export const desktopLaunchAppTool: ToolDefinition = {
   },
   execute: async (params) => {
     const target = params.target as string | undefined;
-    return routeToSidecarOrDefault(target, 'launch_app', params, 'desktop');
+    const result = await routeToSidecarOrDefault(target, 'launch_app', params, 'desktop');
+
+    // If sidecar returned an error and no explicit target was requested,
+    // fall back to a direct OS-level launch so the user isn't left hanging.
+    const executable = params.executable as string | undefined;
+    if (result.startsWith('Error:') && !target && !isNoLocalTools() && executable) {
+      const args = params.args as string | undefined;
+
+      let cmd: string[];
+      if (process.platform === 'darwin') {
+        cmd = ['open', '-a', executable, ...(args ? args.split(' ') : [])];
+      } else if (process.platform === 'win32') {
+        cmd = ['cmd', '/c', 'start', '', executable, ...(args ? args.split(' ') : [])];
+      } else {
+        // Linux — try xdg-open first, then direct exec
+        cmd = ['xdg-open', executable];
+      }
+
+      try {
+        const proc = Bun.spawn(cmd, { stdout: 'pipe', stderr: 'pipe' });
+        await proc.exited;
+        if (proc.exitCode === 0) {
+          return `Launched "${executable}" (fallback, sidecar unavailable)`;
+        }
+        // If xdg-open failed on Linux, try direct execution
+        if (process.platform === 'linux') {
+          const direct = Bun.spawn([executable, ...(args ? args.split(' ') : [])], { stdout: 'pipe', stderr: 'pipe' });
+          await direct.exited;
+          if (direct.exitCode === 0) {
+            return `Launched "${executable}" directly (fallback, sidecar unavailable)`;
+          }
+        }
+        return `Error: Failed to launch "${executable}" — sidecar unavailable and fallback failed.`;
+      } catch (err) {
+        return `Error: Failed to launch "${executable}" — ${err instanceof Error ? err.message : String(err)}`;
+      }
+    }
+
+    return result;
   },
 };
 
