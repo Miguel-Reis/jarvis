@@ -292,6 +292,66 @@ function createTables(db: Database): void {
     CREATE INDEX IF NOT EXISTS idx_conv_msg_time ON conversation_messages(created_at)
   `);
 
+  // FTS5 full-text index for conversation messages (BM25 ranking)
+  try {
+    db.run(`
+      CREATE VIRTUAL TABLE IF NOT EXISTS conv_messages_fts USING fts5(
+        content,
+        content='conversation_messages',
+        content_rowid='rowid',
+        tokenize='porter unicode61'
+      )
+    `);
+    db.run(`
+      CREATE TRIGGER IF NOT EXISTS conv_fts_insert AFTER INSERT ON conversation_messages BEGIN
+        INSERT INTO conv_messages_fts(rowid, content) VALUES (new.rowid, new.content);
+      END
+    `);
+    db.run(`
+      CREATE TRIGGER IF NOT EXISTS conv_fts_delete BEFORE DELETE ON conversation_messages BEGIN
+        INSERT INTO conv_messages_fts(conv_messages_fts, rowid, content) VALUES ('delete', old.rowid, old.content);
+      END
+    `);
+    db.run(`
+      CREATE TRIGGER IF NOT EXISTS conv_fts_update AFTER UPDATE ON conversation_messages BEGIN
+        INSERT INTO conv_messages_fts(conv_messages_fts, rowid, content) VALUES ('delete', old.rowid, old.content);
+        INSERT INTO conv_messages_fts(rowid, content) VALUES (new.rowid, new.content);
+      END
+    `);
+  } catch {
+    // FTS5 not available or already exists — degrade gracefully
+  }
+
+  // FTS5 full-text index for facts (predicate + object)
+  try {
+    db.run(`
+      CREATE VIRTUAL TABLE IF NOT EXISTS facts_fts USING fts5(
+        predicate, object,
+        content='facts',
+        content_rowid='rowid',
+        tokenize='porter unicode61'
+      )
+    `);
+    db.run(`
+      CREATE TRIGGER IF NOT EXISTS facts_fts_insert AFTER INSERT ON facts BEGIN
+        INSERT INTO facts_fts(rowid, predicate, object) VALUES (new.rowid, new.predicate, new.object);
+      END
+    `);
+    db.run(`
+      CREATE TRIGGER IF NOT EXISTS facts_fts_delete BEFORE DELETE ON facts BEGIN
+        INSERT INTO facts_fts(facts_fts, rowid, predicate, object) VALUES ('delete', old.rowid, old.predicate, old.object);
+      END
+    `);
+    db.run(`
+      CREATE TRIGGER IF NOT EXISTS facts_fts_update AFTER UPDATE ON facts BEGIN
+        INSERT INTO facts_fts(facts_fts, rowid, predicate, object) VALUES ('delete', old.rowid, old.predicate, old.object);
+        INSERT INTO facts_fts(rowid, predicate, object) VALUES (new.rowid, new.predicate, new.object);
+      END
+    `);
+  } catch {
+    // FTS5 not available or already exists — degrade gracefully
+  }
+
   // Content pipeline: items moving through creation stages
   db.run(`
     CREATE TABLE IF NOT EXISTS content_items (

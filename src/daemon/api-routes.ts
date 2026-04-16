@@ -61,6 +61,7 @@ import {
 import { mkdirSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { getWhatsAppAdapter } from '../comms/channels/whatsapp.ts';
 
 // --- Security helpers ---
 
@@ -2193,6 +2194,22 @@ export function createApiRoutes(ctx: ApiContext): Record<string, unknown> {
           const id = url.pathname.split('/').pop()!;
           return ctx.webhookManager.handleRequest(id, req);
         } catch (err) { return error(`${err}`); }
+      },
+    },
+
+    // ── WhatsApp Cloud API webhook ─────────────────────────────────────
+    '/webhooks/whatsapp': {
+      /** Meta sends a GET to verify the webhook endpoint ownership */
+      GET: (req: Request) => {
+        const adapter = getWhatsAppAdapter();
+        if (!adapter) return new Response('WhatsApp not configured', { status: 404 });
+        return adapter.handleVerify(req);
+      },
+      /** Incoming messages and status updates from Meta */
+      POST: async (req: Request) => {
+        const adapter = getWhatsAppAdapter();
+        if (!adapter) return new Response('WhatsApp not configured', { status: 404 });
+        return adapter.handleIncoming(req);
       },
     },
 

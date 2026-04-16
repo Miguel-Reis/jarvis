@@ -16,6 +16,7 @@ import type { STTProvider } from '../comms/voice.ts';
 import { ChannelManager } from '../comms/index.ts';
 import { TelegramAdapter } from '../comms/channels/telegram.ts';
 import { DiscordAdapter } from '../comms/channels/discord.ts';
+import { WhatsAppAdapter } from '../comms/channels/whatsapp.ts';
 import { createSTTProvider } from '../comms/voice.ts';
 import { getOrCreateConversation, addMessage } from '../vault/conversations.ts';
 
@@ -75,6 +76,16 @@ export class ChannelService implements Service {
           guildId: channels.discord.guild_id,
         });
         this.manager.register(discord);
+      }
+
+      if (channels?.whatsapp?.enabled && channels.whatsapp.phone_number_id && channels.whatsapp.access_token) {
+        const whatsapp = new WhatsAppAdapter({
+          phoneNumberId: channels.whatsapp.phone_number_id,
+          accessToken: channels.whatsapp.access_token,
+          webhookVerifyToken: channels.whatsapp.webhook_verify_token || 'jarvis-verify',
+          allowedUsers: channels.whatsapp.allowed_users,
+        });
+        this.manager.register(whatsapp);
       }
 
       // 3. Set unified message handler — same brain for all channels

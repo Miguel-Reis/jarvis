@@ -1,9 +1,13 @@
 /**
  * Vault Retrieval — Memory Query Engine
  *
- * Takes a user message, extracts search terms, queries the knowledge graph
- * for matching entities/facts/relationships, and returns formatted context
- * that gets injected into the system prompt.
+ * Hybrid BM25 + vector retrieval:
+ *   1. Entity name search (keyword)
+ *   2. Facts FTS5 (BM25 — porter stemmer, ranked by relevance × recency)
+ *   3. Conversation messages FTS5 (BM25 — recent relevant chat snippets)
+ *   4. Vector cosine similarity (semantic matches across all ref types)
+ *
+ * Results are merged and de-duplicated before formatting into the system prompt.
  */
 
 import { getDb } from './schema.ts';
@@ -67,6 +71,7 @@ async function retrieveContextForMessage(message: string): Promise<{
   profiles: EntityProfile[];
   commitments: Commitment[];
   goals: Goal[];
+  recentConversationSnippets: string[];
 }> {
   const terms = extractSearchTerms(message);
   const entityMap = new Map<string, Entity>();
@@ -98,7 +103,9 @@ async function retrieveContextForMessage(message: string): Promise<{
   }
 
   if (terms.length === 0 && entityMap.size === 0 && !getEmbeddingService()?.isAvailable())
-    return { profiles: [], commitments: [], goals: [] };
+    return { profiles: [], commitments: [], goals: [], recentConversationSnippets: [] };
+
+  const recentConversationSnippets: string[] = [];
 
   // 1. Search entity names
   for (const term of terms) {
@@ -108,29 +115,100 @@ async function retrieveContextForMessage(message: string): Promise<{
     }
   }
 
-  // 2. Search fact objects and predicates for matching terms
+  // 2a. Facts FTS5 (BM25) — ranked by relevance then recency
   try {
     const db = getDb();
-    for (const term of terms) {
-      const stmt = db.prepare(`
-        SELECT DISTINCT e.id, e.type, e.name, e.properties, e.created_at, e.updated_at, e.source
-        FROM entities e
-        JOIN facts f ON e.id = f.subject_id
-        WHERE f.object LIKE ? OR f.predicate LIKE ?
-        LIMIT 10
-      `);
-      const rows = stmt.all(`%${term}%`, `%${term}%`) as any[];
-      for (const row of rows) {
-        if (!entityMap.has(row.id)) {
-          entityMap.set(row.id, {
-            ...row,
-            properties: row.properties ? JSON.parse(row.properties) : null,
-          });
+    if (terms.length > 0) {
+      // Try FTS5 first; fall back to LIKE if unavailable
+      const ftsQuery = terms.map((t) => `"${t.replace(/"/g, '""')}"*`).join(' OR ');
+      try {
+        const rows = db.prepare(`
+          SELECT DISTINCT e.id, e.type, e.name, e.properties, e.created_at, e.updated_at, e.source
+          FROM entities e
+          JOIN facts f ON e.id = f.subject_id
+          JOIN facts_fts fts ON fts.rowid = f.rowid
+          WHERE facts_fts MATCH ?
+          ORDER BY rank
+          LIMIT 15
+        `).all(ftsQuery) as any[];
+        for (const row of rows) {
+          if (!entityMap.has(row.id)) {
+            entityMap.set(row.id, {
+              ...row,
+              properties: row.properties ? JSON.parse(row.properties) : null,
+            });
+          }
+        }
+      } catch {
+        // FTS5 not available — fallback to LIKE
+        for (const term of terms) {
+          const rows = db.prepare(`
+            SELECT DISTINCT e.id, e.type, e.name, e.properties, e.created_at, e.updated_at, e.source
+            FROM entities e
+            JOIN facts f ON e.id = f.subject_id
+            WHERE f.object LIKE ? OR f.predicate LIKE ?
+            LIMIT 10
+          `).all(`%${term}%`, `%${term}%`) as any[];
+          for (const row of rows) {
+            if (!entityMap.has(row.id)) {
+              entityMap.set(row.id, {
+                ...row,
+                properties: row.properties ? JSON.parse(row.properties) : null,
+              });
+            }
+          }
         }
       }
     }
   } catch {
     // DB not available — return what we have from entity search
+  }
+
+  // 2b. Conversation messages FTS5 (BM25) — find recent snippets matching the query
+  if (terms.length > 0) {
+    try {
+      const db = getDb();
+      const now = Date.now();
+      const ftsQuery = terms.map((t) => `"${t.replace(/"/g, '""')}"*`).join(' OR ');
+
+      // Temporal decay: score = bm25_rank * recency_factor
+      // recency_factor = 1 / (1 + days_old) — recent messages score higher
+      let rows: Array<{ content: string; created_at: number; role: string }> = [];
+
+      try {
+        rows = db.prepare(`
+          SELECT cm.content, cm.created_at, cm.role
+          FROM conversation_messages cm
+          JOIN conv_messages_fts fts ON fts.rowid = cm.rowid
+          WHERE conv_messages_fts MATCH ?
+            AND cm.role IN ('user', 'assistant')
+          ORDER BY rank * (1.0 / (1.0 + (? - cm.created_at) / 86400000.0))
+          LIMIT 8
+        `).all(ftsQuery, now) as any[];
+      } catch {
+        // FTS5 unavailable — LIKE fallback
+        const pattern = `%${terms[0]}%`;
+        rows = db.prepare(`
+          SELECT content, created_at, role
+          FROM conversation_messages
+          WHERE content LIKE ?
+            AND role IN ('user', 'assistant')
+          ORDER BY created_at DESC
+          LIMIT 8
+        `).all(pattern) as any[];
+      }
+
+      for (const row of rows) {
+        const excerpt = row.content.length > 200
+          ? row.content.slice(0, 197) + '…'
+          : row.content;
+        const daysAgo = Math.round((now - row.created_at) / 86400000);
+        const timeLabel = daysAgo === 0 ? 'today' : daysAgo === 1 ? 'yesterday' : `${daysAgo}d ago`;
+        recentConversationSnippets.push(`[${row.role}, ${timeLabel}] ${excerpt}`);
+      }
+    } catch {
+      // Best-effort — never block
+    }
   }
 
   // 3. Vector search — enrich with semantically similar entities, commitments, and goals
@@ -190,7 +268,7 @@ async function retrieveContextForMessage(message: string): Promise<{
     profiles.push({ entity, facts, relationships });
   }
 
-  return { profiles, commitments: [...matchedCommitments.values()], goals: [...matchedGoals.values()] };
+  return { profiles, commitments: [...matchedCommitments.values()], goals: [...matchedGoals.values()], recentConversationSnippets };
 }
 
 /**
@@ -265,7 +343,7 @@ function formatGoalsContext(goals: Goal[]): string {
  */
 export async function getKnowledgeForMessage(message: string): Promise<string> {
   try {
-    const { profiles, commitments, goals } = await retrieveContextForMessage(message);
+    const { profiles, commitments, goals, recentConversationSnippets } = await retrieveContextForMessage(message);
     const parts: string[] = [];
 
     const entityContext = formatKnowledgeContext(profiles);
@@ -276,6 +354,10 @@ export async function getKnowledgeForMessage(message: string): Promise<string> {
 
     const goalContext = formatGoalsContext(goals);
     if (goalContext) parts.push(goalContext);
+
+    if (recentConversationSnippets.length > 0) {
+      parts.push(`**Related Conversation History**\n${recentConversationSnippets.join('\n')}`);
+    }
 
     return parts.join('\n\n');
   } catch (err) {

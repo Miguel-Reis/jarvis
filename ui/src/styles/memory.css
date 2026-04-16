@@ -248,3 +248,34 @@
 @keyframes mem-loadBreath { 0%,100% { transform: scale(1); opacity: 0.8; } 50% { transform: scale(1.15); opacity: 1; } }
 .mem-loading-text { font-size: 12px; color: rgba(255,255,255,0.30); }
 .mem-empty { text-align: center; padding: 48px 20px; color: rgba(255,255,255,0.30); font-size: 12px; }
+
+/* ── Conversation Search View ── */
+.mem-conv-search { display: flex; flex-direction: column; flex: 1; overflow: hidden; padding: 20px 24px; gap: 16px; }
+.mem-conv-search-bar { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; padding: 10px 14px; }
+.mem-conv-search-input {
+  flex: 1; background: none; border: none; outline: none;
+  color: rgba(255,255,255,0.88); font-size: 13px; font-family: inherit;
+}
+.mem-conv-search-input::placeholder { color: rgba(255,255,255,0.25); }
+.mem-conv-search-btn {
+  background: rgba(139,92,246,0.15); border: 1px solid rgba(139,92,246,0.25);
+  color: #A78BFA; font-size: 11px; padding: 5px 14px; border-radius: 6px;
+  cursor: pointer; transition: all 150ms;
+}
+.mem-conv-search-btn:hover:not(:disabled) { background: rgba(139,92,246,0.25); }
+.mem-conv-search-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.mem-conv-results-header { font-size: 11px; color: rgba(255,255,255,0.35); font-family: 'JetBrains Mono', monospace; }
+.mem-conv-results { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.mem-conv-empty { text-align: center; padding: 48px 20px; color: rgba(255,255,255,0.25); font-size: 12px; }
+.mem-conv-result {
+  background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 8px; padding: 12px 14px; transition: border-color 150ms;
+}
+.mem-conv-result:hover { border-color: rgba(139,92,246,0.20); }
+.mem-cr-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.mem-cr-role { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; padding: 2px 7px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; }
+.mem-cr-role-user { background: rgba(96,165,250,0.12); color: #60A5FA; }
+.mem-cr-role-assistant { background: rgba(139,92,246,0.12); color: #A78BFA; }
+.mem-cr-thread { font-size: 11px; color: rgba(255,255,255,0.45); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mem-cr-time { font-size: 9px; color: rgba(255,255,255,0.25); font-family: 'JetBrains Mono', monospace; flex-shrink: 0; }
+.mem-cr-excerpt { font-size: 12px; color: rgba(255,255,255,0.60); line-height: 1.5; white-space: pre-wrap; word-break: break-word; }

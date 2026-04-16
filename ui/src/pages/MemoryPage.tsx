@@ -33,8 +33,17 @@ const CLUSTER_CENTERS: Record<string, { x: number; y: number }> = {
   place:   { x: 50, y: 50 },
 };
 
-type View = "constellation" | "explorer";
+type View = "constellation" | "explorer" | "search";
 type DetailTab = "profile" | "connections" | "conversations";
+
+type MemorySearchResult = {
+  thread_id: string;
+  thread_title: string | null;
+  message_id: string;
+  role: string;
+  excerpt: string;
+  created_at: number;
+};
 
 type Conversation = {
   id: string;
@@ -173,6 +182,19 @@ export default function MemoryPage() {
   const [profiles, setProfiles] = useState<MemoryProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [convSearchQuery, setConvSearchQuery] = useState("");
+  const [convResults, setConvResults] = useState<MemorySearchResult[]>([]);
+  const [convSearching, setConvSearching] = useState(false);
+
+  const searchConversations = useCallback(async (q: string) => {
+    if (!q.trim()) { setConvResults([]); return; }
+    setConvSearching(true);
+    try {
+      const data = await api<MemorySearchResult[]>(`/api/vault/threads/search?q=${encodeURIComponent(q)}`);
+      setConvResults(data);
+    } catch { setConvResults([]); }
+    finally { setConvSearching(false); }
+  }, []);
 
   const fetchMemories = useCallback(async (q: string, type: string) => {
     setLoading(true);
@@ -225,6 +247,10 @@ export default function MemoryPage() {
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
             Explorer
           </button>
+          <button className={view === "search" ? "active" : ""} onClick={() => setView("search")}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            Conversations
+          </button>
         </div>
 
         <div className="mem-header-spacer" />
@@ -245,6 +271,14 @@ export default function MemoryPage() {
           <div className="mem-loading-orb" />
           <div className="mem-loading-text">Loading memory vault...</div>
         </div>
+      ) : view === "search" ? (
+        <ConversationSearchView
+          query={convSearchQuery}
+          setQuery={setConvSearchQuery}
+          results={convResults}
+          searching={convSearching}
+          onSearch={searchConversations}
+        />
       ) : view === "constellation" ? (
         <ConstellationView
           profiles={profiles}
@@ -266,6 +300,61 @@ export default function MemoryPage() {
           query={query}
         />
       )}
+    </div>
+  );
+}
+
+// ── Conversation Search View ──
+
+function ConversationSearchView({ query, setQuery, results, searching, onSearch }: {
+  query: string;
+  setQuery: (q: string) => void;
+  results: MemorySearchResult[];
+  searching: boolean;
+  onSearch: (q: string) => void;
+}) {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") onSearch(query);
+  };
+
+  return (
+    <div className="mem-conv-search">
+      <div className="mem-conv-search-bar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ opacity: 0.4, flexShrink: 0 }}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input
+          className="mem-conv-search-input"
+          placeholder="Search across all conversations..."
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={handleKeyDown}
+          autoFocus
+        />
+        <button className="mem-conv-search-btn" onClick={() => onSearch(query)} disabled={!query.trim() || searching}>
+          {searching ? "…" : "Search"}
+        </button>
+      </div>
+
+      {results.length > 0 && (
+        <div className="mem-conv-results-header">
+          {results.length} result{results.length !== 1 ? "s" : ""} for &ldquo;{query}&rdquo;
+        </div>
+      )}
+
+      <div className="mem-conv-results">
+        {!searching && query && results.length === 0 && (
+          <div className="mem-conv-empty">No messages found for &ldquo;{query}&rdquo;</div>
+        )}
+        {results.map((r) => (
+          <div key={r.message_id} className="mem-conv-result">
+            <div className="mem-cr-meta">
+              <span className={`mem-cr-role mem-cr-role-${r.role}`}>{r.role}</span>
+              <span className="mem-cr-thread">{r.thread_title || "Untitled conversation"}</span>
+              <span className="mem-cr-time">{timeAgo(r.created_at)}</span>
+            </div>
+            <div className="mem-cr-excerpt">{r.excerpt}</div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

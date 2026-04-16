@@ -21,6 +21,13 @@ export type ChannelConfig = {
     allowed_users: string[];  // Discord user IDs
     guild_id?: string;        // restrict to single guild
   };
+  whatsapp?: {
+    enabled: boolean;
+    phone_number_id: string;  // Meta phone number ID
+    access_token: string;     // System user access token
+    webhook_verify_token: string; // Token to verify Meta webhook ownership
+    allowed_users?: string[]; // Optional E.164 phone number allowlist (e.g. "+351912345678")
+  };
 };
 
 export type STTConfig = {
@@ -194,6 +201,7 @@ export const DEFAULT_CONFIG: JarvisConfig = {
   channels: {
     telegram: { enabled: false, bot_token: '', allowed_users: [] },
     discord: { enabled: false, bot_token: '', allowed_users: [] },
+    whatsapp: { enabled: false, phone_number_id: '', access_token: '', webhook_verify_token: '' },
   },
   stt: {
     provider: 'openai',
