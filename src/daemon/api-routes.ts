@@ -592,6 +592,53 @@ export function createApiRoutes(ctx: ApiContext): Record<string, unknown> {
       },
     },
 
+    '/api/vault/threads/:id/export': {
+      /** Export a thread as a Markdown file. */
+      GET: (req: Request & { params: { id: string } }) => {
+        const thread = getThread(req.params.id);
+        if (!thread) return error('Thread not found', 404);
+
+        const messages = getThreadContext(req.params.id, 500);
+
+        const title = thread.title ?? 'Chat Export';
+        const date = new Date(thread.started_at).toISOString().slice(0, 10);
+
+        const roleLabel: Record<string, string> = {
+          user: '**You**',
+          assistant: '**JARVIS**',
+          system: '_[system]_',
+        };
+
+        const lines: string[] = [
+          `# ${title}`,
+          `*Exported on ${new Date().toLocaleDateString()} — ${messages.length} messages*`,
+          '',
+          '---',
+          '',
+        ];
+
+        for (const msg of messages) {
+          const label = roleLabel[msg.role] ?? `**${msg.role}**`;
+          const time = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          lines.push(`### ${label} _${time}_`);
+          lines.push('');
+          lines.push(msg.content);
+          lines.push('');
+          lines.push('---');
+          lines.push('');
+        }
+
+        const md = lines.join('\n');
+        const filename = `jarvis-chat-${date}-${req.params.id.slice(0, 8)}.md`;
+        return new Response(md, {
+          headers: {
+            'Content-Type': 'text/markdown; charset=utf-8',
+            'Content-Disposition': `attachment; filename="${filename}"`,
+          },
+        });
+      },
+    },
+
     // --- Vault: Observations ---
     '/api/vault/observations': {
       GET: (req: Request) => {

@@ -113,6 +113,16 @@ export function ThreadSidebar({ activeThreadId, onSelectThread, onNewThread }: P
                   )}
                 </span>
               </button>
+              <a
+                className="thread-export-btn"
+                href={`/api/vault/threads/${thread.id}/export`}
+                download
+                onClick={(e) => e.stopPropagation()}
+                title="Export chat as Markdown"
+                aria-label="Export chat"
+              >
+                ↓
+              </a>
               <button
                 className="thread-delete-btn"
                 onClick={(e) => handleDelete(e, thread.id)}
