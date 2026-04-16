@@ -101,21 +101,23 @@ export function addMessage(
   const id = generateId();
   const now = Date.now();
 
-  db.prepare(
-    'INSERT INTO conversation_messages (id, conversation_id, role, content, tool_calls, created_at) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(
-    id,
-    conversationId,
-    msg.role,
-    msg.content,
-    msg.tool_calls ? JSON.stringify(msg.tool_calls) : null,
-    now
-  );
+  // Both writes must succeed together — transaction prevents stale message_count on crash.
+  db.transaction(() => {
+    db.prepare(
+      'INSERT INTO conversation_messages (id, conversation_id, role, content, tool_calls, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(
+      id,
+      conversationId,
+      msg.role,
+      msg.content,
+      msg.tool_calls ? JSON.stringify(msg.tool_calls) : null,
+      now
+    );
 
-  // Update conversation
-  db.prepare(
-    'UPDATE conversations SET last_message_at = ?, message_count = message_count + 1 WHERE id = ?'
-  ).run(now, conversationId);
+    db.prepare(
+      'UPDATE conversations SET last_message_at = ?, message_count = message_count + 1 WHERE id = ?'
+    ).run(now, conversationId);
+  })();
 
   return {
     id,
