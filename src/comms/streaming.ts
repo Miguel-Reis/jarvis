@@ -1,5 +1,6 @@
 import type { LLMStreamEvent } from '../llm/provider.ts';
 import type { WebSocketServer, WSMessage } from './websocket.ts';
+import { estimateCost } from '../llm/pricing.ts';
 
 export type RelayOptions = {
   /** Called each time a complete sentence is available during streaming. */
@@ -94,6 +95,12 @@ export class StreamRelay {
 
           console.log('[StreamRelay] Stream complete for request:', requestId);
 
+          const cost = estimateCost(
+            event.response.model,
+            event.response.usage.input_tokens,
+            event.response.usage.output_tokens,
+          );
+
           const doneMessage: WSMessage = {
             type: 'status',
             payload: {
@@ -101,6 +108,8 @@ export class StreamRelay {
               requestId,
               fullText,
               usage: event.response.usage,
+              model: event.response.model,
+              cost,
             },
             id: requestId,
             timestamp: Date.now(),

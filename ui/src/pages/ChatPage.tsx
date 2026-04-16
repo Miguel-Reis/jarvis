@@ -100,7 +100,7 @@ export default function ChatPage({
 
         {/* Input */}
         <ChatInput
-          onSend={(text) => sendMessage(text, activeThreadId ? { threadId: activeThreadId } : undefined)}
+          onSend={(text, images) => sendMessage(text, { ...(activeThreadId ? { threadId: activeThreadId } : {}), ...(images ? { images } : {}) })}
           disabled={!isConnected}
           voice={voice ? {
             voiceState: voice.voiceState,

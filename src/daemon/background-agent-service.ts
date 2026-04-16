@@ -26,6 +26,7 @@ import { BrowserController } from '../actions/browser/session.ts';
 import { DESKTOP_TOOLS } from '../actions/tools/desktop.ts';
 import { commitmentsTool } from '../actions/tools/commitments.ts';
 import { researchQueueTool } from '../actions/tools/research.ts';
+import { webSearchTool } from '../actions/tools/search.ts';
 import { buildSystemPrompt, type PromptContext } from '../roles/prompt-builder.ts';
 import { getDueCommitments, getUpcoming } from '../vault/commitments.ts';
 import { getRecentObservations } from '../vault/observations.ts';
@@ -87,6 +88,7 @@ export class BackgroundAgentService implements Service, IAgentService {
 
       toolRegistry.register(commitmentsTool);
       toolRegistry.register(researchQueueTool);
+      toolRegistry.register(webSearchTool);
 
       this.orchestrator.setToolRegistry(toolRegistry);
 

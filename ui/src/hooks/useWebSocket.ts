@@ -14,6 +14,17 @@ export type SubAgentEvent = {
   data: unknown;
 };
 
+export type TokenUsage = {
+  input_tokens: number;
+  output_tokens: number;
+};
+
+export type ImageAttachment = {
+  /** data URI: "data:image/png;base64,..." */
+  dataUrl: string;
+  mediaType: string;
+};
+
 export type ChatMessage = {
   id: string;
   role: MessageRole;
@@ -24,6 +35,10 @@ export type ChatMessage = {
   source?: string; // 'heartbeat', 'proactive', 'sub-agent'
   priority?: string;
   isStreaming?: boolean;
+  usage?: TokenUsage;
+  model?: string;
+  cost?: number | null;
+  images?: ImageAttachment[];
 };
 
 export type TaskEvent = {
@@ -424,6 +439,9 @@ export function useWebSocket() {
         const finalId = streamIdRef.current;
         const finalToolCalls = toolCallsRef.current;
         const finalSubAgentEvents = subAgentEventsRef.current;
+        const usage: TokenUsage | undefined = msg.payload?.usage;
+        const model: string | undefined = msg.payload?.model;
+        const cost: number | null | undefined = msg.payload?.cost;
         setMessages((prev) =>
           prev.map((m) =>
             m.id === finalId
@@ -436,6 +454,9 @@ export function useWebSocket() {
                     finalSubAgentEvents.length > 0
                       ? finalSubAgentEvents
                       : m.subAgentEvents,
+                  usage,
+                  model,
+                  cost,
                 }
               : m
           )
@@ -546,11 +567,12 @@ export function useWebSocket() {
   }, [connect]);
 
   const sendMessage = useCallback(
-    (text: string, options?: { projectId?: string; threadId?: string }) => {
+    (text: string, options?: { projectId?: string; threadId?: string; images?: ImageAttachment[] }) => {
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
 
       const id = crypto.randomUUID();
       const threadId = options?.threadId ?? activeThreadIdRef.current;
+      const images = options?.images;
 
       // Add user message to local state
       setMessages((prev) => [
@@ -561,17 +583,42 @@ export function useWebSocket() {
           content: text,
           timestamp: Date.now(),
           source: options?.projectId ? `site:${options.projectId}` : undefined,
+          images,
         },
       ]);
+
+      // Build payload — include content array if images are attached
+      let payload: Record<string, unknown>;
+      if (images && images.length > 0) {
+        const contentBlocks: unknown[] = images.map((img) => ({
+          type: "image",
+          source: {
+            type: "base64",
+            media_type: img.mediaType,
+            data: img.dataUrl.replace(/^data:[^;]+;base64,/, ""),
+          },
+        }));
+        if (text.trim()) {
+          contentBlocks.push({ type: "text", text });
+        }
+        payload = {
+          content: contentBlocks,
+          ...(text.trim() ? { text } : {}),
+          ...(options?.projectId ? { projectId: options.projectId } : {}),
+          ...(threadId ? { thread_id: threadId } : {}),
+        };
+      } else {
+        payload = {
+          text,
+          ...(options?.projectId ? { projectId: options.projectId } : {}),
+          ...(threadId ? { thread_id: threadId } : {}),
+        };
+      }
 
       // Send to server
       const msg: WSMessage = {
         type: "chat",
-        payload: {
-          text,
-          ...(options?.projectId ? { projectId: options.projectId } : {}),
-          ...(threadId ? { thread_id: threadId } : {}),
-        },
+        payload,
         id,
         timestamp: Date.now(),
       };

@@ -13,6 +13,7 @@ import type { ChannelService } from './channel-service.ts';
 import type { Commitment } from '../vault/commitments.ts';
 import type { ContentItem } from '../vault/content-pipeline.ts';
 import type { STTProvider, TTSProvider } from '../comms/voice.ts';
+import type { ContentBlock } from '../llm/provider.ts';
 import { setDefaultCwd } from '../actions/tools/builtin.ts';
 import type { ApprovalRequest } from '../authority/approval.ts';
 import type { EmergencyState } from '../authority/emergency.ts';
@@ -527,12 +528,25 @@ export class WebSocketService implements Service {
    * Supports optional thread_id for persistent threaded chat sessions.
    */
   private async handleChat(msg: WSMessage, ws?: ServerWebSocket<unknown>): Promise<WSMessage | void> {
-    const payload = msg.payload as { text?: string; channel?: string; projectId?: string; thread_id?: string };
-    const text = payload?.text;
+    const payload = msg.payload as { text?: string; content?: ContentBlock[]; channel?: string; projectId?: string; thread_id?: string };
     const projectId = payload?.projectId ?? null;
     const incomingThreadId = payload?.thread_id ?? null;
 
-    if (!text) {
+    // Support both plain text and multimodal content (text + images)
+    let text = payload?.text ?? '';
+    let contentBlocks: ContentBlock[] | undefined;
+
+    if (Array.isArray(payload?.content) && payload.content.length > 0) {
+      contentBlocks = payload.content;
+      // Extract text parts for vault storage and task labels
+      text = payload.content
+        .filter((b): b is ContentBlock & { type: 'text' } => b.type === 'text')
+        .map((b) => b.text)
+        .join(' ')
+        .trim();
+    }
+
+    if (!text && !contentBlocks) {
       return {
         type: 'error',
         payload: { message: 'Missing text in chat payload' },
@@ -594,12 +608,13 @@ If the user wants to create a new project, tell them to use the Site Builder pag
     }
 
     // Auto-create a task for non-trivial messages
-    const isTrivial = text.trim().length < 10;
+    const taskText = text || (contentBlocks ? '[image message]' : '');
+    const isTrivial = taskText.trim().length < 10 && !contentBlocks;
     let taskCommitment: Commitment | null = null;
 
     if (!isTrivial) {
       try {
-        const taskLabel = text.length > 80 ? text.slice(0, 77) + '...' : text;
+        const taskLabel = taskText.length > 80 ? taskText.slice(0, 77) + '...' : taskText;
         taskCommitment = createCommitment(taskLabel, {
           assigned_to: 'jarvis',
           created_from: 'user',
@@ -651,7 +666,7 @@ If the user wants to create a new project, tell them to use the Site Builder pag
         setDefaultCwd(projectPath);
       }
 
-      const { stream, onComplete } = await this.agentService.streamMessage(text, channel, siteContext);
+      const { stream, onComplete } = await this.agentService.streamMessage(text, channel, siteContext, contentBlocks);
 
       // Set up streaming TTS: speak sentences as they arrive
       const ttsActive = !!(this.ttsProvider && ws);

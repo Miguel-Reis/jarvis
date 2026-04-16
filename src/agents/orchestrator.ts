@@ -286,7 +286,7 @@ export class AgentOrchestrator {
    * Yields text/tool_call events through all iterations.
    * Only emits 'done' when the final response is complete.
    */
-  async *streamMessage(systemPrompt: string, message: string): AsyncIterable<LLMStreamEvent> {
+  async *streamMessage(systemPrompt: string, message: string | ContentBlock[]): AsyncIterable<LLMStreamEvent> {
     const primary = this.getPrimary();
     if (!primary) {
       throw new Error('No primary agent exists. Create one first.');
@@ -297,7 +297,8 @@ export class AgentOrchestrator {
 
     // If no LLM manager, yield placeholder
     if (!this.llmManager) {
-      const response = `[No LLM configured] Received: ${message}`;
+      const msgPreview = typeof message === 'string' ? message : '[image + text]';
+      const response = `[No LLM configured] Received: ${msgPreview}`;
       primary.addMessage('assistant', response);
       yield { type: 'text', text: response };
       yield {

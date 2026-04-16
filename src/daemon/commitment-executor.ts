@@ -14,6 +14,7 @@ import { getDueCommitments, getUpcoming, updateCommitmentStatus } from '../vault
 import type { Commitment } from '../vault/commitments.ts';
 import type { IAgentService } from './agent-service-interface.ts';
 import type { WSMessage } from '../comms/websocket.ts';
+import { sendDesktopNotification } from '../comms/desktop-notify.ts';
 
 export type Aggressiveness = 'passive' | 'moderate' | 'aggressive';
 
@@ -291,6 +292,12 @@ export class CommitmentExecutor {
     } catch (err) {
       console.error('[Executor] Failed to update commitment status:', err);
     }
+
+    // Desktop notification — let user know the task finished
+    try {
+      const label = state.what.length > 80 ? state.what.slice(0, 77) + '...' : state.what;
+      sendDesktopNotification('JARVIS: Task completed', label);
+    } catch { /* non-critical */ }
 
     console.log(`[Executor] Completed: "${state.what}"`);
   }

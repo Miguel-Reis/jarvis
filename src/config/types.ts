@@ -119,6 +119,14 @@ export type GoalConfig = {
   calendar_ownership: boolean;
 };
 
+export type SearchConfig = {
+  /** Search provider. 'duckduckgo' requires no API key (limited). 'brave' and 'tavily' need keys. */
+  provider?: 'brave' | 'tavily' | 'duckduckgo';
+  brave_api_key?: string;
+  tavily_api_key?: string;
+  max_results?: number;
+};
+
 export type AuthConfig = {
   /** Shared secret token. If unset, auth is disabled (open access). Env: JARVIS_AUTH_TOKEN */
   token?: string;
@@ -138,6 +146,7 @@ export type JarvisConfig = {
     brain_domain?: string;
   };
   auth?: AuthConfig;
+  search?: SearchConfig;
   google?: GoogleConfig;
   channels?: ChannelConfig;
   stt?: STTConfig;

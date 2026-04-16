@@ -4,6 +4,20 @@ import { ToolCallBadge } from "./ToolCallBadge";
 import { SubAgentTag } from "./SubAgentTag";
 import { MarkdownContent } from "./MarkdownContent";
 
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
+}
+
+function formatCost(cost: number | null | undefined): string {
+  if (cost === null || cost === undefined) return "";
+  if (cost < 0.001) return "<$0.001";
+  if (cost < 0.01) return `$${cost.toFixed(4)}`;
+  if (cost < 1) return `$${cost.toFixed(3)}`;
+  return `$${cost.toFixed(2)}`;
+}
+
 type Props = {
   message: ChatMessage;
 };
@@ -83,6 +97,15 @@ export function MessageBubble({ message }: Props) {
         </div>
       )}
 
+      {/* Image attachments (user messages) */}
+      {isUser && message.images && message.images.length > 0 && (
+        <div className="chat-image-row">
+          {message.images.map((img, i) => (
+            <img key={i} src={img.dataUrl} alt={`image ${i + 1}`} className="chat-image-thumb" />
+          ))}
+        </div>
+      )}
+
       {/* Bubble */}
       <div className={`chat-bubble ${isUser ? "chat-bubble-user" : "chat-bubble-jarvis"}`}>
         {isUser ? message.content : <MarkdownContent content={message.content} />}
@@ -95,6 +118,18 @@ export function MessageBubble({ message }: Props) {
           {message.toolCalls.map((tc, i) => (
             <ToolCallBadge key={i} toolCall={tc} />
           ))}
+        </div>
+      )}
+
+      {/* Token usage + cost (assistant only, after stream finishes) */}
+      {!isUser && !message.isStreaming && message.usage && (
+        <div className="chat-usage">
+          <span className="chat-usage-tokens">
+            ↑ {formatTokens(message.usage.input_tokens)} ↓ {formatTokens(message.usage.output_tokens)}
+          </span>
+          {message.cost != null && (
+            <span className="chat-usage-cost">{formatCost(message.cost)}</span>
+          )}
         </div>
       )}
 

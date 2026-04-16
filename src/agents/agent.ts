@@ -1,5 +1,5 @@
 import type { RoleDefinition } from '../roles/types.ts';
-import type { LLMMessage } from '../llm/provider.ts';
+import type { LLMMessage, ContentBlock } from '../llm/provider.ts';
 
 export type AgentStatus = 'active' | 'idle' | 'terminated';
 
@@ -100,7 +100,7 @@ export class AgentInstance {
     this.agent.current_task = null;
   }
 
-  addMessage(role: 'user' | 'assistant' | 'system', content: string): void {
+  addMessage(role: 'user' | 'assistant' | 'system', content: string | ContentBlock[]): void {
     this.messageHistory.push({ role, content });
   }
 

@@ -507,6 +507,96 @@
 }
 
 /* ================================================================
+   IMAGE ATTACHMENTS
+   ================================================================ */
+.chat-image-previews {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 0 4px;
+}
+.chat-image-preview-wrap {
+  position: relative;
+  display: inline-block;
+}
+.chat-image-preview {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.chat-image-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(251,113,133,0.9);
+  border: none;
+  color: #fff;
+  font-size: 9px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.chat-attach-btn {
+  background: none;
+  border: none;
+  color: var(--text-3);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 6px;
+  opacity: 0.5;
+  transition: opacity 150ms;
+  flex-shrink: 0;
+}
+.chat-attach-btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+.chat-attach-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.2;
+}
+.chat-image-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.chat-image-thumb {
+  width: 120px;
+  height: 90px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+/* ================================================================
+   TOKEN USAGE + COST
+   ================================================================ */
+.chat-usage {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  opacity: 0.45;
+  color: var(--text-3);
+}
+.chat-usage-tokens {
+  letter-spacing: 0.02em;
+}
+.chat-usage-cost {
+  color: var(--emerald);
+  opacity: 0.8;
+}
+
+/* ================================================================
    TIMESTAMP
    ================================================================ */
 .chat-ts {

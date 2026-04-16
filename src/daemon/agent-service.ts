@@ -9,7 +9,7 @@
 import { join } from 'node:path';
 import type { Service, ServiceStatus } from './services.ts';
 import type { JarvisConfig } from '../config/types.ts';
-import type { LLMStreamEvent } from '../llm/provider.ts';
+import type { LLMStreamEvent, ContentBlock } from '../llm/provider.ts';
 import type { RoleDefinition } from '../roles/types.ts';
 import type { PersonalityModel } from '../personality/model.ts';
 
@@ -30,6 +30,7 @@ import { contentPipelineTool } from '../actions/tools/content.ts';
 import { commitmentsTool } from '../actions/tools/commitments.ts';
 import { researchQueueTool } from '../actions/tools/research.ts';
 import { documentTool } from '../actions/tools/documents.ts';
+import { webSearchTool, setSearchConfig } from '../actions/tools/search.ts';
 import { AgentTaskManager } from '../agents/task-manager.ts';
 import { discoverSpecialists, formatSpecialistList } from '../agents/role-discovery.ts';
 import { buildSystemPrompt, type PromptContext } from '../roles/prompt-builder.ts';
@@ -164,6 +165,10 @@ export class AgentService implements Service, IAgentService {
       // Register document tool (vault-stored documents)
       toolRegistry.register(documentTool);
 
+      // Register web search tool
+      setSearchConfig(this.config.search ?? {});
+      toolRegistry.register(webSearchTool);
+
       // Register delegate_task tool if specialists are available
       if (this.specialists.size > 0) {
         const delegateDeps: DelegateToolDeps = {
@@ -244,7 +249,7 @@ export class AgentService implements Service, IAgentService {
    * Stream a message through the agent. Returns a stream and an onComplete callback.
    * Async so it can pre-fetch vault knowledge before building the system prompt.
    */
-  async streamMessage(text: string, channel: string = 'websocket', siteContext?: string): Promise<{
+  async streamMessage(text: string, channel: string = 'websocket', siteContext?: string, contentBlocks?: ContentBlock[]): Promise<{
     stream: AsyncIterable<LLMStreamEvent>;
     onComplete: (fullText: string) => Promise<void>;
   }> {
@@ -254,7 +259,8 @@ export class AgentService implements Service, IAgentService {
       systemPrompt += '\n\n' + siteContext;
     }
 
-    const stream = this.orchestrator.streamMessage(systemPrompt, text);
+    const messageContent: string | ContentBlock[] = contentBlocks ?? text;
+    const stream = this.orchestrator.streamMessage(systemPrompt, messageContent);
 
     const onComplete = async (fullText: string): Promise<void> => {
       // Note: orchestrator already adds assistant response to history
