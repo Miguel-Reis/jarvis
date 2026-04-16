@@ -134,13 +134,16 @@ export function saveMessage(
   const id = generateId();
   const now = Date.now();
 
-  db.prepare(
-    'INSERT INTO conversation_messages (id, conversation_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)'
-  ).run(id, threadId, role, content, now);
+  // Both operations must succeed together: if the UPDATE fails the INSERT rolls back too.
+  db.transaction(() => {
+    db.prepare(
+      'INSERT INTO conversation_messages (id, conversation_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)'
+    ).run(id, threadId, role, content, now);
 
-  db.prepare(
-    'UPDATE conversations SET last_message_at = ?, message_count = message_count + 1 WHERE id = ?'
-  ).run(now, threadId);
+    db.prepare(
+      'UPDATE conversations SET last_message_at = ?, message_count = message_count + 1 WHERE id = ?'
+    ).run(now, threadId);
+  })();
 
   return { id, thread_id: threadId, role, content, created_at: now };
 }

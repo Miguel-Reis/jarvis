@@ -218,13 +218,13 @@ export function updateGoalScore(id: string, score: number, reason: string, sourc
   const clampedScore = Math.max(0, Math.min(1, score));
   const now = Date.now();
 
-  // Log progress entry
-  addProgressEntry(id, source === 'user' ? 'manual' : 'system', existing.score, clampedScore, reason, source);
-
-  // Update the goal
-  db.prepare(
-    `UPDATE goals SET score = ?, score_reason = ?, updated_at = ? WHERE id = ?`
-  ).run(clampedScore, reason, now, id);
+  // Progress entry + goal score update must succeed together
+  db.transaction(() => {
+    addProgressEntry(id, source === 'user' ? 'manual' : 'system', existing.score, clampedScore, reason, source);
+    db.prepare(
+      `UPDATE goals SET score = ?, score_reason = ?, updated_at = ? WHERE id = ?`
+    ).run(clampedScore, reason, now, id);
+  })();
 
   return getGoal(id);
 }

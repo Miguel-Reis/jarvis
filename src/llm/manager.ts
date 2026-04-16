@@ -12,6 +12,7 @@ export class LLMManager {
   private fallbackChain: string[] = [];
   private static readonly MAX_RETRIES_PER_PROVIDER = 3;
   private static readonly REQUEST_TIMEOUT_MS = 90000; // 90 second timeout for LLM calls
+  private static readonly STREAM_CHUNK_TIMEOUT_MS = 60_000; // 60s between stream chunks
   private static readonly isDebugging = process.env.JARVIS_LOG_LEVEL === 'debug' || process.env.DEBUG_LLM === 'true';
 
   constructor() {}
@@ -78,6 +79,37 @@ export class LLMManager {
     this.providers = newMap;
     this.primaryProvider = newMap.has(primary) ? primary : (providers[0]?.name ?? '');
     this.fallbackChain = fallback.filter(n => newMap.has(n));
+  }
+
+  /**
+   * Wrap an async iterable stream with a per-chunk timeout.
+   * Throws if no chunk arrives within timeoutMs — catches stalled TCP connections.
+   * timeoutMs is parameterised so tests can use small values.
+   */
+  private async *streamWithChunkTimeout(
+    source: AsyncIterable<LLMStreamEvent>,
+    providerName: string,
+    timeoutMs = LLMManager.STREAM_CHUNK_TIMEOUT_MS,
+  ): AsyncGenerator<LLMStreamEvent> {
+    const iter = source[Symbol.asyncIterator]();
+    try {
+      while (true) {
+        let timeoutId!: ReturnType<typeof setTimeout>;
+        const timedOut = new Promise<never>((_, reject) => {
+          timeoutId = setTimeout(
+            () => reject(new Error(`LLM stream from ${providerName} stalled after ${timeoutMs}ms`)),
+            timeoutMs,
+          );
+        });
+        const result = await Promise.race([iter.next(), timedOut]);
+        clearTimeout(timeoutId);
+        if (result.done) break;
+        yield result.value;
+      }
+    } finally {
+      // Signal upstream to close the HTTP connection
+      iter.return?.();
+    }
   }
 
   /**
@@ -176,7 +208,7 @@ export class LLMManager {
         let emittedContent = false;
         try {
           let hasError = false;
-          for await (const event of provider.stream(messages, options)) {
+          for await (const event of this.streamWithChunkTimeout(provider.stream(messages, options), providerName)) {
             if (event.type === 'error') {
               hasError = true;
               errors.push(`attempt ${attempt}: ${event.error}`);

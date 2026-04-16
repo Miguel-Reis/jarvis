@@ -5,7 +5,7 @@ import { GroqProvider } from './groq.ts';
 import { OllamaProvider } from './ollama.ts';
 import { OpenRouterProvider } from './openrouter.ts';
 import { LLMManager } from './manager.ts';
-import { guardImageSize, type LLMMessage, type ContentBlock } from './provider.ts';
+import { guardImageSize, type LLMMessage, type ContentBlock, type LLMStreamEvent } from './provider.ts';
 import { isToolResult, type ToolResult } from '../actions/tools/registry.ts';
 
 describe('LLM Provider Types', () => {
@@ -142,6 +142,42 @@ describe('LLMManager', () => {
     expect(response.content).toBe('fallback ok');
     expect(response.model).toBe('fallback-model');
   });
+
+  test('streamWithChunkTimeout passes chunks through normally', async () => {
+    const manager = new LLMManager();
+    async function* source() {
+      yield { type: 'text' as const, text: 'hello' };
+      yield { type: 'done' as const, response: { content: 'hello', tool_calls: [], usage: { input_tokens: 1, output_tokens: 1 }, model: 'm', finish_reason: 'stop' as const } };
+    }
+    const events: LLMStreamEvent[] = [];
+    for await (const ev of (manager as any).streamWithChunkTimeout(source(), 'test', 500)) {
+      events.push(ev);
+    }
+    expect(events).toHaveLength(2);
+    expect(events[0]).toMatchObject({ type: 'text', text: 'hello' });
+    expect(events[1]).toMatchObject({ type: 'done' });
+  });
+
+  test('streamWithChunkTimeout throws on stall after first chunk', async () => {
+    const manager = new LLMManager();
+    async function* stallingSource() {
+      yield { type: 'text' as const, text: 'first' };
+      await new Promise(() => {}); // stall forever
+    }
+    const events: LLMStreamEvent[] = [];
+    let caughtErr: Error | null = null;
+    try {
+      for await (const ev of (manager as any).streamWithChunkTimeout(stallingSource(), 'stall', 20)) {
+        events.push(ev);
+      }
+    } catch (err) {
+      caughtErr = err as Error;
+    }
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ type: 'text', text: 'first' });
+    expect(caughtErr).not.toBeNull();
+    expect(caughtErr!.message).toContain('stalled');
+  }, { timeout: 5000 });
 
   test('falls back to the next provider for stream failures before output', async () => {
     const manager = new LLMManager();
