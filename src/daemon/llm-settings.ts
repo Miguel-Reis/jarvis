@@ -23,6 +23,7 @@ const KEY_OPENAI = 'llm.openai.api_key';
 const KEY_GROQ = 'llm.groq.api_key';
 const KEY_GEMINI = 'llm.gemini.api_key';
 const KEY_OPENROUTER = 'llm.openrouter.api_key';
+const KEY_OLLAMA = 'llm.ollama.api_key';
 
 // DB setting keys
 const SETTING_PRIMARY = 'llm.primary';
@@ -42,7 +43,7 @@ export type LLMSettingsResponse = {
   openai: { model: string; has_api_key: boolean } | null;
   groq: { model: string; has_api_key: boolean } | null;
   gemini: { model: string; has_api_key: boolean } | null;
-  ollama: { base_url: string; model: string } | null;
+  ollama: { base_url: string; model: string; has_api_key: boolean } | null;
   openrouter: { model: string; has_api_key: boolean } | null;
 };
 
@@ -77,7 +78,7 @@ export function getLLMSettings(config: JarvisConfig): LLMSettingsResponse {
     openai: { model: openaiModel, has_api_key: hasOpenaiKey },
     groq: { model: groqModel, has_api_key: hasGroqKey },
     gemini: { model: geminiModel, has_api_key: hasGeminiKey },
-    ollama: { base_url: ollamaBaseUrl, model: ollamaModel },
+    ollama: { base_url: ollamaBaseUrl, model: ollamaModel, has_api_key: hasSecret(KEY_OLLAMA) || !!config.llm.ollama?.api_key },
     openrouter: { model: openrouterModel, has_api_key: hasOpenrouterKey },
   };
 }
@@ -94,7 +95,7 @@ export function saveLLMSettings(
     openai?: { api_key?: string; model?: string };
     groq?: { api_key?: string; model?: string };
     gemini?: { api_key?: string; model?: string };
-    ollama?: { base_url?: string; model?: string };
+    ollama?: { base_url?: string; model?: string; api_key?: string };
     openrouter?: { api_key?: string; model?: string };
   },
 ): void {
@@ -176,10 +177,14 @@ export function saveLLMSettings(
     if (body.ollama.base_url) {
       setSetting(SETTING_OLLAMA_BASE_URL, body.ollama.base_url);
     }
+    if (body.ollama.api_key) {
+      setSecret(KEY_OLLAMA, body.ollama.api_key);
+    }
     config.llm.ollama = {
       ...config.llm.ollama,
       model: body.ollama.model ?? config.llm.ollama?.model,
       base_url: body.ollama.base_url ?? config.llm.ollama?.base_url,
+      api_key: body.ollama.api_key ?? getOllamaApiKey(config) ?? undefined,
     };
   }
 
@@ -232,6 +237,14 @@ function getGeminiApiKey(config: JarvisConfig): string | null {
  */
 function getOpenRouterApiKey(config: JarvisConfig): string | null {
   return getSecret(KEY_OPENROUTER) ?? config.llm.openrouter?.api_key ?? null;
+}
+
+/**
+ * Resolve the Ollama API key: keychain > config.yaml.
+ * Optional — Ollama works without a key for local instances.
+ */
+function getOllamaApiKey(config: JarvisConfig): string | null {
+  return getSecret(KEY_OLLAMA) ?? config.llm.ollama?.api_key ?? null;
 }
 
 /**
@@ -301,13 +314,15 @@ export function mergeLLMSettingsIntoConfig(config: JarvisConfig): void {
   // Ollama
   const dbOllamaModel = getSetting(SETTING_OLLAMA_MODEL);
   const dbOllamaUrl = getSetting(SETTING_OLLAMA_BASE_URL);
-  if (dbOllamaModel || dbOllamaUrl) {
+  const keychainOllamaKey = getSecret(KEY_OLLAMA);
+  if (dbOllamaModel || dbOllamaUrl || keychainOllamaKey) {
     config.llm.ollama = {
       ...config.llm.ollama,
       model: dbOllamaModel ?? config.llm.ollama?.model,
       base_url: (!process.env.JARVIS_OLLAMA_URL && dbOllamaUrl)
         ? dbOllamaUrl
         : (config.llm.ollama?.base_url ?? 'http://localhost:11434'),
+      api_key: keychainOllamaKey ?? config.llm.ollama?.api_key,
     };
   }
 
@@ -354,7 +369,7 @@ export function hotReloadLLMProviders(config: JarvisConfig, llmManager: LLMManag
     console.log('[LLM] Hot-reloaded OpenRouter provider');
   }
   if (llm.ollama) {
-    providers.push(new OllamaProvider(llm.ollama.base_url, llm.ollama.model));
+    providers.push(new OllamaProvider(llm.ollama.base_url, llm.ollama.model, llm.ollama.api_key));
     console.log('[LLM] Hot-reloaded Ollama provider');
   }
 
@@ -400,9 +415,11 @@ export async function testLLMProvider(
       if (!key) return { ok: false, error: 'API key required' };
       instance = new OpenRouterProvider(key, opts.model ?? config.llm.openrouter?.model);
     } else if (opts.provider === 'ollama') {
+      const ollamaKey = opts.api_key || getOllamaApiKey(config) || undefined;
       instance = new OllamaProvider(
         opts.base_url ?? config.llm.ollama?.base_url,
         opts.model ?? config.llm.ollama?.model,
+        ollamaKey,
       );
     } else {
       return { ok: false, error: `Unknown provider: ${opts.provider}` };

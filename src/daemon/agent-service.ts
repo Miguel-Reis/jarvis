@@ -393,11 +393,12 @@ export class AgentService implements Service, IAgentService {
       console.log('[AgentService] Registered OpenRouter provider');
     }
 
-    // Register Ollama (always available, no API key needed)
+    // Register Ollama
     if (llm.ollama) {
       const provider = new OllamaProvider(
         llm.ollama.base_url,
-        llm.ollama.model
+        llm.ollama.model,
+        llm.ollama.api_key,
       );
       this.llmManager.registerProvider(provider);
       hasProvider = true;

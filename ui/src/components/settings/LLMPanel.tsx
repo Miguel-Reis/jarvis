@@ -8,7 +8,7 @@ type LLMConfig = {
   openai: { model: string; has_api_key: boolean } | null;
   groq: { model: string; has_api_key: boolean } | null;
   gemini: { model: string; has_api_key: boolean } | null;
-  ollama: { base_url: string; model: string } | null;
+  ollama: { base_url: string; model: string; has_api_key: boolean } | null;
   openrouter: { model: string; has_api_key: boolean } | null;
 };
 
@@ -117,6 +117,7 @@ export function LLMPanel() {
   const [ollamaBaseUrl, setOllamaBaseUrl] = useState("http://localhost:11434");
   const [ollamaModel, setOllamaModel] = useState("llama3");
   const [ollamaCustomModel, setOllamaCustomModel] = useState("");
+  const [ollamaKey, setOllamaKey] = useState("");
 
   // OpenRouter
   const [openrouterKey, setOpenrouterKey] = useState("");
@@ -228,6 +229,7 @@ export function LLMPanel() {
         ollama: {
           base_url: ollamaBaseUrl,
           model: resolveModel(ollamaModel, ollamaCustomModel),
+          ...(ollamaKey ? { api_key: ollamaKey } : {}),
         },
         openrouter: {
           model: resolveModel(openrouterModel, openrouterCustomModel),
@@ -243,6 +245,7 @@ export function LLMPanel() {
       setOpenaiKey("");
       setGroqKey("");
       setGeminiKey("");
+      setOllamaKey("");
       setOpenrouterKey("");
       refetch();
     } catch (err) {
@@ -273,6 +276,7 @@ export function LLMPanel() {
       } else if (provider === "ollama") {
         body.base_url = ollamaBaseUrl;
         body.model = resolveModel(ollamaModel, ollamaCustomModel);
+        body.api_key = ollamaKey || undefined;
       } else if (provider === "openrouter") {
         body.api_key = openrouterKey || undefined;
         body.model = resolveModel(openrouterModel, openrouterCustomModel);
@@ -408,9 +412,10 @@ export function LLMPanel() {
           name="Ollama"
           provider="ollama"
           isPrimary={primary === "ollama"}
-          hasKey={!!config.ollama}
-          apiKey=""
-          onApiKeyChange={() => {}}
+          hasKey={config.ollama?.has_api_key ?? false}
+          apiKey={ollamaKey}
+          onApiKeyChange={setOllamaKey}
+          apiKeyPlaceholder="API key (optional — only for remote/authenticated instances)"
           model={ollamaModel}
           customModel={ollamaCustomModel}
           onModelChange={setOllamaModel}
@@ -423,7 +428,6 @@ export function LLMPanel() {
           onFallbackToggle={() => toggleFallback("ollama")}
           expanded={!!expanded.ollama}
           onToggleExpand={() => setExpanded((s) => ({ ...s, ollama: !s.ollama }))}
-          hideApiKey
           baseUrl={ollamaBaseUrl}
           onBaseUrlChange={setOllamaBaseUrl}
         />
@@ -503,6 +507,7 @@ type ProviderSectionProps = {
   expanded: boolean;
   onToggleExpand: () => void;
   hideApiKey?: boolean;
+  apiKeyPlaceholder?: string;
   baseUrl?: string;
   onBaseUrlChange?: (v: string) => void;
 };
@@ -551,7 +556,7 @@ function ProviderSection({
   models, testing, testResult, onTest,
   isFallback, onFallbackToggle,
   expanded, onToggleExpand,
-  hideApiKey, baseUrl, onBaseUrlChange,
+  hideApiKey, apiKeyPlaceholder, baseUrl, onBaseUrlChange,
 }: ProviderSectionProps) {
   return (
     <div style={providerCardStyle}>
@@ -595,7 +600,7 @@ function ProviderSection({
                 type="password"
                 value={apiKey}
                 onChange={(e) => onApiKeyChange(e.target.value)}
-                placeholder={hasKey ? "Stored securely — leave empty to keep" : "Enter API key"}
+                placeholder={hasKey ? "Stored securely — leave empty to keep" : (apiKeyPlaceholder ?? "Enter API key")}
                 style={inputStyle}
               />
             </div>
