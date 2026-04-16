@@ -229,7 +229,7 @@ function buildAgentSnapshots(ctx: ApiContext) {
 /**
  * Create all API route handlers.
  */
-export function createApiRoutes(ctx: ApiContext): Record<string, Record<string, (req: Request) => Response | Promise<Response>>> {
+export function createApiRoutes(ctx: ApiContext): Record<string, unknown> {
   return {
     // --- Health ---
     '/api/health': {
