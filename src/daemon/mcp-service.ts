@@ -114,6 +114,21 @@ export class McpService implements Service {
     }));
   }
 
+  /** Get detailed tool list per server for the tools browser UI. */
+  getToolDetails(): Array<{
+    server: string;
+    connected: boolean;
+    tools: Array<{ name: string; description?: string }>;
+    error?: string;
+  }> {
+    return this.entries.map(e => ({
+      server: e.name,
+      connected: e.client.isReady(),
+      tools: e.client.getTools().map(t => ({ name: t.name, description: t.description })),
+      error: e.error,
+    }));
+  }
+
   /** Connect a new MCP server at runtime without restarting the daemon. */
   async connectServer(cfg: import('../config/types.ts').McpServerConfig): Promise<void> {
     if (this.entries.find(e => e.name === cfg.name)) {

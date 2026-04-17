@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from "react";
-import { useApiData } from "../hooks/useApi";
+import React, { useState, useMemo, useCallback } from "react";
+import { useApiData, api } from "../hooks/useApi";
+import { useToast } from "../components/Toast";
 import "../styles/knowledge.css";
 
 type Entity = {
@@ -34,6 +35,7 @@ type RelWithEntities = {
 };
 
 const ENTITY_TYPES = ["all", "person", "project", "tool", "place", "concept", "event"] as const;
+type EntityTypeName = "person" | "project" | "tool" | "place" | "concept" | "event";
 
 const TYPE_COLORS: Record<string, string> = {
   person: "#60A5FA",
@@ -45,9 +47,15 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 export default function KnowledgePage() {
+  const { showToast } = useToast();
   const [typeFilter, setTypeFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showCreateEntity, setShowCreateEntity] = useState(false);
+  const [showAddFact, setShowAddFact] = useState(false);
+  const [newFactPredicate, setNewFactPredicate] = useState("");
+  const [newFactObject, setNewFactObject] = useState("");
+  const [addingFact, setAddingFact] = useState(false);
 
   // Build entity query
   const entityParams = useMemo(() => {
@@ -57,13 +65,13 @@ export default function KnowledgePage() {
     return p.toString();
   }, [typeFilter, search]);
 
-  const { data: entities, loading: entitiesLoading } = useApiData<Entity[]>(
+  const { data: entities, loading: entitiesLoading, refetch: refetchEntities } = useApiData<Entity[]>(
     `/api/vault/entities${entityParams ? `?${entityParams}` : ""}`,
     [entityParams]
   );
 
   // Fetch facts + relationships for selected entity
-  const { data: facts, loading: factsLoading } = useApiData<Fact[]>(
+  const { data: facts, loading: factsLoading, refetch: refetchFacts } = useApiData<Fact[]>(
     selectedId ? `/api/vault/entities/${selectedId}/facts` : null,
     [selectedId]
   );
@@ -77,10 +85,52 @@ export default function KnowledgePage() {
     entities?.find(e => e.id === selectedId) || null,
   [entities, selectedId]);
 
-  // Navigate to an entity by clicking a relationship
   const handleNavigateToEntity = (entityId: string) => {
     setSelectedId(entityId);
   };
+
+  const handleDeleteEntity = useCallback(async (id: string, name: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm(`Delete entity "${name}"? This will also remove its facts.`)) return;
+    try {
+      await api(`/api/vault/entities/${id}`, { method: "DELETE" });
+      if (selectedId === id) setSelectedId(null);
+      refetchEntities();
+      showToast("Entity deleted", "success");
+    } catch {
+      showToast("Failed to delete entity", "error");
+    }
+  }, [selectedId, refetchEntities, showToast]);
+
+  const handleDeleteFact = useCallback(async (factId: string) => {
+    try {
+      await api(`/api/vault/facts/${factId}`, { method: "DELETE" });
+      refetchFacts();
+      showToast("Fact deleted", "success");
+    } catch {
+      showToast("Failed to delete fact", "error");
+    }
+  }, [refetchFacts, showToast]);
+
+  const handleAddFact = useCallback(async () => {
+    if (!selectedId || !newFactPredicate.trim() || !newFactObject.trim()) return;
+    setAddingFact(true);
+    try {
+      await api(`/api/vault/entities/${selectedId}/facts`, {
+        method: "POST",
+        body: JSON.stringify({ predicate: newFactPredicate.trim(), object: newFactObject.trim() }),
+      });
+      setNewFactPredicate("");
+      setNewFactObject("");
+      setShowAddFact(false);
+      refetchFacts();
+      showToast("Fact added", "success");
+    } catch {
+      showToast("Failed to add fact", "error");
+    } finally {
+      setAddingFact(false);
+    }
+  }, [selectedId, newFactPredicate, newFactObject, refetchFacts, showToast]);
 
   return (
     <div className="kb-page">
@@ -91,6 +141,17 @@ export default function KnowledgePage() {
         <span className="kb-header-title">Knowledge Browser</span>
         <span className="kb-header-count">{entities?.length ?? 0}</span>
         <div className="kb-header-spacer" />
+        <button
+          className="kb-new-btn"
+          onClick={() => setShowCreateEntity(true)}
+          aria-label="Create new entity"
+        >
+          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <line x1="6" y1="1" x2="6" y2="11" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+            <line x1="1" y1="6" x2="11" y2="6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+          </svg>
+          New Entity
+        </button>
       </div>
 
       {/* Three columns */}
@@ -136,6 +197,12 @@ export default function KnowledgePage() {
                   <div className="ke-dot" style={{ background: color }} />
                   <span className="ke-name">{entity.name}</span>
                   <span className="ke-type">{entity.type}</span>
+                  <button
+                    className="ke-delete-btn"
+                    onClick={(e) => handleDeleteEntity(entity.id, entity.name, e)}
+                    title="Delete entity"
+                    aria-label={`Delete ${entity.name}`}
+                  >×</button>
                 </div>
               );
             })}
@@ -147,11 +214,56 @@ export default function KnowledgePage() {
           <div className="kb-col-header">
             <span className="kb-col-title">Facts</span>
             <span className="kb-col-count">{facts?.length ?? 0}</span>
+            {selectedId && (
+              <button
+                className="kb-add-btn"
+                onClick={() => setShowAddFact(v => !v)}
+                title="Add fact"
+                aria-label="Add fact"
+              >+ Add</button>
+            )}
           </div>
+
+          {/* Add fact inline form */}
+          {showAddFact && selectedId && (
+            <div className="kb-add-fact-form">
+              <input
+                className="kb-fact-input"
+                placeholder="Predicate (e.g. works at)"
+                value={newFactPredicate}
+                onChange={e => setNewFactPredicate(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && handleAddFact()}
+                autoFocus
+              />
+              <input
+                className="kb-fact-input"
+                placeholder="Value (e.g. Anthropic)"
+                value={newFactObject}
+                onChange={e => setNewFactObject(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && handleAddFact()}
+              />
+              <div className="kb-fact-form-actions">
+                <button
+                  className="kb-fact-save-btn"
+                  onClick={handleAddFact}
+                  disabled={addingFact || !newFactPredicate.trim() || !newFactObject.trim()}
+                >
+                  {addingFact ? "Saving…" : "Save"}
+                </button>
+                <button
+                  className="kb-fact-cancel-btn"
+                  onClick={() => { setShowAddFact(false); setNewFactPredicate(""); setNewFactObject(""); }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="kb-col-body">
             {!selectedId && <div className="kb-empty">Select an entity</div>}
             {selectedId && factsLoading && <div className="kb-loading">Loading facts...</div>}
-            {selectedId && !factsLoading && facts && facts.length === 0 && (
+            {selectedId && !factsLoading && facts && facts.length === 0 && !showAddFact && (
               <div className="kb-empty">No facts recorded</div>
             )}
             {facts?.map((fact, i) => {
@@ -165,6 +277,12 @@ export default function KnowledgePage() {
                     <span>{confPct}%</span>
                     <span className="kf-conf-bar"><span className="kf-conf-fill" style={{ width: `${confPct}%`, background: confColor }} /></span>
                     {fact.source && <span>{fact.source}</span>}
+                    <button
+                      className="kf-delete-btn"
+                      onClick={() => handleDeleteFact(fact.id)}
+                      title="Delete fact"
+                      aria-label="Delete fact"
+                    >×</button>
                   </div>
                 </div>
               );
@@ -205,6 +323,93 @@ export default function KnowledgePage() {
               );
             })}
           </div>
+        </div>
+      </div>
+
+      {/* Create Entity Modal */}
+      {showCreateEntity && (
+        <CreateEntityModal
+          onClose={() => setShowCreateEntity(false)}
+          onCreated={(id) => {
+            setShowCreateEntity(false);
+            refetchEntities();
+            setSelectedId(id);
+            showToast("Entity created", "success");
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ----------------------------------------------------------------
+   Create Entity Modal
+   ---------------------------------------------------------------- */
+function CreateEntityModal({ onClose, onCreated }: {
+  onClose: () => void;
+  onCreated: (id: string) => void;
+}) {
+  const { showToast } = useToast();
+  const [name, setName] = useState("");
+  const [type, setType] = useState<EntityTypeName>("concept");
+  const [saving, setSaving] = useState(false);
+
+  const handleCreate = async () => {
+    if (!name.trim()) return;
+    setSaving(true);
+    try {
+      const entity = await api<{ id: string }>("/api/vault/entities", {
+        method: "POST",
+        body: JSON.stringify({ type, name: name.trim() }),
+      });
+      onCreated(entity.id);
+    } catch {
+      showToast("Failed to create entity", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="kb-modal-backdrop" onClick={onClose}>
+      <div className="kb-modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Create entity">
+        <div className="kb-modal-header">
+          <span className="kb-modal-title">New Entity</span>
+          <button className="kb-modal-close" onClick={onClose} aria-label="Close">×</button>
+        </div>
+        <div className="kb-modal-body">
+          <label className="kb-modal-label">Name</label>
+          <input
+            className="kb-modal-input"
+            placeholder="Entity name"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && handleCreate()}
+            autoFocus
+          />
+          <label className="kb-modal-label" style={{ marginTop: "14px" }}>Type</label>
+          <div className="kb-modal-type-grid">
+            {(["person", "project", "tool", "place", "concept", "event"] as EntityTypeName[]).map(t => (
+              <button
+                key={t}
+                className={`kb-modal-type-btn${type === t ? " active" : ""}`}
+                onClick={() => setType(t)}
+                style={type === t ? { borderColor: TYPE_COLORS[t], color: TYPE_COLORS[t], background: `${TYPE_COLORS[t]}18` } : {}}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="kb-modal-footer">
+          <button className="kb-modal-cancel-btn" onClick={onClose}>Cancel</button>
+          <button
+            className="kb-modal-create-btn"
+            onClick={handleCreate}
+            disabled={saving || !name.trim()}
+          >
+            {saving ? "Creating…" : "Create Entity"}
+          </button>
         </div>
       </div>
     </div>

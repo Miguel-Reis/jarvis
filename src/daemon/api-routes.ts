@@ -20,8 +20,8 @@ import type { EmergencyController } from '../authority/emergency.ts';
 import type { DeferredExecutor } from '../authority/deferred-executor.ts';
 import type { ActionCategory } from '../roles/authority.ts';
 
-import { findEntities, getEntity, searchEntitiesByName } from '../vault/entities.ts';
-import { findFacts } from '../vault/facts.ts';
+import { findEntities, getEntity, searchEntitiesByName, createEntity, deleteEntity } from '../vault/entities.ts';
+import { findFacts, createFact, deleteFact } from '../vault/facts.ts';
 import { findRelationships, getEntityRelationships } from '../vault/relationships.ts';
 import { getDb } from '../vault/schema.ts';
 import { findCommitments, getUpcoming, createCommitment, getCommitment, updateCommitmentStatus, reorderCommitments } from '../vault/commitments.ts';
@@ -291,6 +291,14 @@ export function createApiRoutes(ctx: ApiContext): Record<string, unknown> {
         if (q) query.nameContains = q;
         return json(findEntities(query));
       },
+      POST: async (req: Request) => {
+        try {
+          const body = await req.json() as { type: EntityType; name: string; properties?: Record<string, unknown>; source?: string };
+          if (!body.type || !body.name?.trim()) return error('type and name are required', 400);
+          const entity = createEntity(body.type, body.name.trim(), body.properties, body.source);
+          return json(entity, 201);
+        } catch (err) { return error(`${err}`); }
+      },
     },
 
     '/api/vault/entities/:id': {
@@ -299,11 +307,24 @@ export function createApiRoutes(ctx: ApiContext): Record<string, unknown> {
         if (!entity) return error('Entity not found', 404);
         return json(entity);
       },
+      DELETE: (req: Request & { params: { id: string } }) => {
+        const ok = deleteEntity(req.params.id);
+        if (!ok) return error('Entity not found', 404);
+        return json({ ok: true });
+      },
     },
 
     '/api/vault/entities/:id/facts': {
       GET: (req: Request & { params: { id: string } }) => {
         return json(findFacts({ subject_id: req.params.id }));
+      },
+      POST: async (req: Request & { params: { id: string } }) => {
+        try {
+          const body = await req.json() as { predicate: string; object: string; confidence?: number; source?: string };
+          if (!body.predicate?.trim() || !body.object?.trim()) return error('predicate and object are required', 400);
+          const fact = createFact(req.params.id, body.predicate.trim(), body.object.trim(), { confidence: body.confidence, source: body.source });
+          return json(fact, 201);
+        } catch (err) { return error(`${err}`); }
       },
     },
 
@@ -325,6 +346,14 @@ export function createApiRoutes(ctx: ApiContext): Record<string, unknown> {
         if (predicate) query.predicate = predicate;
         if (object) query.object = object;
         return json(findFacts(query));
+      },
+    },
+
+    '/api/vault/facts/:id': {
+      DELETE: (req: Request & { params: { id: string } }) => {
+        const ok = deleteFact(req.params.id);
+        if (!ok) return error('Fact not found', 404);
+        return json({ ok: true });
       },
     },
 
@@ -3201,14 +3230,8 @@ export function createApiRoutes(ctx: ApiContext): Record<string, unknown> {
     },
 
     '/api/mcp/tools': {
-      /** List tool counts per connected MCP server */
       GET: (_req: Request) => {
-        const statuses = ctx.mcpService?.getServerStatus() ?? [];
-        return json(statuses.map(s => ({
-          server: s.name,
-          connected: s.connected,
-          toolCount: s.toolCount,
-        })));
+        return json(ctx.mcpService?.getToolDetails() ?? []);
       },
     },
 

@@ -1,6 +1,13 @@
 import React, { useState } from "react";
 import { useApiData } from "../../hooks/useApi";
 
+type McpToolEntry = {
+  server: string;
+  connected: boolean;
+  tools: Array<{ name: string; description?: string }>;
+  error?: string;
+};
+
 type McpServerStatus = {
   name: string;
   command: string;
@@ -13,6 +20,7 @@ type McpServerStatus = {
 
 export function MCPPanel() {
   const { data: servers, refetch } = useApiData<McpServerStatus[]>("/api/mcp/servers", []);
+  const { data: toolData } = useApiData<McpToolEntry[]>("/api/mcp/tools", []);
 
   const [name, setName] = useState("");
   const [command, setCommand] = useState("");
@@ -194,6 +202,43 @@ export function MCPPanel() {
           <span style={{ color: "var(--j-accent)" }}>modelcontextprotocol.io</span> for available servers.
         </div>
       </div>
+
+      {/* Tools Browser */}
+      {toolData && toolData.some(s => s.tools.length > 0) && (
+        <div className="sp-card">
+          <h3 className="sp-card-title">Available Tools</h3>
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            {toolData.filter(s => s.tools.length > 0).map(s => (
+              <div key={s.server}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                  <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--j-text)", letterSpacing: "0.02em" }}>{s.server}</span>
+                  <span style={{
+                    fontSize: "10px", fontWeight: 700, padding: "1px 6px", borderRadius: "4px",
+                    background: "rgba(139,92,246,0.15)", color: "#A78BFA", border: "1px solid rgba(139,92,246,0.25)",
+                  }}>{s.tools.length} tools</span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                  {s.tools.map(t => (
+                    <div key={t.name} style={{
+                      padding: "7px 10px", borderRadius: "6px",
+                      background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)",
+                    }}>
+                      <div style={{ fontSize: "12px", fontWeight: 600, color: "rgba(255,255,255,0.82)", fontFamily: "monospace" }}>
+                        {t.name}
+                      </div>
+                      {t.description && (
+                        <div style={{ fontSize: "11px", color: "var(--j-text-muted)", marginTop: "2px", lineHeight: 1.4 }}>
+                          {t.description}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
     </div>
   );
