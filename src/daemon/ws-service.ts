@@ -46,6 +46,8 @@ export class WebSocketService implements Service {
   private voiceSessions = new Map<ServerWebSocket<unknown>, VoiceSession>();
   private siteBuilderService: import('../sites/service.ts').SiteBuilderService | null = null;
   private triggerManager: import('../workflows/triggers/manager.ts').TriggerManager | null = null;
+  /** Per-client rate limit: max 10 chat messages per 10-second window */
+  private rateLimitMap = new Map<ServerWebSocket<unknown>, { count: number; windowStart: number }>();
 
   constructor(port: number, agentService: AgentService) {
     this.port = port;
@@ -155,6 +157,7 @@ export class WebSocketService implements Service {
         onDisconnect: (ws) => {
           // Clean up any pending voice session for this client
           this.voiceSessions.delete(ws);
+          this.rateLimitMap.delete(ws);
           console.log('[WSService] Client disconnected');
         },
       });
@@ -541,6 +544,22 @@ export class WebSocketService implements Service {
    * Supports optional thread_id for persistent threaded chat sessions.
    */
   private async handleChat(msg: WSMessage, ws?: ServerWebSocket<unknown>): Promise<WSMessage | void> {
+    // Rate limit: max 10 chat messages per 10-second window per client
+    if (ws) {
+      const now = Date.now();
+      const rl = this.rateLimitMap.get(ws) ?? { count: 0, windowStart: now };
+      if (now - rl.windowStart > 10_000) {
+        rl.count = 0;
+        rl.windowStart = now;
+      }
+      rl.count++;
+      this.rateLimitMap.set(ws, rl);
+      if (rl.count > 10) {
+        ws.send(JSON.stringify({ type: 'error', payload: { message: 'Rate limit exceeded. Please wait a moment.' }, timestamp: now }));
+        return;
+      }
+    }
+
     const payload = msg.payload as { text?: string; content?: ContentBlock[]; channel?: string; projectId?: string; thread_id?: string };
     const projectId = payload?.projectId ?? null;
     const incomingThreadId = payload?.thread_id ?? null;

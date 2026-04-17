@@ -47,6 +47,17 @@ export function ChannelsPanel() {
   const { data: sttCfg, refetch: refetchStt } = useApiData<STTConfigData>("/api/config/stt", []);
   const { data: ttsCfg, refetch: refetchTts } = useApiData<TTSConfigData>("/api/config/tts", []);
 
+  // Wake word
+  const [wakeWordEnabled, setWakeWordEnabled] = useState(() =>
+    localStorage.getItem('jarvis_wake_word_enabled') !== 'false'
+  );
+
+  const handleWakeWordToggle = (enabled: boolean) => {
+    setWakeWordEnabled(enabled);
+    localStorage.setItem('jarvis_wake_word_enabled', String(enabled));
+    window.dispatchEvent(new StorageEvent('storage', { key: 'jarvis_wake_word_enabled', newValue: String(enabled) }));
+  };
+
   // Telegram form
   const [tgToken, setTgToken] = useState("");
   const [tgEnabled, setTgEnabled] = useState(false);
@@ -81,6 +92,10 @@ export function ChannelsPanel() {
   const [elModel, setElModel] = useState("eleven_flash_v2_5");
   const [elVoices, setElVoices] = useState<ElevenLabsVoice[]>([]);
   const [elVoicesLoading, setElVoicesLoading] = useState(false);
+
+  // Edge TTS voices
+  const [edgeVoices, setEdgeVoices] = useState<{ voice_id: string; name: string; locale: string }[]>([]);
+  const [edgeVoicesLoading, setEdgeVoicesLoading] = useState(false);
 
   // Messages
   const [msg, setMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
@@ -124,6 +139,15 @@ export function ChannelsPanel() {
       }
     }
   }, [ttsCfg]);
+
+  // Fetch Edge TTS voices on mount
+  useEffect(() => {
+    setEdgeVoicesLoading(true);
+    api<{ voice_id: string; name: string; locale: string }[]>("/api/tts/voices?provider=edge&lang=en")
+      .then(v => setEdgeVoices(v))
+      .catch(() => {})
+      .finally(() => setEdgeVoicesLoading(false));
+  }, []);
 
   // Fetch ElevenLabs voices when provider is elevenlabs and key is configured
   const fetchElVoices = async () => {
@@ -248,6 +272,23 @@ export function ChannelsPanel() {
           {msg.text}
         </div>
       )}
+
+      {/* Voice Activation Section */}
+      <div style={sectionStyle}>
+        <div style={labelStyle}>Voice Activation</div>
+        <p style={hintStyle}>
+          When enabled, JARVIS listens for <strong>"Hey Jarvis"</strong> to start recording.
+          Disable if you prefer push-to-talk (microphone button in chat) or want to save CPU.
+        </p>
+        <label style={toggleRowStyle}>
+          <input
+            type="checkbox"
+            checked={wakeWordEnabled}
+            onChange={e => handleWakeWordToggle(e.target.checked)}
+          />
+          <span style={{ fontSize: "13px", color: "var(--j-text)" }}>Enable wake word detection</span>
+        </label>
+      </div>
 
       {/* Telegram Section */}
       <div style={sectionStyle}>
@@ -505,18 +546,29 @@ export function ChannelsPanel() {
           <>
             <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
               <span style={{ fontSize: "11px", color: "var(--j-text-muted)" }}>Voice</span>
-              <select
-                style={inputStyle}
-                value={ttsVoice}
-                onChange={e => setTtsVoice(e.target.value)}
-              >
-                <option value="en-US-AriaNeural">Aria (US Female)</option>
-                <option value="en-US-GuyNeural">Guy (US Male)</option>
-                <option value="en-GB-SoniaNeural">Sonia (UK Female)</option>
-                <option value="en-AU-NatashaNeural">Natasha (AU Female)</option>
-                <option value="en-US-JennyNeural">Jenny (US Female)</option>
-                <option value="en-US-DavisNeural">Davis (US Male)</option>
-              </select>
+              {edgeVoicesLoading ? (
+                <span style={{ fontSize: "12px", color: "var(--j-text-dim)" }}>Loading voices…</span>
+              ) : (
+                <select
+                  style={inputStyle}
+                  value={ttsVoice}
+                  onChange={e => setTtsVoice(e.target.value)}
+                >
+                  {edgeVoices.length > 0
+                    ? edgeVoices.map(v => <option key={v.voice_id} value={v.voice_id}>{v.name}</option>)
+                    : (
+                      <>
+                        <option value="en-US-AriaNeural">Aria (US Female)</option>
+                        <option value="en-US-GuyNeural">Guy (US Male)</option>
+                        <option value="en-GB-SoniaNeural">Sonia (UK Female)</option>
+                        <option value="en-AU-NatashaNeural">Natasha (AU Female)</option>
+                        <option value="en-US-JennyNeural">Jenny (US Female)</option>
+                        <option value="en-US-DavisNeural">Davis (US Male)</option>
+                      </>
+                    )
+                  }
+                </select>
+              )}
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>

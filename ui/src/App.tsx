@@ -145,8 +145,23 @@ const SETTINGS_NAV: { section: SettingsSection; label: string }[] = [
 export function App() {
   const [route, setRoute] = useState<Route>(getRoute);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>(getSettingsSection);
+  const [wakeWordEnabled, setWakeWordEnabled] = useState(
+    () => localStorage.getItem('jarvis_wake_word_enabled') !== 'false'
+  );
+
+  // Keep wake word pref in sync when changed from settings panel
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'jarvis_wake_word_enabled') {
+        setWakeWordEnabled(e.newValue !== 'false');
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
   const ws = useWebSocket();
-  const voice = useVoice({ wsRef: ws.wsRef });
+  const voice = useVoice({ wsRef: ws.wsRef, wakeWordEnabled });
 
   // Wire voice callbacks into WS hook
   useEffect(() => {

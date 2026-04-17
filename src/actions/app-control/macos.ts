@@ -1,54 +1,54 @@
 import type { AppController, WindowInfo, UIElement } from './interface.ts';
 
+/**
+ * macOS App Controller — graceful stub.
+ * Full implementation requires AXUIElement/AppleScript native bindings.
+ * The Go sidecar (launched via SidecarManager) handles all desktop control
+ * on macOS via AppleScript — use the sidecar desktop tools instead.
+ */
 export class MacAppController implements AppController {
-  private notImplemented(method: string): never {
-    throw new Error(
-      `${method} not yet implemented for macOS.\n\n` +
-      `TODO: Implement using one of:\n` +
-      `  - AXUIElement API via N-API native bindings\n` +
-      `  - AppleScript automation\n` +
-      `  - node-mac-automation package\n` +
-      `  - Swift/Objective-C bridge via FFI\n\n` +
-      `Reference:\n` +
-      `  - https://developer.apple.com/documentation/applicationservices/axuielement\n` +
-      `  - https://developer.apple.com/library/archive/documentation/Accessibility/Conceptual/AccessibilityMacOSX/\n` +
-      `  - https://github.com/sveinbjornt/AXElementsTester`
-    );
+  private warn(method: string): void {
+    console.warn(`[MacAppController] ${method}: delegate to sidecar for full macOS support`);
   }
 
   async getActiveWindow(): Promise<WindowInfo> {
-    this.notImplemented('getActiveWindow');
+    this.warn('getActiveWindow');
+    return { pid: 0, title: '', className: '', bounds: { x: 0, y: 0, width: 0, height: 0 }, focused: false };
   }
 
-  async getWindowTree(pid: number): Promise<UIElement[]> {
-    this.notImplemented('getWindowTree');
+  async getWindowTree(_pid: number): Promise<UIElement[]> {
+    this.warn('getWindowTree');
+    return [];
   }
 
   async listWindows(): Promise<WindowInfo[]> {
-    this.notImplemented('listWindows');
+    this.warn('listWindows');
+    return [];
   }
 
-  async clickElement(element: UIElement): Promise<void> {
-    this.notImplemented('clickElement');
+  async clickElement(_element: UIElement): Promise<void> {
+    this.warn('clickElement');
   }
 
-  async typeText(text: string): Promise<void> {
-    this.notImplemented('typeText');
+  async typeText(_text: string): Promise<void> {
+    this.warn('typeText');
   }
 
-  async pressKeys(keys: string[]): Promise<void> {
-    this.notImplemented('pressKeys');
+  async pressKeys(_keys: string[]): Promise<void> {
+    this.warn('pressKeys');
   }
 
   async captureScreen(): Promise<Buffer> {
-    this.notImplemented('captureScreen');
+    this.warn('captureScreen');
+    return Buffer.alloc(0);
   }
 
-  async captureWindow(pid: number): Promise<Buffer> {
-    this.notImplemented('captureWindow');
+  async captureWindow(_pid: number): Promise<Buffer> {
+    this.warn('captureWindow');
+    return Buffer.alloc(0);
   }
 
-  async focusWindow(pid: number): Promise<void> {
-    this.notImplemented('focusWindow');
+  async focusWindow(_pid: number): Promise<void> {
+    this.warn('focusWindow');
   }
 }

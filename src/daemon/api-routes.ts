@@ -154,6 +154,48 @@ let CORS: Record<string, string> = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
+// Edge TTS voice list cache (24h TTL)
+let edgeTtsVoicesCache: { voices: unknown[]; fetchedAt: number } | null = null;
+const EDGE_TTS_CACHE_TTL = 24 * 60 * 60 * 1000;
+const EDGE_TTS_VOICES_FALLBACK = [
+  { voice_id: 'en-US-AriaNeural',    name: 'Aria (US Female)',       category: 'neural', locale: 'en-US' },
+  { voice_id: 'en-US-GuyNeural',     name: 'Guy (US Male)',          category: 'neural', locale: 'en-US' },
+  { voice_id: 'en-GB-SoniaNeural',   name: 'Sonia (UK Female)',      category: 'neural', locale: 'en-GB' },
+  { voice_id: 'en-AU-NatashaNeural', name: 'Natasha (AU Female)',    category: 'neural', locale: 'en-AU' },
+  { voice_id: 'en-US-JennyNeural',   name: 'Jenny (US Female)',      category: 'neural', locale: 'en-US' },
+  { voice_id: 'en-US-DavisNeural',   name: 'Davis (US Male)',        category: 'neural', locale: 'en-US' },
+  { voice_id: 'en-IE-EmilyNeural',   name: 'Emily (IE Female)',      category: 'neural', locale: 'en-IE' },
+  { voice_id: 'en-IN-NeerjaNeural',  name: 'Neerja (IN Female)',     category: 'neural', locale: 'en-IN' },
+  { voice_id: 'en-US-AndrewNeural',  name: 'Andrew (US Male)',       category: 'neural', locale: 'en-US' },
+  { voice_id: 'en-US-EmmaNeural',    name: 'Emma (US Female)',       category: 'neural', locale: 'en-US' },
+];
+
+async function fetchEdgeTtsVoices(lang?: string): Promise<unknown[]> {
+  const now = Date.now();
+  if (edgeTtsVoicesCache && now - edgeTtsVoicesCache.fetchedAt < EDGE_TTS_CACHE_TTL) {
+    const voices = edgeTtsVoicesCache.voices as Array<{ locale?: string }>;
+    return lang && lang !== 'all' ? voices.filter(v => v.locale?.startsWith(lang)) : voices;
+  }
+  try {
+    const res = await fetch(
+      'https://speech.platform.bing.com/consumer/speech/synthesize/readaloud/voices/list?trustedclienttoken=6A5AA1D4EAFF4E9FB37E23D68491D6F4',
+      { signal: AbortSignal.timeout(5000) }
+    );
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const raw = await res.json() as Array<{ ShortName: string; FriendlyName: string; Gender: string; Locale: string }>;
+    const voices = raw.map(v => ({
+      voice_id: v.ShortName,
+      name: v.FriendlyName.replace('Microsoft ', '').replace(' Online (Natural) - ', ' (').replace(/\)$/, ')'),
+      category: 'neural',
+      locale: v.Locale,
+    }));
+    edgeTtsVoicesCache = { voices, fetchedAt: now };
+    return lang && lang !== 'all' ? voices.filter(v => (v.locale as string).startsWith(lang)) : voices;
+  } catch {
+    return EDGE_TTS_VOICES_FALLBACK;
+  }
+}
+
 /** Call once during init to set the correct CORS origin from config */
 export function setCorsOrigin(port: number, host = 'localhost') {
   CORS = {
@@ -1556,15 +1598,10 @@ export function createApiRoutes(ctx: ApiContext): Record<string, unknown> {
           }
         }
 
-        // Edge TTS: return hardcoded voice list
-        return json([
-          { voice_id: 'en-US-AriaNeural', name: 'Aria (US Female)', category: 'neural' },
-          { voice_id: 'en-US-GuyNeural', name: 'Guy (US Male)', category: 'neural' },
-          { voice_id: 'en-GB-SoniaNeural', name: 'Sonia (UK Female)', category: 'neural' },
-          { voice_id: 'en-AU-NatashaNeural', name: 'Natasha (AU Female)', category: 'neural' },
-          { voice_id: 'en-US-JennyNeural', name: 'Jenny (US Female)', category: 'neural' },
-          { voice_id: 'en-US-DavisNeural', name: 'Davis (US Male)', category: 'neural' },
-        ]);
+        // Edge TTS: fetch from Microsoft API with 24h cache, fallback to built-in list
+        const lang = params.get('lang') ?? 'en';
+        const voices = await fetchEdgeTtsVoices(lang);
+        return json(voices);
       },
     },
 
