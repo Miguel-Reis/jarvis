@@ -19,6 +19,7 @@ import { clipboardTrigger }   from './triggers/clipboard.ts';
 import { processTrigger }     from './triggers/process.ts';
 import { calendarTrigger }    from './triggers/calendar.ts';
 import { pollTrigger }        from './triggers/poll.ts';
+import { messageTrigger }     from './triggers/message.ts';
 
 // ── Actions ───────────────────────────────────────────────────────────────────
 import { sendMessageAction }   from './actions/send-message.ts';
@@ -74,6 +75,7 @@ export function registerBuiltinNodes(registry: NodeRegistry): void {
   registry.register(processTrigger);
   registry.register(calendarTrigger);
   registry.register(pollTrigger);
+  registry.register(messageTrigger);
 
   // Actions
   registry.register(sendMessageAction);

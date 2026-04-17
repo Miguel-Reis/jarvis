@@ -113,4 +113,38 @@ export class McpService implements Service {
       error: e.error,
     }));
   }
+
+  /** Connect a new MCP server at runtime without restarting the daemon. */
+  async connectServer(cfg: import('../config/types.ts').McpServerConfig): Promise<void> {
+    if (this.entries.find(e => e.name === cfg.name)) {
+      throw new Error(`MCP server '${cfg.name}' is already connected`);
+    }
+    const client = new McpClient(cfg);
+    await client.connect();
+
+    let toolCount = 0;
+    if (this.toolRegistry) {
+      const tools = mcpToolsToDefinitions(client);
+      for (const tool of tools) {
+        try {
+          this.toolRegistry.register(tool);
+          toolCount++;
+        } catch (err) {
+          console.warn(`[McpService] Could not register tool '${tool.name}':`, err instanceof Error ? err.message : err);
+        }
+      }
+    }
+
+    this.entries.push({ name: cfg.name, client, toolCount });
+    console.log(`[McpService] Connected server '${cfg.name}' (${toolCount} tools)`);
+  }
+
+  /** Disconnect and remove a named MCP server at runtime. */
+  async disconnectServer(name: string): Promise<void> {
+    const idx = this.entries.findIndex(e => e.name === name);
+    if (idx === -1) throw new Error(`MCP server '${name}' not found`);
+    const [entry] = this.entries.splice(idx, 1) as [McpServerEntry];
+    await entry.client.disconnect();
+    console.log(`[McpService] Disconnected server '${name}'`);
+  }
 }

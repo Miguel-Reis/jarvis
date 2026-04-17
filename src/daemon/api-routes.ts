@@ -3114,9 +3114,17 @@ export function createApiRoutes(ctx: ApiContext): Record<string, unknown> {
           if (!fresh.mcp_servers) fresh.mcp_servers = [];
           if (fresh.mcp_servers.some(s => s.name === body.name)) return error(`Server '${body.name}' already exists`);
 
-          fresh.mcp_servers.push({ name: body.name!, command: body.command!, args: body.args, env: body.env });
+          const serverCfg = { name: body.name!, command: body.command!, args: body.args, env: body.env };
+          fresh.mcp_servers.push(serverCfg);
           await saveConfig(fresh);
-          return json({ ok: true, message: `Server '${body.name}' added. Restart daemon to connect.` });
+
+          // Hot-connect without restarting the daemon
+          try {
+            await ctx.mcpService?.connectServer(serverCfg);
+            return json({ ok: true, message: `Server '${body.name}' added and connected.` });
+          } catch (connErr) {
+            return json({ ok: true, message: `Server '${body.name}' saved but failed to connect: ${connErr instanceof Error ? connErr.message : connErr}` });
+          }
         } catch (err) { return error(err instanceof Error ? err.message : String(err)); }
       },
     },
@@ -3132,7 +3140,12 @@ export function createApiRoutes(ctx: ApiContext): Record<string, unknown> {
           fresh.mcp_servers = (fresh.mcp_servers ?? []).filter(s => s.name !== name);
           if (fresh.mcp_servers.length === before) return error(`Server '${name}' not found`, 404);
           await saveConfig(fresh);
-          return json({ ok: true, message: `Server '${name}' removed. Restart daemon to disconnect.` });
+
+          // Hot-disconnect without restarting the daemon
+          try {
+            await ctx.mcpService?.disconnectServer(name);
+          } catch { /* already gone */ }
+          return json({ ok: true, message: `Server '${name}' removed and disconnected.` });
         } catch (err) { return error(err instanceof Error ? err.message : String(err)); }
       },
     },
