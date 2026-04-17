@@ -345,37 +345,27 @@ export function LLMPanel() {
 
   if (loading || !config) {
     return (
-      <div style={cardStyle}>
-        <span style={{ color: "var(--j-text-muted)", fontSize: "13px" }}>Loading...</span>
+      <div className="sp-card">
+        <span style={{ color: "rgba(255,255,255,0.35)", fontSize: "13px" }}>Loading...</span>
       </div>
     );
   }
 
   return (
-    <div style={cardStyle}>
-      <h3 style={headerStyle}>LLM Configuration</h3>
+    <div className="sp-card">
+      <h3 className="sp-card-title">LLM Configuration</h3>
 
       {/* Status message */}
       {message && (
-        <div
-          style={{
-            padding: "8px 12px",
-            marginBottom: "12px",
-            borderRadius: "6px",
-            fontSize: "12px",
-            background: message.type === "ok" ? "rgba(16,185,129,0.1)" : "rgba(239,68,68,0.1)",
-            border: `1px solid ${message.type === "ok" ? "rgba(16,185,129,0.3)" : "rgba(239,68,68,0.3)"}`,
-            color: message.type === "ok" ? "var(--j-success)" : "var(--j-error)",
-          }}
-        >
+        <div className={`sp-msg ${message.type === "ok" ? "sp-msg--success" : "sp-msg--error"}`} style={{ marginBottom: "12px" }}>
           {message.text}
         </div>
       )}
 
       {/* Primary provider */}
       <div style={{ marginBottom: "16px" }}>
-        <div style={labelStyle}>Primary Provider</div>
-        <select value={primary} onChange={(e) => setPrimary(e.target.value)} style={selectStyle}>
+        <div className="sp-label">Primary Provider</div>
+        <select value={primary} onChange={(e) => setPrimary(e.target.value)} className="sp-select" style={{ width: "auto" }}>
           {PROVIDERS.map((p) => (
             <option key={p} value={p}>
               {PROVIDER_LABELS[p] ?? p}
@@ -541,7 +531,7 @@ export function LLMPanel() {
 
       {/* Save */}
       <div style={{ marginTop: "16px", display: "flex", justifyContent: "flex-end" }}>
-        <button onClick={handleSave} disabled={saving} style={saveBtnStyle}>
+        <button onClick={handleSave} disabled={saving} className="sp-btn-primary">
           {saving ? "Saving..." : "Save Configuration"}
         </button>
       </div>
@@ -665,7 +655,7 @@ function ProviderSection({
                 value={apiKey}
                 onChange={(e) => onApiKeyChange(e.target.value)}
                 placeholder={hasKey ? "Stored securely — leave empty to keep" : (apiKeyPlaceholder ?? "Enter API key")}
-                style={inputStyle}
+                className="sp-input"
               />
             </div>
           )}
@@ -678,7 +668,7 @@ function ProviderSection({
                 value={baseUrl}
                 onChange={(e) => onBaseUrlChange(e.target.value)}
                 placeholder="http://localhost:11434"
-                style={inputStyle}
+                className="sp-input"
               />
             </div>
           )}
@@ -686,7 +676,7 @@ function ProviderSection({
           <div>
             <div style={fieldLabelStyle}>Model</div>
             <div style={{ display: "flex", gap: "6px" }}>
-              <select value={model} onChange={(e) => onModelChange(e.target.value)} style={{ ...selectStyle, flex: 1 }}>
+              <select value={model} onChange={(e) => onModelChange(e.target.value)} className="sp-select" style={{ flex: 1 }}>
                 {models.map((m) => (
                   <option key={m} value={m}>{m}</option>
                 ))}
@@ -698,7 +688,7 @@ function ProviderSection({
                   value={customModel}
                   onChange={(e) => onCustomModelChange(e.target.value)}
                   placeholder="model ID"
-                  style={{ ...inputStyle, flex: 1 }}
+                  className="sp-input" style={{ flex: 1 }}
                 />
               )}
             </div>
@@ -740,29 +730,6 @@ function ProviderSection({
 
 // --- Styles ---
 
-const cardStyle: React.CSSProperties = {
-  padding: "20px",
-  background: "var(--j-surface)",
-  border: "1px solid var(--j-border)",
-  borderRadius: "8px",
-};
-
-const headerStyle: React.CSSProperties = {
-  fontSize: "14px",
-  fontWeight: 600,
-  color: "var(--j-text)",
-  marginBottom: "16px",
-};
-
-const labelStyle: React.CSSProperties = {
-  fontSize: "11px",
-  fontWeight: 600,
-  color: "var(--j-text-muted)",
-  textTransform: "uppercase",
-  letterSpacing: "0.5px",
-  marginBottom: "6px",
-};
-
 const fieldLabelStyle: React.CSSProperties = {
   fontSize: "11px",
   color: "var(--j-text-muted)",
@@ -776,28 +743,6 @@ const providerCardStyle: React.CSSProperties = {
   borderRadius: "6px",
 };
 
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "6px 10px",
-  fontSize: "13px",
-  background: "var(--j-surface)",
-  border: "1px solid var(--j-border)",
-  borderRadius: "4px",
-  color: "var(--j-text)",
-  outline: "none",
-  boxSizing: "border-box",
-};
-
-const selectStyle: React.CSSProperties = {
-  padding: "6px 10px",
-  fontSize: "13px",
-  background: "var(--j-surface)",
-  border: "1px solid var(--j-border)",
-  borderRadius: "4px",
-  color: "var(--j-text)",
-  outline: "none",
-  cursor: "pointer",
-};
 
 const testBtnStyle: React.CSSProperties = {
   padding: "4px 12px",
@@ -808,17 +753,6 @@ const testBtnStyle: React.CSSProperties = {
   color: "var(--j-accent)",
   cursor: "pointer",
   whiteSpace: "nowrap",
-};
-
-const saveBtnStyle: React.CSSProperties = {
-  padding: "8px 20px",
-  fontSize: "13px",
-  fontWeight: 600,
-  background: "rgba(0, 212, 255, 0.15)",
-  border: "1px solid rgba(0, 212, 255, 0.4)",
-  borderRadius: "6px",
-  color: "var(--j-accent)",
-  cursor: "pointer",
 };
 
 const primaryBadgeStyle: React.CSSProperties = {

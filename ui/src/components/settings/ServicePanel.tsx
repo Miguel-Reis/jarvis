@@ -49,13 +49,13 @@ export function ServicePanel() {
   };
 
   if (loading) {
-    return <div style={cardStyle}><span style={mutedTextStyle}>Loading service controls...</span></div>;
+    return <div className="sp-card"><span style={{ color: "rgba(255,255,255,0.35)", fontSize: "13px" }}>Loading service controls...</span></div>;
   }
 
   if (error && !data) {
     return (
-      <div style={cardStyle}>
-        <div style={{ ...messageStyle, color: "var(--j-error)", borderColor: "rgba(248, 113, 113, 0.22)", background: "rgba(248, 113, 113, 0.08)", marginBottom: 0 }}>
+      <div className="sp-card">
+        <div className="sp-msg sp-msg--error" style={{ marginBottom: 0 }}>
           {error}
         </div>
       </div>
@@ -63,14 +63,14 @@ export function ServicePanel() {
   }
 
   if (!data) {
-    return <div style={cardStyle}><span style={mutedTextStyle}>Service controls unavailable.</span></div>;
+    return <div className="sp-card"><span style={{ color: "rgba(255,255,255,0.35)", fontSize: "13px" }}>Service controls unavailable.</span></div>;
   }
 
   return (
-    <div style={cardStyle}>
+    <div className="sp-card">
       <div style={headerRowStyle}>
         <div>
-          <h3 style={headerStyle}>24/7 Service</h3>
+          <h3 className="sp-card-title" style={{ margin: 0 }}>24/7 Service</h3>
           <div style={subtleStyle}>
             Manage the keepalive service that keeps JARVIS running after the terminal closes.
           </div>
@@ -97,36 +97,27 @@ export function ServicePanel() {
       </div>
 
       {message && (
-        <div style={{
-          ...messageStyle,
-          color: message.type === "success" ? "var(--j-success)" : "var(--j-error)",
-          borderColor: message.type === "success" ? "rgba(52, 211, 153, 0.22)" : "rgba(248, 113, 113, 0.22)",
-          background: message.type === "success" ? "rgba(52, 211, 153, 0.08)" : "rgba(248, 113, 113, 0.08)",
-        }}>
+        <div className={`sp-msg ${message.type === "success" ? "sp-msg--success" : "sp-msg--error"}`}>
           {message.text}
         </div>
       )}
 
       {error && !message && (
-        <div style={{ ...messageStyle, color: "var(--j-error)", borderColor: "rgba(248, 113, 113, 0.22)", background: "rgba(248, 113, 113, 0.08)" }}>
+        <div className="sp-msg sp-msg--error">
           {error}
         </div>
       )}
 
-      <div style={actionsStyle}>
+      <div className="sp-actions">
         <button
           type="button"
+          className="sp-btn-primary"
           onClick={restartService}
           disabled={!data.restart_supported || phase === "restarting"}
-          style={{
-            ...buttonStyle,
-            opacity: !data.restart_supported || phase === "restarting" ? 0.55 : 1,
-            cursor: !data.restart_supported || phase === "restarting" ? "not-allowed" : "pointer",
-          }}
         >
           {phase === "restarting" ? "Restarting..." : "Restart 24/7 JARVIS"}
         </button>
-        <button type="button" onClick={refetch} style={secondaryButtonStyle}>
+        <button type="button" className="sp-btn-secondary" onClick={refetch}>
           Refresh Status
         </button>
       </div>
@@ -143,13 +134,6 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-const cardStyle: React.CSSProperties = {
-  padding: "20px",
-  background: "var(--j-surface)",
-  border: "1px solid var(--j-border)",
-  borderRadius: "8px",
-};
-
 const headerRowStyle: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
@@ -159,24 +143,12 @@ const headerRowStyle: React.CSSProperties = {
   flexWrap: "wrap",
 };
 
-const headerStyle: React.CSSProperties = {
-  fontSize: "14px",
-  fontWeight: 600,
-  color: "var(--j-text)",
-  margin: 0,
-};
-
 const subtleStyle: React.CSSProperties = {
   fontSize: "12px",
   lineHeight: 1.5,
   color: "var(--j-text-muted)",
   marginTop: "6px",
   maxWidth: "560px",
-};
-
-const mutedTextStyle: React.CSSProperties = {
-  color: "var(--j-text-muted)",
-  fontSize: "13px",
 };
 
 const statusBadgeStyle: React.CSSProperties = {
@@ -212,37 +184,3 @@ const infoValueStyle: React.CSSProperties = {
   textTransform: "capitalize",
 };
 
-const messageStyle: React.CSSProperties = {
-  fontSize: "12px",
-  border: "1px solid transparent",
-  borderRadius: "8px",
-  padding: "10px 12px",
-  marginBottom: "16px",
-};
-
-const actionsStyle: React.CSSProperties = {
-  display: "flex",
-  gap: "10px",
-  flexWrap: "wrap",
-};
-
-const buttonStyle: React.CSSProperties = {
-  border: "1px solid rgba(0, 212, 255, 0.28)",
-  background: "rgba(0, 212, 255, 0.12)",
-  color: "var(--j-accent)",
-  borderRadius: "8px",
-  padding: "10px 14px",
-  fontSize: "13px",
-  fontWeight: 600,
-};
-
-const secondaryButtonStyle: React.CSSProperties = {
-  border: "1px solid var(--j-border)",
-  background: "transparent",
-  color: "var(--j-text-muted)",
-  borderRadius: "8px",
-  padding: "10px 14px",
-  fontSize: "13px",
-  fontWeight: 500,
-  cursor: "pointer",
-};

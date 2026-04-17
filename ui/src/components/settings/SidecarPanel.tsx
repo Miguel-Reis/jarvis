@@ -69,8 +69,8 @@ export function SidecarPanel() {
   };
 
   return (
-    <div style={cardStyle}>
-      <h3 style={headerStyle}>Sidecars</h3>
+    <div className="sp-card">
+      <h3 className="sp-card-title">Sidecars</h3>
 
       {/* Enroll form */}
       <div style={{ marginBottom: "16px" }}>
@@ -80,13 +80,14 @@ export function SidecarPanel() {
         <div style={{ display: "flex", gap: "8px" }}>
           <input
             type="text"
+            className="sp-input"
+            style={{ flex: 1 }}
             placeholder="Sidecar name (e.g. work-laptop)"
             value={enrollName}
             onChange={(e) => setEnrollName(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleEnroll()}
-            style={inputStyle}
           />
-          <button onClick={handleEnroll} disabled={enrolling || !enrollName.trim()} style={buttonStyle}>
+          <button onClick={handleEnroll} disabled={enrolling || !enrollName.trim()} className="sp-btn-primary">
             {enrolling ? "..." : "Enroll"}
           </button>
         </div>
@@ -101,8 +102,8 @@ export function SidecarPanel() {
           <div style={{ fontSize: "12px", color: "var(--j-accent)", marginBottom: "6px", fontWeight: 500 }}>
             Token for "{enrollResult.name}" — copy and run on the target machine:
           </div>
-          <code style={codeStyle}>jarvis-sidecar --token {enrollResult.token.slice(0, 40)}...</code>
-          <button onClick={copyToken} style={{ ...buttonStyle, marginTop: "8px", fontSize: "11px" }}>
+          <code className="sp-mono" style={{ display: "block", wordBreak: "break-all" }}>jarvis-sidecar --token {enrollResult.token.slice(0, 40)}...</code>
+          <button onClick={copyToken} className="sp-btn-secondary" style={{ marginTop: "8px", fontSize: "11px" }}>
             Copy Full Token
           </button>
         </div>
@@ -157,28 +158,16 @@ export function SidecarPanel() {
                 {sc.connected && (
                   <button
                     onClick={() => setConfigTarget({ id: sc.id, name: sc.name })}
-                    style={{
-                      ...buttonStyle,
-                      fontSize: "11px",
-                      padding: "4px 10px",
-                      background: "transparent",
-                      color: "var(--j-accent)",
-                      border: "1px solid var(--j-accent)",
-                    }}
+                    className="sp-btn-secondary"
+                    style={{ fontSize: "11px", padding: "4px 10px" }}
                   >
                     Configure
                   </button>
                 )}
                 <button
                   onClick={() => handleRevoke(sc.id)}
-                  style={{
-                    ...buttonStyle,
-                    fontSize: "11px",
-                    padding: "4px 10px",
-                    background: "transparent",
-                    color: "var(--j-error, #f44)",
-                    border: "1px solid var(--j-error, #f44)",
-                  }}
+                  className="sp-btn-danger"
+                  style={{ fontSize: "11px", padding: "4px 10px" }}
                 >
                   Revoke
                 </button>
@@ -203,63 +192,20 @@ export function SidecarPanel() {
   );
 }
 
-const cardStyle: React.CSSProperties = {
-  padding: "20px",
-  background: "var(--j-surface)",
-  border: "1px solid var(--j-border)",
-  borderRadius: "8px",
-};
-
-const headerStyle: React.CSSProperties = {
-  fontSize: "14px",
-  fontWeight: 600,
-  color: "var(--j-text)",
-  marginBottom: "16px",
-};
-
-const inputStyle: React.CSSProperties = {
-  flex: 1,
-  padding: "8px 12px",
-  background: "var(--j-bg)",
-  border: "1px solid var(--j-border)",
-  borderRadius: "6px",
-  color: "var(--j-text)",
-  fontSize: "13px",
-  outline: "none",
-};
-
-const buttonStyle: React.CSSProperties = {
-  padding: "8px 16px",
-  background: "var(--j-accent)",
-  color: "#fff",
-  border: "none",
-  borderRadius: "6px",
-  fontSize: "13px",
-  cursor: "pointer",
-  fontWeight: 500,
-};
-
 const tokenBoxStyle: React.CSSProperties = {
   padding: "12px",
-  background: "var(--j-bg)",
-  border: "1px solid var(--j-accent)",
-  borderRadius: "6px",
+  background: "rgba(139, 92, 246, 0.06)",
+  border: "1px solid rgba(139, 92, 246, 0.25)",
+  borderRadius: "8px",
   marginBottom: "16px",
-};
-
-const codeStyle: React.CSSProperties = {
-  display: "block",
-  fontSize: "11px",
-  color: "var(--j-text-muted)",
-  wordBreak: "break-all",
-  fontFamily: "monospace",
 };
 
 const sidecarRowStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   padding: "10px 12px",
-  background: "var(--j-bg)",
-  borderRadius: "6px",
+  background: "rgba(255, 255, 255, 0.02)",
+  border: "1px solid rgba(255, 255, 255, 0.05)",
+  borderRadius: "8px",
   gap: "12px",
 };

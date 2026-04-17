@@ -264,23 +264,23 @@ export function ChannelsPanel() {
   };
 
   return (
-    <div style={cardStyle}>
-      <h3 style={headerStyle}>Communication Channels</h3>
+    <div className="sp-card">
+      <h3 className="sp-card-title">Communication Channels</h3>
 
       {msg && (
-        <div style={{ ...msgStyle, color: msg.type === "error" ? "var(--j-error)" : "var(--j-success)" }}>
+        <div className={`sp-msg ${msg.type === "error" ? "sp-msg--error" : "sp-msg--success"}`} style={{ marginBottom: "8px" }}>
           {msg.text}
         </div>
       )}
 
       {/* Voice Activation Section */}
-      <div style={sectionStyle}>
-        <div style={labelStyle}>Voice Activation</div>
-        <p style={hintStyle}>
+      <div className="sp-section">
+        <div className="sp-label">Voice Activation</div>
+        <p className="sp-hint">
           When enabled, JARVIS listens for <strong>"Hey Jarvis"</strong> to start recording.
           Disable if you prefer push-to-talk (microphone button in chat) or want to save CPU.
         </p>
-        <label style={toggleRowStyle}>
+        <label className="sp-toggle-row">
           <input
             type="checkbox"
             checked={wakeWordEnabled}
@@ -291,10 +291,10 @@ export function ChannelsPanel() {
       </div>
 
       {/* Telegram Section */}
-      <div style={sectionStyle}>
+      <div className="sp-section">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={labelStyle}>Telegram</div>
-          <div style={rowStyle}>
+          <div className="sp-label">Telegram</div>
+          <div className="sp-row">
             <StatusDot color={status?.channels.telegram ? "var(--j-success)" : "var(--j-text-muted)"} />
             <span style={{ fontSize: "11px", color: "var(--j-text-dim)" }}>
               {status?.channels.telegram ? "Connected" : "Disconnected"}
@@ -302,11 +302,11 @@ export function ChannelsPanel() {
           </div>
         </div>
 
-        <p style={hintStyle}>
+        <p className="sp-hint">
           Create a bot via <strong>@BotFather</strong> on Telegram, then paste the token here.
         </p>
 
-        <label style={toggleRowStyle}>
+        <label className="sp-toggle-row">
           <input
             type="checkbox"
             checked={tgEnabled}
@@ -321,14 +321,14 @@ export function ChannelsPanel() {
         </label>
 
         <input
-          style={inputStyle}
+          className="sp-input"
           type="password"
           placeholder="Bot Token (leave empty to keep existing)"
           value={tgToken}
           onChange={e => setTgToken(e.target.value)}
         />
         <input
-          style={inputStyle}
+          className="sp-input"
           type="text"
           placeholder="Allowed User IDs (comma-separated, empty = all)"
           value={tgAllowed}
@@ -337,10 +337,10 @@ export function ChannelsPanel() {
       </div>
 
       {/* Discord Section */}
-      <div style={sectionStyle}>
+      <div className="sp-section">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={labelStyle}>Discord</div>
-          <div style={rowStyle}>
+          <div className="sp-label">Discord</div>
+          <div className="sp-row">
             <StatusDot color={status?.channels.discord ? "var(--j-success)" : "var(--j-text-muted)"} />
             <span style={{ fontSize: "11px", color: "var(--j-text-dim)" }}>
               {status?.channels.discord ? "Connected" : "Disconnected"}
@@ -348,12 +348,12 @@ export function ChannelsPanel() {
           </div>
         </div>
 
-        <p style={hintStyle}>
+        <p className="sp-hint">
           Create an app at <strong>discord.com/developers</strong>, add a Bot, copy the token.
           Enable <em>Message Content Intent</em> in Bot settings.
         </p>
 
-        <label style={toggleRowStyle}>
+        <label className="sp-toggle-row">
           <input
             type="checkbox"
             checked={dcEnabled}
@@ -368,21 +368,21 @@ export function ChannelsPanel() {
         </label>
 
         <input
-          style={inputStyle}
+          className="sp-input"
           type="password"
           placeholder="Bot Token (leave empty to keep existing)"
           value={dcToken}
           onChange={e => setDcToken(e.target.value)}
         />
         <input
-          style={inputStyle}
+          className="sp-input"
           type="text"
           placeholder="Allowed User IDs (comma-separated, empty = all)"
           value={dcAllowed}
           onChange={e => setDcAllowed(e.target.value)}
         />
         <input
-          style={inputStyle}
+          className="sp-input"
           type="text"
           placeholder="Guild ID (optional, restrict to one server)"
           value={dcGuild}
@@ -391,10 +391,10 @@ export function ChannelsPanel() {
       </div>
 
       {/* WhatsApp Section */}
-      <div style={sectionStyle}>
+      <div className="sp-section">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={labelStyle}>WhatsApp</div>
-          <div style={rowStyle}>
+          <div className="sp-label">WhatsApp</div>
+          <div className="sp-row">
             <StatusDot color={status?.channels.whatsapp ? "var(--j-success)" : "var(--j-text-muted)"} />
             <span style={{ fontSize: "11px", color: "var(--j-text-dim)" }}>
               {status?.channels.whatsapp ? "Connected" : "Disconnected"}
@@ -402,12 +402,12 @@ export function ChannelsPanel() {
           </div>
         </div>
 
-        <p style={hintStyle}>
+        <p className="sp-hint">
           Requires a <strong>Meta Business account</strong> with a WhatsApp Cloud API app.
           Set the webhook URL to <code style={{ fontSize: "11px", background: "var(--j-bg)", padding: "1px 4px", borderRadius: "3px" }}>https://your-domain/webhooks/whatsapp</code>.
         </p>
 
-        <label style={toggleRowStyle}>
+        <label className="sp-toggle-row">
           <input
             type="checkbox"
             checked={waEnabled}
@@ -417,28 +417,28 @@ export function ChannelsPanel() {
         </label>
 
         <input
-          style={inputStyle}
+          className="sp-input"
           type="text"
           placeholder={`Phone Number ID${channelCfg?.whatsapp.has_phone_number_id ? " (configured)" : ""}`}
           value={waPhoneNumberId}
           onChange={e => setWaPhoneNumberId(e.target.value)}
         />
         <input
-          style={inputStyle}
+          className="sp-input"
           type="password"
           placeholder={`System User Access Token${channelCfg?.whatsapp.has_access_token ? " (configured)" : ""}`}
           value={waAccessToken}
           onChange={e => setWaAccessToken(e.target.value)}
         />
         <input
-          style={inputStyle}
+          className="sp-input"
           type="text"
           placeholder={`Webhook Verify Token${channelCfg?.whatsapp.has_verify_token ? " (configured)" : ""}`}
           value={waVerifyToken}
           onChange={e => setWaVerifyToken(e.target.value)}
         />
         <input
-          style={inputStyle}
+          className="sp-input"
           type="text"
           placeholder="Allowed phone numbers in E.164 format (comma-separated, empty = all)"
           value={waAllowed}
@@ -446,20 +446,20 @@ export function ChannelsPanel() {
         />
       </div>
 
-      <button style={primaryBtnStyle} onClick={saveChannels}>
+      <button className="sp-btn-primary" onClick={saveChannels}>
         Save Channel Config
       </button>
 
       {/* STT Section */}
-      <div style={{ ...sectionStyle, marginTop: "16px" }}>
-        <div style={labelStyle}>Voice Transcription (STT)</div>
-        <p style={hintStyle}>
+      <div className="sp-section" style={{ marginTop: "16px" }}>
+        <div className="sp-label">Voice Transcription (STT)</div>
+        <p className="sp-hint">
           Enables voice message transcription on Telegram and Discord.
           Provide an API key for the selected provider.
         </p>
 
         <select
-          style={inputStyle}
+          className="sp-select"
           value={sttProvider}
           onChange={e => setSttProvider(e.target.value)}
         >
@@ -471,7 +471,7 @@ export function ChannelsPanel() {
         {(sttProvider === "openai" || sttProvider === "groq") && (
           <>
             <input
-              style={inputStyle}
+              className="sp-input"
               type="password"
               placeholder={`${sttProvider === "openai" ? "OpenAI" : "Groq"} API Key (leave empty to keep existing)`}
               value={sttKey}
@@ -489,7 +489,7 @@ export function ChannelsPanel() {
         {sttProvider === "local" && (
           <>
             <input
-              style={inputStyle}
+              className="sp-input"
               type="text"
               placeholder="Whisper endpoint (e.g., http://localhost:8080)"
               value={sttEndpoint}
@@ -498,7 +498,7 @@ export function ChannelsPanel() {
             <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
               <span style={{ fontSize: "11px", color: "var(--j-text-muted)" }}>Server Type</span>
               <select
-                style={inputStyle}
+                className="sp-select"
                 value={sttServerType}
                 onChange={e => setSttServerType(e.target.value)}
               >
@@ -509,19 +509,19 @@ export function ChannelsPanel() {
           </>
         )}
 
-        <button style={{ ...primaryBtnStyle, marginTop: "8px" }} onClick={saveSTT}>
+        <button className="sp-btn-primary" style={{ marginTop: "8px" }} onClick={saveSTT}>
           Save STT Config
         </button>
       </div>
 
       {/* TTS Section */}
-      <div style={{ ...sectionStyle, marginTop: "16px", borderBottom: "none" }}>
-        <div style={labelStyle}>Text-to-Speech (TTS)</div>
-        <p style={hintStyle}>
+      <div className="sp-section-last" style={{ marginTop: "16px" }}>
+        <div className="sp-label">Text-to-Speech (TTS)</div>
+        <p className="sp-hint">
           Enables voice responses from JARVIS via the dashboard.
         </p>
 
-        <label style={toggleRowStyle}>
+        <label className="sp-toggle-row">
           <input
             type="checkbox"
             checked={ttsEnabled}
@@ -533,7 +533,7 @@ export function ChannelsPanel() {
         <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
           <span style={{ fontSize: "11px", color: "var(--j-text-muted)" }}>Provider</span>
           <select
-            style={inputStyle}
+            className="sp-select"
             value={ttsProvider}
             onChange={e => setTtsProvider(e.target.value)}
           >
@@ -550,7 +550,7 @@ export function ChannelsPanel() {
                 <span style={{ fontSize: "12px", color: "var(--j-text-dim)" }}>Loading voices…</span>
               ) : (
                 <select
-                  style={inputStyle}
+                  className="sp-select"
                   value={ttsVoice}
                   onChange={e => setTtsVoice(e.target.value)}
                 >
@@ -574,7 +574,7 @@ export function ChannelsPanel() {
             <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
               <span style={{ fontSize: "11px", color: "var(--j-text-muted)" }}>Speaking Rate</span>
               <select
-                style={inputStyle}
+                className="sp-select"
                 value={ttsRate}
                 onChange={e => setTtsRate(e.target.value)}
               >
@@ -589,12 +589,12 @@ export function ChannelsPanel() {
 
         {ttsProvider === "elevenlabs" && (
           <>
-            <p style={hintStyle}>
+            <p className="sp-hint">
               Get your API key from <strong>elevenlabs.io/app/settings/api-keys</strong>
             </p>
 
             <input
-              style={inputStyle}
+              className="sp-input"
               type="password"
               placeholder="ElevenLabs API Key (leave empty to keep existing)"
               value={elApiKey}
@@ -612,7 +612,7 @@ export function ChannelsPanel() {
                 <span style={{ fontSize: "12px", color: "var(--j-text-dim)" }}>Loading voices...</span>
               ) : elVoices.length > 0 ? (
                 <select
-                  style={inputStyle}
+                  className="sp-select"
                   value={elVoiceId}
                   onChange={e => setElVoiceId(e.target.value)}
                 >
@@ -633,7 +633,7 @@ export function ChannelsPanel() {
             <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
               <span style={{ fontSize: "11px", color: "var(--j-text-muted)" }}>Model</span>
               <select
-                style={inputStyle}
+                className="sp-select"
                 value={elModel}
                 onChange={e => setElModel(e.target.value)}
               >
@@ -644,7 +644,7 @@ export function ChannelsPanel() {
           </>
         )}
 
-        <button style={{ ...primaryBtnStyle, marginTop: "8px" }} onClick={saveTTS}>
+        <button className="sp-btn-primary" style={{ marginTop: "8px" }} onClick={saveTTS}>
           Save TTS Config
         </button>
       </div>
@@ -667,82 +667,3 @@ function StatusDot({ color }: { color: string }) {
   );
 }
 
-const cardStyle: React.CSSProperties = {
-  padding: "20px",
-  background: "var(--j-surface)",
-  border: "1px solid var(--j-border)",
-  borderRadius: "8px",
-};
-
-const headerStyle: React.CSSProperties = {
-  fontSize: "14px",
-  fontWeight: 600,
-  color: "var(--j-text)",
-  marginBottom: "16px",
-};
-
-const labelStyle: React.CSSProperties = {
-  fontSize: "11px",
-  fontWeight: 600,
-  color: "var(--j-text-muted)",
-  textTransform: "uppercase",
-  letterSpacing: "0.5px",
-};
-
-const sectionStyle: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "8px",
-  marginBottom: "12px",
-  paddingBottom: "12px",
-  borderBottom: "1px solid var(--j-border)",
-};
-
-const rowStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: "6px",
-};
-
-const toggleRowStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: "8px",
-  cursor: "pointer",
-};
-
-const hintStyle: React.CSSProperties = {
-  fontSize: "11px",
-  color: "var(--j-text-dim)",
-  margin: 0,
-  lineHeight: 1.5,
-};
-
-const msgStyle: React.CSSProperties = {
-  fontSize: "12px",
-  marginBottom: "8px",
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "8px 12px",
-  background: "var(--j-bg)",
-  border: "1px solid var(--j-border)",
-  borderRadius: "6px",
-  color: "var(--j-text)",
-  fontSize: "13px",
-  fontFamily: "inherit",
-  outline: "none",
-  boxSizing: "border-box",
-};
-
-const primaryBtnStyle: React.CSSProperties = {
-  padding: "8px 16px",
-  background: "var(--j-accent)",
-  color: "#000",
-  border: "none",
-  borderRadius: "6px",
-  fontSize: "13px",
-  fontWeight: 600,
-  cursor: "pointer",
-};

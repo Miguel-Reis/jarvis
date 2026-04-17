@@ -10,49 +10,6 @@ type McpServerStatus = {
   error: string | null;
 };
 
-const card: React.CSSProperties = {
-  background: "var(--j-surface)",
-  border: "1px solid var(--j-border)",
-  borderRadius: "10px",
-  padding: "20px 24px",
-};
-
-const label: React.CSSProperties = {
-  display: "block",
-  fontSize: "12px",
-  fontWeight: 600,
-  color: "var(--j-text-muted)",
-  marginBottom: "6px",
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-};
-
-const input: React.CSSProperties = {
-  width: "100%",
-  padding: "8px 12px",
-  background: "var(--j-bg)",
-  border: "1px solid var(--j-border)",
-  borderRadius: "6px",
-  color: "var(--j-text)",
-  fontSize: "13px",
-  outline: "none",
-  boxSizing: "border-box",
-};
-
-const btn = (variant: "primary" | "danger" | "ghost"): React.CSSProperties => ({
-  padding: "7px 14px",
-  borderRadius: "6px",
-  fontSize: "13px",
-  fontWeight: 500,
-  cursor: "pointer",
-  border: "none",
-  background:
-    variant === "primary" ? "var(--j-accent)" :
-    variant === "danger" ? "#ef4444" :
-    "var(--j-surface-2)",
-  color:
-    variant === "ghost" ? "var(--j-text-muted)" : "#fff",
-});
 
 export function MCPPanel() {
   const { data: servers, refetch } = useApiData<McpServerStatus[]>("/api/mcp/servers", []);
@@ -120,10 +77,8 @@ export function MCPPanel() {
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
 
       {/* Status */}
-      <div style={card}>
-        <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--j-text)", marginBottom: "14px" }}>
-          Connected MCP Servers
-        </div>
+      <div className="sp-card">
+        <h3 className="sp-card-title">Connected MCP Servers</h3>
 
         {list.length === 0 ? (
           <div style={{ fontSize: "13px", color: "var(--j-text-muted)" }}>
@@ -170,7 +125,8 @@ export function MCPPanel() {
 
                 {/* Remove */}
                 <button
-                  style={btn("danger")}
+                  className="sp-btn-danger"
+                  style={{ padding: "5px 12px", fontSize: "12px" }}
                   disabled={removing === s.name}
                   onClick={() => handleRemove(s.name)}
                 >
@@ -183,25 +139,23 @@ export function MCPPanel() {
       </div>
 
       {/* Add server */}
-      <div style={card}>
-        <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--j-text)", marginBottom: "16px" }}>
-          Add MCP Server
-        </div>
+      <div className="sp-card">
+        <h3 className="sp-card-title">Add MCP Server</h3>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "12px", marginBottom: "12px" }}>
-          <div>
-            <span style={label}>Server Name</span>
+          <div className="sp-field">
+            <span className="sp-field-label">Server Name</span>
             <input
-              style={input}
+              className="sp-input"
               placeholder="e.g. notion"
               value={name}
               onChange={e => setName(e.target.value)}
             />
           </div>
-          <div>
-            <span style={label}>Command</span>
+          <div className="sp-field">
+            <span className="sp-field-label">Command</span>
             <input
-              style={input}
+              className="sp-input"
               placeholder="e.g. npx @notionhq/notion-mcp-server"
               value={command}
               onChange={e => setCommand(e.target.value)}
@@ -209,10 +163,10 @@ export function MCPPanel() {
           </div>
         </div>
 
-        <div style={{ marginBottom: "16px" }}>
-          <span style={label}>Arguments (space-separated, optional)</span>
+        <div className="sp-field" style={{ marginBottom: "16px" }}>
+          <span className="sp-field-label">Arguments (space-separated, optional)</span>
           <input
-            style={input}
+            className="sp-input"
             placeholder="e.g. --api-key sk-..."
             value={args}
             onChange={e => setArgs(e.target.value)}
@@ -221,7 +175,7 @@ export function MCPPanel() {
 
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
           <button
-            style={btn("primary")}
+            className="sp-btn-primary"
             onClick={handleAdd}
             disabled={saving || !name.trim() || !command.trim()}
           >

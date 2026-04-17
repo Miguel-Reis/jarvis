@@ -145,8 +145,8 @@ export function IntegrationsPanel() {
 
   if (loading || !gStatus) {
     return (
-      <div style={cardStyle}>
-        <span style={{ color: "var(--j-text-muted)", fontSize: "13px" }}>
+      <div className="sp-card">
+        <span style={{ color: "rgba(255,255,255,0.35)", fontSize: "13px" }}>
           Loading...
         </span>
       </div>
@@ -154,18 +154,18 @@ export function IntegrationsPanel() {
   }
 
   return (
-    <div style={cardStyle}>
-      <h3 style={headerStyle}>Integrations</h3>
+    <div className="sp-card">
+      <h3 className="sp-card-title">Integrations</h3>
 
       {/* Google Section */}
-      <div style={labelStyle}>Google</div>
+      <div className="sp-label">Google</div>
 
       {/* Messages */}
       {errorMsg && (
-        <div style={{ ...msgStyle, color: "var(--j-error)" }}>{errorMsg}</div>
+        <div className="sp-msg sp-msg--error" style={{ marginBottom: "8px" }}>{errorMsg}</div>
       )}
       {successMsg && (
-        <div style={{ ...msgStyle, color: "var(--j-success)" }}>
+        <div className="sp-msg sp-msg--success" style={{ marginBottom: "8px" }}>
           {successMsg}
         </div>
       )}
@@ -192,20 +192,20 @@ export function IntegrationsPanel() {
             </ol>
           </div>
           <input
-            style={inputStyle}
+            className="sp-input"
             type="text"
             placeholder="Client ID"
             value={clientId}
             onChange={(e) => setClientId(e.target.value)}
           />
           <input
-            style={inputStyle}
+            className="sp-input"
             type="password"
             placeholder="Client Secret"
             value={clientSecret}
             onChange={(e) => setClientSecret(e.target.value)}
           />
-          <button style={primaryBtnStyle} onClick={handleSaveCredentials}>
+          <button className="sp-btn-primary" onClick={handleSaveCredentials}>
             Save Credentials
           </button>
         </div>
@@ -229,7 +229,7 @@ export function IntegrationsPanel() {
               Credentials configured
             </span>
           </div>
-          <button style={primaryBtnStyle} onClick={handleConnect}>
+          <button className="sp-btn-primary" onClick={handleConnect}>
             Connect Google Account
           </button>
           <p style={{ fontSize: "11px", color: "var(--j-text-muted)", margin: 0 }}>
@@ -296,7 +296,7 @@ export function IntegrationsPanel() {
             </div>
           )}
 
-          <button style={dangerBtnStyle} onClick={handleDisconnect}>
+          <button className="sp-btn-danger" onClick={handleDisconnect}>
             Disconnect
           </button>
         </div>
@@ -331,73 +331,10 @@ function StatusDot({
 
 /* -- Styles -- */
 
-const cardStyle: React.CSSProperties = {
-  padding: "20px",
-  background: "var(--j-surface)",
-  border: "1px solid var(--j-border)",
-  borderRadius: "8px",
-};
-
-const headerStyle: React.CSSProperties = {
-  fontSize: "14px",
-  fontWeight: 600,
-  color: "var(--j-text)",
-  marginBottom: "16px",
-};
-
-const labelStyle: React.CSSProperties = {
-  fontSize: "11px",
-  fontWeight: 600,
-  color: "var(--j-text-muted)",
-  textTransform: "uppercase",
-  letterSpacing: "0.5px",
-  marginBottom: "10px",
-};
-
 const rowStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: "8px",
-};
-
-const msgStyle: React.CSSProperties = {
-  fontSize: "12px",
-  marginBottom: "8px",
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "8px 12px",
-  background: "var(--j-bg)",
-  border: "1px solid var(--j-border)",
-  borderRadius: "6px",
-  color: "var(--j-text)",
-  fontSize: "13px",
-  fontFamily: "inherit",
-  outline: "none",
-  boxSizing: "border-box",
-};
-
-const primaryBtnStyle: React.CSSProperties = {
-  padding: "8px 16px",
-  background: "var(--j-accent)",
-  color: "#000",
-  border: "none",
-  borderRadius: "6px",
-  fontSize: "13px",
-  fontWeight: 600,
-  cursor: "pointer",
-};
-
-const dangerBtnStyle: React.CSSProperties = {
-  padding: "8px 16px",
-  background: "var(--j-error, #e74c3c)",
-  color: "#fff",
-  border: "none",
-  borderRadius: "6px",
-  fontSize: "13px",
-  fontWeight: 600,
-  cursor: "pointer",
 };
 
 const setupStepsStyle: React.CSSProperties = {

@@ -22,16 +22,16 @@ export function PersonalityPanel() {
   const { data: personality, loading } = useApiData<PersonalityModel>("/api/personality", []);
 
   if (loading || !personality) {
-    return <div style={cardStyle}><span style={{ color: "var(--j-text-muted)", fontSize: "13px" }}>Loading personality...</span></div>;
+    return <div className="sp-card"><span style={{ color: "rgba(255,255,255,0.35)", fontSize: "13px" }}>Loading personality...</span></div>;
   }
 
   return (
-    <div style={cardStyle}>
-      <h3 style={headerStyle}>Personality</h3>
+    <div className="sp-card">
+      <h3 className="sp-card-title">Personality</h3>
 
       {/* Core traits */}
       <div style={{ marginBottom: "16px" }}>
-        <div style={labelStyle}>Core Traits</div>
+        <div className="sp-label">Core Traits</div>
         <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
           {personality.core_traits.map((trait) => (
             <span key={trait} style={tagStyle}>{trait}</span>
@@ -41,7 +41,7 @@ export function PersonalityPanel() {
 
       {/* Learned preferences */}
       <div style={{ marginBottom: "16px" }}>
-        <div style={labelStyle}>Learned Preferences</div>
+        <div className="sp-label">Learned Preferences</div>
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
           <SliderDisplay label="Verbosity" value={personality.learned_preferences.verbosity} max={10} />
           <SliderDisplay label="Formality" value={personality.learned_preferences.formality} max={10} />
@@ -63,7 +63,7 @@ export function PersonalityPanel() {
 
       {/* Relationship */}
       <div>
-        <div style={labelStyle}>Relationship</div>
+        <div className="sp-label">Relationship</div>
         <div style={{ display: "flex", flexDirection: "column", gap: "6px", fontSize: "13px" }}>
           <div style={{ display: "flex", justifyContent: "space-between" }}>
             <span style={{ color: "var(--j-text-dim)" }}>Messages Exchanged</span>
@@ -96,29 +96,6 @@ function SliderDisplay({ label, value, max }: { label: string; value: number; ma
     </div>
   );
 }
-
-const cardStyle: React.CSSProperties = {
-  padding: "20px",
-  background: "var(--j-surface)",
-  border: "1px solid var(--j-border)",
-  borderRadius: "8px",
-};
-
-const headerStyle: React.CSSProperties = {
-  fontSize: "14px",
-  fontWeight: 600,
-  color: "var(--j-text)",
-  marginBottom: "16px",
-};
-
-const labelStyle: React.CSSProperties = {
-  fontSize: "11px",
-  fontWeight: 600,
-  color: "var(--j-text-muted)",
-  textTransform: "uppercase",
-  letterSpacing: "0.5px",
-  marginBottom: "8px",
-};
 
 const tagStyle: React.CSSProperties = {
   padding: "3px 10px",

@@ -1,0 +1,380 @@
+/* ================================================================
+   JARVIS Settings Panel — Shared Component Library
+   Import once in SettingsPage.tsx — all panels inherit.
+   ================================================================ */
+
+/* ── Card ──────────────────────────────────────────────────── */
+.sp-card {
+  padding: 20px 24px;
+  background: rgba(12, 12, 18, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255,255,255,0.03);
+  position: relative;
+  overflow: hidden;
+}
+
+.sp-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.3), transparent);
+  pointer-events: none;
+}
+
+/* ── Page header (h3 inside a card) ──────────────────────── */
+.sp-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.88);
+  margin: 0 0 18px;
+  letter-spacing: 0.1px;
+}
+
+/* ── Section (groups within a card) ─────────────────────── */
+.sp-section {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.sp-section-last {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  border-bottom: none;
+}
+
+/* ── Label (uppercase category headings) ────────────────── */
+.sp-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.28);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sp-label::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(139, 92, 246, 0.7);
+  flex-shrink: 0;
+}
+
+/* ── Hint text ───────────────────────────────────────────── */
+.sp-hint {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.32);
+  line-height: 1.55;
+  margin: 0;
+}
+
+.sp-hint strong {
+  color: rgba(255, 255, 255, 0.50);
+  font-weight: 600;
+}
+
+.sp-hint code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  background: rgba(139, 92, 246, 0.1);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: rgba(167, 139, 250, 0.9);
+}
+
+/* ── Inputs ──────────────────────────────────────────────── */
+.sp-input,
+.sp-select,
+.sp-textarea {
+  width: 100%;
+  padding: 8px 12px;
+  background: rgba(7, 7, 10, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+  appearance: none;
+}
+
+.sp-input::placeholder,
+.sp-textarea::placeholder {
+  color: rgba(255, 255, 255, 0.22);
+}
+
+.sp-input:hover,
+.sp-select:hover,
+.sp-textarea:hover {
+  border-color: rgba(255, 255, 255, 0.11);
+}
+
+.sp-input:focus,
+.sp-select:focus,
+.sp-textarea:focus {
+  border-color: rgba(139, 92, 246, 0.55);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.10);
+}
+
+.sp-select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='rgba(255,255,255,0.3)' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+  cursor: pointer;
+}
+
+.sp-select option {
+  background: #0C0C12;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.sp-textarea {
+  resize: vertical;
+  min-height: 80px;
+  line-height: 1.5;
+}
+
+/* ── Sub-label (above an input) ─────────────────────────── */
+.sp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.sp-field-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+  font-weight: 500;
+}
+
+/* ── Buttons ─────────────────────────────────────────────── */
+.sp-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: box-shadow 200ms ease, transform 150ms ease, filter 150ms ease;
+  white-space: nowrap;
+}
+
+.sp-btn-primary:hover {
+  box-shadow: 0 0 18px rgba(139, 92, 246, 0.45);
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.sp-btn-primary:active {
+  transform: translateY(0);
+  filter: brightness(0.95);
+}
+
+.sp-btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.sp-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 150ms, border-color 150ms, color 150ms;
+  white-space: nowrap;
+}
+
+.sp-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.13);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.sp-btn-danger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  background: rgba(251, 113, 133, 0.08);
+  color: rgba(251, 113, 133, 0.85);
+  border: 1px solid rgba(251, 113, 133, 0.18);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 150ms, box-shadow 150ms;
+  white-space: nowrap;
+}
+
+.sp-btn-danger:hover {
+  background: rgba(251, 113, 133, 0.14);
+  box-shadow: 0 0 12px rgba(251, 113, 133, 0.2);
+}
+
+/* ── Toggle row ──────────────────────────────────────────── */
+.sp-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.sp-toggle-row input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: #8B5CF6;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.sp-toggle-label {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.sp-toggle-note {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.28);
+  margin-left: auto;
+}
+
+/* ── Status dot + row ────────────────────────────────────── */
+.sp-status-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sp-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.sp-status-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+/* ── Section heading with optional status ────────────────── */
+.sp-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* ── Message (success / error) ───────────────────────────── */
+.sp-msg {
+  font-size: 12px;
+  padding: 8px 12px;
+  border-radius: 7px;
+  border: 1px solid transparent;
+}
+
+.sp-msg--success {
+  color: #34D399;
+  background: rgba(52, 211, 153, 0.08);
+  border-color: rgba(52, 211, 153, 0.18);
+}
+
+.sp-msg--error {
+  color: #FB7185;
+  background: rgba(251, 113, 133, 0.08);
+  border-color: rgba(251, 113, 133, 0.18);
+}
+
+/* ── Generic flex row ────────────────────────────────────── */
+.sp-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sp-row--between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* ── Info badge ──────────────────────────────────────────── */
+.sp-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(139, 92, 246, 0.12);
+  color: rgba(167, 139, 250, 0.9);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+}
+
+.sp-badge--green {
+  background: rgba(52, 211, 153, 0.10);
+  color: #34D399;
+  border-color: rgba(52, 211, 153, 0.2);
+}
+
+.sp-badge--red {
+  background: rgba(251, 113, 133, 0.10);
+  color: #FB7185;
+  border-color: rgba(251, 113, 133, 0.2);
+}
+
+/* ── Button row (align actions to end) ───────────────────── */
+.sp-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+/* ── Code/mono value display ─────────────────────────────── */
+.sp-mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}

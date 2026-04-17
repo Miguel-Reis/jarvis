@@ -20,12 +20,12 @@ export function RolePanel() {
   const { data: roleInfo, loading } = useApiData<RoleInfo>("/api/roles", []);
 
   if (loading || !roleInfo) {
-    return <div style={cardStyle}><span style={{ color: "var(--j-text-muted)", fontSize: "13px" }}>Loading...</span></div>;
+    return <div className="sp-card"><span style={{ color: "rgba(255,255,255,0.35)", fontSize: "13px" }}>Loading...</span></div>;
   }
 
   return (
-    <div style={cardStyle}>
-      <h3 style={headerStyle}>Active Role</h3>
+    <div className="sp-card">
+      <h3 className="sp-card-title">Active Role</h3>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px" }}>
@@ -52,7 +52,7 @@ export function RolePanel() {
         {/* Sub-roles / Specialists */}
         {roleInfo.role && roleInfo.role.sub_roles.length > 0 && (
           <div style={{ borderTop: "1px solid var(--j-border)", paddingTop: "12px", marginTop: "4px" }}>
-            <div style={labelStyle}>Available Specialists ({roleInfo.role.sub_roles.length})</div>
+            <div className="sp-label">Available Specialists ({roleInfo.role.sub_roles.length})</div>
             <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
               {roleInfo.role.sub_roles.map((sr) => (
                 <div
@@ -81,25 +81,3 @@ export function RolePanel() {
   );
 }
 
-const cardStyle: React.CSSProperties = {
-  padding: "20px",
-  background: "var(--j-surface)",
-  border: "1px solid var(--j-border)",
-  borderRadius: "8px",
-};
-
-const headerStyle: React.CSSProperties = {
-  fontSize: "14px",
-  fontWeight: 600,
-  color: "var(--j-text)",
-  marginBottom: "16px",
-};
-
-const labelStyle: React.CSSProperties = {
-  fontSize: "11px",
-  fontWeight: 600,
-  color: "var(--j-text-muted)",
-  textTransform: "uppercase",
-  letterSpacing: "0.5px",
-  marginBottom: "8px",
-};

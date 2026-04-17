@@ -28,13 +28,6 @@ type UserProfileResponse = {
   has_profile: boolean;
 };
 
-const cardStyle: React.CSSProperties = {
-  padding: "20px",
-  background: "var(--j-surface)",
-  border: "1px solid var(--j-border)",
-  borderRadius: "8px",
-};
-
 export function UserProfilePanel() {
   const { data, loading, error, refetch } = useApiData<UserProfileResponse>("/api/user-profile", []);
   const [editing, setEditing] = useState(false);
@@ -112,37 +105,37 @@ export function UserProfilePanel() {
 
   if (error && !data) {
     return (
-      <div style={cardStyle}>
-        <span style={{ color: "var(--j-danger, #ff6b6b)", fontSize: "13px" }}>{error}</span>
+      <div className="sp-card">
+        <span style={{ color: "#FB7185", fontSize: "13px" }}>{error}</span>
       </div>
     );
   }
 
   if (loading || !data) {
     return (
-      <div style={cardStyle}>
-        <span style={{ color: "var(--j-text-muted)", fontSize: "13px" }}>Loading user profile wizard...</span>
+      <div className="sp-card">
+        <span style={{ color: "rgba(255,255,255,0.35)", fontSize: "13px" }}>Loading user profile wizard...</span>
       </div>
     );
   }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-      <div style={cardStyle}>
+      <div className="sp-card">
         <div style={{ display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start", flexWrap: "wrap" }}>
           <div style={{ flex: 1, minWidth: "280px" }}>
-            <h3 style={{ fontSize: "14px", fontWeight: 600, color: "var(--j-text)", margin: 0 }}>Initial User Context</h3>
+            <h3 className="sp-card-title" style={{ margin: 0 }}>Initial User Context</h3>
             <p style={{ fontSize: "13px", color: "var(--j-text-muted)", margin: "8px 0 0 0", lineHeight: 1.6 }}>
               This wizard gives JARVIS durable context about who you are, what matters to you, and how you prefer to work.
               It is meant to be the initial context dump you can refine later.
             </p>
           </div>
           <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-            <button style={primaryButton} onClick={() => { setEditing(true); setStepIndex(0); }}>
+            <button className="sp-btn-primary" onClick={() => { setEditing(true); setStepIndex(0); }}>
               {data.has_profile ? "Edit Profile" : "Start Wizard"}
             </button>
             {data.has_profile && (
-              <button style={secondaryButton} onClick={clearProfile}>
+              <button className="sp-btn-secondary" onClick={clearProfile}>
                 Clear
               </button>
             )}
@@ -167,18 +160,13 @@ export function UserProfilePanel() {
       </div>
 
       {message && (
-        <div style={{
-          ...cardStyle,
-          borderColor: message.type === "success" ? "rgba(16,185,129,0.35)" : "rgba(239,68,68,0.35)",
-          color: message.type === "success" ? "var(--j-success, #10b981)" : "var(--j-danger, #ef4444)",
-          fontSize: "13px",
-        }}>
+        <div className={`sp-msg ${message.type === "success" ? "sp-msg--success" : "sp-msg--error"}`}>
           {message.text}
         </div>
       )}
 
       {editing && currentStep ? (
-        <div style={cardStyle}>
+        <div className="sp-card">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", marginBottom: "20px", flexWrap: "wrap" }}>
             <div>
               <div style={{ fontSize: "11px", letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--j-text-muted)", marginBottom: "6px" }}>
@@ -186,7 +174,7 @@ export function UserProfilePanel() {
               </div>
               <h3 style={{ margin: 0, fontSize: "16px", color: "var(--j-text)" }}>{currentStep.title}</h3>
             </div>
-            <button style={secondaryButton} onClick={() => setEditing(false)}>Cancel</button>
+            <button className="sp-btn-secondary" onClick={() => setEditing(false)}>Cancel</button>
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
@@ -201,18 +189,18 @@ export function UserProfilePanel() {
 
                 {question.multiline ? (
                   <textarea
+                    className="sp-textarea"
                     value={answers[question.id] ?? ""}
                     onChange={(e) => setAnswers((prev) => ({ ...prev, [question.id]: e.target.value }))}
                     placeholder={question.placeholder}
                     rows={5}
-                    style={textareaStyle}
                   />
                 ) : (
                   <input
+                    className="sp-input"
                     value={answers[question.id] ?? ""}
                     onChange={(e) => setAnswers((prev) => ({ ...prev, [question.id]: e.target.value }))}
                     placeholder={question.placeholder}
-                    style={inputStyle}
                   />
                 )}
               </label>
@@ -221,7 +209,7 @@ export function UserProfilePanel() {
 
           <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", marginTop: "24px", flexWrap: "wrap" }}>
             <button
-              style={secondaryButton}
+              className="sp-btn-secondary"
               onClick={() => setStepIndex((prev) => Math.max(prev - 1, 0))}
               disabled={stepIndex === 0}
             >
@@ -229,11 +217,11 @@ export function UserProfilePanel() {
             </button>
             <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
               {stepIndex < steps.length - 1 ? (
-                <button style={primaryButton} onClick={() => setStepIndex((prev) => Math.min(prev + 1, steps.length - 1))}>
+                <button className="sp-btn-primary" onClick={() => setStepIndex((prev) => Math.min(prev + 1, steps.length - 1))}>
                   Next
                 </button>
               ) : (
-                <button style={primaryButton} onClick={saveProfile} disabled={saving}>
+                <button className="sp-btn-primary" onClick={saveProfile} disabled={saving}>
                   {saving ? "Saving..." : "Save Profile"}
                 </button>
               )}
@@ -241,8 +229,8 @@ export function UserProfilePanel() {
           </div>
         </div>
       ) : data.has_profile ? (
-        <div style={cardStyle}>
-          <h3 style={{ fontSize: "14px", fontWeight: 600, color: "var(--j-text)", marginTop: 0, marginBottom: "18px" }}>Saved Context</h3>
+        <div className="sp-card">
+          <h3 className="sp-card-title">Saved Context</h3>
           <div style={{ display: "grid", gap: "14px" }}>
             {steps.map((step) => {
               const answeredQuestions = step.questions.filter((question) => {
@@ -272,8 +260,8 @@ export function UserProfilePanel() {
           </div>
         </div>
       ) : (
-        <div style={cardStyle}>
-          <div style={{ fontSize: "13px", color: "var(--j-text-muted)", lineHeight: 1.6 }}>
+        <div className="sp-card">
+          <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.35)", lineHeight: 1.6 }}>
             No user profile has been saved yet. Start the wizard to give JARVIS a strong initial understanding of your identity,
             goals, preferences, routines, and context.
           </div>
@@ -283,42 +271,3 @@ export function UserProfilePanel() {
   );
 }
 
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "10px 12px",
-  borderRadius: "8px",
-  border: "1px solid var(--j-border)",
-  background: "var(--j-bg)",
-  color: "var(--j-text)",
-  fontSize: "13px",
-  outline: "none",
-};
-
-const textareaStyle: React.CSSProperties = {
-  ...inputStyle,
-  minHeight: "120px",
-  resize: "vertical",
-  fontFamily: "inherit",
-};
-
-const primaryButton: React.CSSProperties = {
-  padding: "10px 14px",
-  borderRadius: "8px",
-  border: "1px solid rgba(0, 212, 255, 0.2)",
-  background: "rgba(0, 212, 255, 0.12)",
-  color: "var(--j-accent)",
-  cursor: "pointer",
-  fontSize: "13px",
-  fontWeight: 600,
-};
-
-const secondaryButton: React.CSSProperties = {
-  padding: "10px 14px",
-  borderRadius: "8px",
-  border: "1px solid var(--j-border)",
-  background: "transparent",
-  color: "var(--j-text)",
-  cursor: "pointer",
-  fontSize: "13px",
-  fontWeight: 500,
-};
