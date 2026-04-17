@@ -48,6 +48,8 @@ export default function GoalsPage({ goalEvents }: Props) {
   const [showCreate, setShowCreate] = useState(false);
   const [createInitialText, setCreateInitialText] = useState("");
   const [showDailyActions, setShowDailyActions] = useState(false);
+  const [showOverdue, setShowOverdue] = useState(false);
+  const [overdueGoals, setOverdueGoals] = useState<Goal[]>([]);
 
   const openCreate = (prefill = "") => {
     setCreateInitialText(prefill);
@@ -66,6 +68,11 @@ export default function GoalsPage({ goalEvents }: Props) {
   }, []);
 
   useEffect(() => { fetchGoals(); }, [fetchGoals]);
+
+  // Prefetch overdue count for badge
+  useEffect(() => {
+    fetch("/api/goals/overdue").then(r => r.ok ? r.json() : []).then(setOverdueGoals).catch(() => {});
+  }, []);
 
   // Re-fetch on goal events
   useEffect(() => {
@@ -91,6 +98,17 @@ export default function GoalsPage({ goalEvents }: Props) {
   };
 
   const activeCount = goals.filter((g) => g.status === "active").length;
+
+  const handleToggleOverdue = useCallback(async () => {
+    if (showOverdue) { setShowOverdue(false); return; }
+    try {
+      const resp = await fetch("/api/goals/overdue");
+      if (resp.ok) setOverdueGoals(await resp.json());
+    } catch { /* ignore */ }
+    setShowOverdue(true);
+  }, [showOverdue]);
+
+  const displayGoals = showOverdue ? overdueGoals : goals;
 
   return (
     <div className="goals-page">
@@ -128,6 +146,24 @@ export default function GoalsPage({ goalEvents }: Props) {
         </nav>
 
         <div className="goals-spacer" />
+
+        {/* Overdue filter */}
+        <button
+          className={`goals-search-btn${showOverdue ? " active" : ""}`}
+          onClick={handleToggleOverdue}
+          aria-label="Show overdue goals"
+          title="Overdue goals"
+          style={{ fontSize: "11px", padding: "0 10px", width: "auto", fontWeight: showOverdue ? 700 : 500, gap: "5px", color: showOverdue ? "#FB7185" : undefined, borderColor: showOverdue ? "rgba(251,113,133,0.35)" : undefined }}
+        >
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+            <circle cx="5" cy="5" r="4" stroke="currentColor" strokeWidth="1.3"/>
+            <path d="M5 2.5v3l1.5 1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+          </svg>
+          Overdue
+          {overdueGoals.length > 0 && !showOverdue && (
+            <span style={{ background: "rgba(251,113,133,0.2)", color: "#FB7185", borderRadius: "8px", padding: "0 4px", fontSize: "9px", fontWeight: 800 }}>{overdueGoals.length}</span>
+          )}
+        </button>
 
         {/* Search */}
         <button className="goals-search-btn" aria-label="Search goals" title="Search goals">
@@ -180,16 +216,16 @@ export default function GoalsPage({ goalEvents }: Props) {
           <div className="goals-content">
             {tab === "constellation" && (
               <GoalConstellation
-                goals={goals}
+                goals={displayGoals}
                 onSelect={handleSelect}
                 selectedGoalId={selectedGoal?.id}
               />
             )}
             {tab === "timeline" && (
-              <GoalTimeline goals={goals} onSelect={handleSelect} />
+              <GoalTimeline goals={displayGoals} onSelect={handleSelect} />
             )}
             {tab === "metrics" && (
-              <GoalMetrics goals={goals} />
+              <GoalMetrics goals={displayGoals} />
             )}
           </div>
 

@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useApiData, api } from "../hooks/useApi";
 import { TaskModal } from "../components/mission/TaskModal";
+import { useToast } from "../components/Toast";
 import type { TaskEvent } from "../hooks/useWebSocket";
 import "../styles/tasks.css";
 
@@ -74,6 +75,7 @@ function getAssigneeLabel(name: string | null): string {
 // ── Main component ──
 
 export default function TasksPage({ taskEvents }: Props) {
+  const { showToast } = useToast();
   const [refreshKey, setRefreshKey] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -217,8 +219,8 @@ export default function TasksPage({ taskEvents }: Props) {
         body: JSON.stringify({ status: toStatus }),
       });
       refetch();
-    } catch (err) {
-      console.error("Failed to update status:", err);
+    } catch {
+      showToast("Failed to update task status", "error");
       refetch(); // revert on failure
     }
   };
@@ -234,8 +236,8 @@ export default function TasksPage({ taskEvents }: Props) {
         body: JSON.stringify({ status }),
       });
       refetch();
-    } catch (err) {
-      console.error("Failed to update task:", err);
+    } catch {
+      showToast("Failed to update task", "error");
       refetch();
     }
   };

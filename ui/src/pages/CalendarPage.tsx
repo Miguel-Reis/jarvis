@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { api } from "../hooks/useApi";
+import { useToast } from "../components/Toast";
 import type { CalendarEvent } from "../components/calendar/CalendarEventBadge";
 import type { TaskEvent, ContentEvent } from "../hooks/useWebSocket";
 import "../styles/calendar.css";
@@ -50,6 +51,7 @@ function formatTime(ts: number): string {
 }
 
 export default function CalendarPage({ taskEvents, contentEvents }: Props) {
+  const { showToast } = useToast();
   const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()));
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [events, setEvents] = useState<CalendarEvent[]>([]);
@@ -63,9 +65,12 @@ export default function CalendarPage({ taskEvents, contentEvents }: Props) {
       const { start, end } = getWeekRange(ws);
       const data = await api<CalendarEvent[]>(`/api/calendar?range_start=${start}&range_end=${end}`);
       setEvents(data);
-    } catch { setEvents([]); }
+    } catch {
+      setEvents([]);
+      showToast("Failed to load calendar events", "error");
+    }
     finally { setLoading(false); }
-  }, []);
+  }, [showToast]);
 
   useEffect(() => { fetchEvents(weekStart); }, [weekStart, fetchEvents]);
 

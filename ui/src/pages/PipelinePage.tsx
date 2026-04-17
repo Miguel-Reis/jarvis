@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useApiData, api } from "../hooks/useApi";
+import { useToast } from "../components/Toast";
 import { PipelineBodyEditor } from "../components/pipeline/PipelineBodyEditor";
 import { PipelineStageNotes } from "../components/pipeline/PipelineStageNotes";
 import { PipelineAttachments } from "../components/pipeline/PipelineAttachments";
@@ -41,6 +42,7 @@ type Props = {
 };
 
 export default function PipelinePage({ contentEvents, sendMessage }: Props) {
+  const { showToast } = useToast();
   const [refreshKey, setRefreshKey] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [stageFilter, setStageFilter] = useState("");
@@ -233,6 +235,7 @@ function DetailPanel({ itemId, refreshKey, sendMessage, onDeleted, onChanged }: 
   onDeleted: () => void;
   onChanged: () => void;
 }) {
+  const { showToast } = useToast();
   const { data: item, refetch: refetchItem } = useApiData<ContentItem>(
     itemId ? `/api/content/${itemId}` : null, [itemId, refreshKey]
   );
@@ -254,33 +257,33 @@ function DetailPanel({ itemId, refreshKey, sendMessage, onDeleted, onChanged }: 
 
   const handleBodySave = useCallback(async (body: string) => {
     if (!itemId) return;
-    try { await api(`/api/content/${itemId}`, { method: "PATCH", body: JSON.stringify({ body }) }); } catch {}
+    try { await api(`/api/content/${itemId}`, { method: "PATCH", body: JSON.stringify({ body }) }); } catch { showToast("Failed to save body", "error"); }
   }, [itemId]);
 
   const handleTitleSave = async () => {
     if (!itemId || !titleValue.trim()) return;
     setEditingTitle(false);
-    try { await api(`/api/content/${itemId}`, { method: "PATCH", body: JSON.stringify({ title: titleValue.trim() }) }); onChanged(); } catch {}
+    try { await api(`/api/content/${itemId}`, { method: "PATCH", body: JSON.stringify({ title: titleValue.trim() }) }); onChanged(); } catch { showToast("Failed to save title", "error"); }
   };
 
   const handleTagsSave = async () => {
     if (!itemId) return;
     setEditingTags(false);
     const tags = tagsValue.split(",").map(t => t.trim()).filter(Boolean);
-    try { await api(`/api/content/${itemId}`, { method: "PATCH", body: JSON.stringify({ tags }) }); onChanged(); } catch {}
+    try { await api(`/api/content/${itemId}`, { method: "PATCH", body: JSON.stringify({ tags }) }); onChanged(); } catch { showToast("Failed to save tags", "error"); }
   };
 
   const handleAdvance = async () => {
     if (!itemId) return;
-    try { await api(`/api/content/${itemId}/advance`, { method: "POST" }); refetchItem(); onChanged(); } catch {}
+    try { await api(`/api/content/${itemId}/advance`, { method: "POST" }); refetchItem(); onChanged(); } catch { showToast("Failed to advance stage", "error"); }
   };
   const handleRegress = async () => {
     if (!itemId) return;
-    try { await api(`/api/content/${itemId}/regress`, { method: "POST" }); refetchItem(); onChanged(); } catch {}
+    try { await api(`/api/content/${itemId}/regress`, { method: "POST" }); refetchItem(); onChanged(); } catch { showToast("Failed to regress stage", "error"); }
   };
   const handleDelete = async () => {
     if (!itemId) return;
-    try { await api(`/api/content/${itemId}`, { method: "DELETE" }); onDeleted(); } catch {}
+    try { await api(`/api/content/${itemId}`, { method: "DELETE" }); onDeleted(); } catch { showToast("Failed to delete item", "error"); }
   };
 
   if (!itemId) {

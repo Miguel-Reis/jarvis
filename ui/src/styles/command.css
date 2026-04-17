@@ -181,3 +181,21 @@
 
 /* ── Empty ── */
 .cmd-empty { text-align: center; padding: 24px 12px; color: rgba(255,255,255,0.30); font-size: 11px; }
+
+/* ── Observations v2 ── */
+.cmd-obs-filters {
+  display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; align-items: center;
+}
+.cmd-obs-filter-btn {
+  padding: 2px 7px; border-radius: 4px; font-size: 9px; font-weight: 700;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.35); cursor: pointer; transition: all 0.12s; text-transform: lowercase;
+}
+.cmd-obs-filter-btn.active { background: rgba(167,139,250,0.15); border-color: rgba(167,139,250,0.3); color: #A78BFA; }
+.cmd-obs-filter-btn:hover:not(.active) { color: rgba(255,255,255,0.6); }
+
+.cmd-obs-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.cmd-obs-data { display: flex; flex-direction: column; gap: 2px; }
+.cmd-obs-kv { display: flex; gap: 6px; align-items: baseline; font-size: 10px; line-height: 1.4; }
+.cmd-obs-key { color: rgba(255,255,255,0.35); font-family: 'JetBrains Mono', monospace; flex-shrink: 0; min-width: 60px; }
+.cmd-obs-val { color: rgba(255,255,255,0.75); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }

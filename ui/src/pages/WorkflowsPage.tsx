@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect, useMemo } from "react";
 import type { WorkflowEvent } from "../hooks/useWebSocket";
 import { useApiData, api } from "../hooks/useApi";
+import { useToast } from "../components/Toast";
 import WorkflowList from "../components/workflows/WorkflowList";
 import WorkflowCanvas from "../components/workflows/WorkflowCanvas";
 import "../styles/workflows.css";
@@ -56,9 +57,13 @@ export default function WorkflowsPage({
   workflowEvents: WorkflowEvent[];
   sendMessage: (text: string) => void;
 }) {
+  const { showToast } = useToast();
   const [view, setView] = useState<"list" | "canvas">("list");
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [showImport, setShowImport] = useState(false);
+  const [importYaml, setImportYaml] = useState("");
+  const [importing, setImporting] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
   const [defMap, setDefMap] = useState<Map<string, WorkflowDefinition>>(new Map());
   const { data: workflows, loading, refetch } = useApiData<Workflow[]>("/api/workflows");
@@ -131,6 +136,26 @@ export default function WorkflowsPage({
     setSelectedWorkflowId(null);
     refetch();
   }, [refetch]);
+
+  const handleImport = useCallback(async () => {
+    if (!importYaml.trim()) return;
+    setImporting(true);
+    try {
+      const wf = await api<Workflow>("/api/workflows/import", {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: importYaml,
+      });
+      setImportYaml("");
+      setShowImport(false);
+      showToast(`Imported "${wf.name}"`, "success");
+      handleSelect(wf.id);
+    } catch {
+      showToast("Failed to import workflow — check YAML syntax", "error");
+    } finally {
+      setImporting(false);
+    }
+  }, [importYaml, showToast]);
 
   const handleCreate = useCallback(async () => {
     const name = prompt("Workflow name:");
@@ -267,6 +292,17 @@ export default function WorkflowsPage({
           </svg>
           {filter === "all" ? "Filter" : filter.charAt(0).toUpperCase() + filter.slice(1)}
         </button>
+        <button
+          className="wf-filter-btn"
+          onClick={() => setShowImport(v => !v)}
+          title="Import workflow from YAML"
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path d="M6 1v7M3 5l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M1 10h10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+          </svg>
+          Import
+        </button>
         <button className="wf-new-btn" onClick={handleCreate}>
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
             <line x1="6" y1="1" x2="6" y2="11" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
@@ -275,6 +311,48 @@ export default function WorkflowsPage({
           New Workflow
         </button>
       </div>
+
+      {/* Import YAML modal */}
+      {showImport && (
+        <div style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 1000,
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }} onClick={() => setShowImport(false)}>
+          <div style={{
+            background: "#0E0E18", border: "1px solid rgba(139,92,246,0.3)", borderRadius: "14px",
+            width: "520px", maxWidth: "92vw", boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 18px 12px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+              <span style={{ fontSize: "14px", fontWeight: 700, color: "rgba(255,255,255,0.92)" }}>Import Workflow YAML</span>
+              <button onClick={() => setShowImport(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.35)", fontSize: "20px", lineHeight: 1 }}>×</button>
+            </div>
+            <div style={{ padding: "16px 18px" }}>
+              <textarea
+                style={{
+                  width: "100%", boxSizing: "border-box", height: "220px",
+                  background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)",
+                  borderRadius: "8px", padding: "10px 12px", fontSize: "12px", fontFamily: "monospace",
+                  color: "rgba(255,255,255,0.88)", resize: "vertical", outline: "none",
+                }}
+                placeholder="Paste workflow YAML here..."
+                value={importYaml}
+                onChange={e => setImportYaml(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", padding: "0 18px 16px" }}>
+              <button onClick={() => setShowImport(false)} style={{ padding: "7px 14px", borderRadius: "7px", fontSize: "12px", background: "none", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.45)", cursor: "pointer" }}>Cancel</button>
+              <button
+                onClick={handleImport}
+                disabled={importing || !importYaml.trim()}
+                style={{ padding: "7px 16px", borderRadius: "7px", fontSize: "12px", fontWeight: 700, background: "rgba(139,92,246,0.25)", border: "1px solid rgba(139,92,246,0.4)", color: "#A78BFA", cursor: "pointer", opacity: importing || !importYaml.trim() ? 0.4 : 1 }}
+              >
+                {importing ? "Importing…" : "Import"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stats Bar */}
       <div className="wf-stats-bar">

@@ -159,13 +159,17 @@ export default function AuthorityPage() {
     return () => clearInterval(timer);
   }, [refreshPending, refreshStats]);
 
+  const { showToast } = useToast();
+
   const handleEmergency = async (action: string) => {
+    if (action === "kill" && !confirm("Kill all autonomous operations? This immediately halts all running agents.")) return;
     try {
       const res = await fetch(`${API}/api/authority/emergency/${action}`, { method: "POST" });
       const data = await res.json();
       if (data.state) setEmergencyState(data.state);
-    } catch (err) {
-      console.error("Emergency action failed:", err);
+      showToast(`System ${action}ed`, action === "kill" ? "error" : action === "resume" ? "success" : "info");
+    } catch {
+      showToast(`Emergency action failed: ${action}`, "error");
     }
   };
 

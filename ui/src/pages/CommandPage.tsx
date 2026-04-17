@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { useApiData } from "../hooks/useApi";
 import "../styles/command.css";
 
@@ -80,9 +80,10 @@ function getStatusClass(status: string): string {
 }
 
 export default function CommandPage() {
+  const [obsTypeFilter, setObsTypeFilter] = useState<string>("all");
   const { data: health, loading: healthLoading } = useApiData<HealthStatus>("/api/health", []);
   const { data: agents } = useApiData<AgentInfo[]>("/api/agents", []);
-  const { data: observations, loading: obsLoading } = useApiData<Observation[]>("/api/vault/observations?limit=30", []);
+  const { data: observations, loading: obsLoading } = useApiData<Observation[]>("/api/vault/observations?limit=50", []);
 
   const activeAgents = agents?.filter(a => a.status === "active").length ?? 0;
   const totalAgents = agents?.length ?? 0;
@@ -217,23 +218,52 @@ export default function CommandPage() {
           <div className="cmd-pc-header" style={{ color: "#A78BFA" }}>
             Observations
             {observations && <span className="cmd-pc-count">{observations.length}</span>}
+            {/* Type filter chips */}
+            {observations && observations.length > 0 && (
+              <div className="cmd-obs-filters">
+                <button
+                  className={`cmd-obs-filter-btn${obsTypeFilter === "all" ? " active" : ""}`}
+                  onClick={() => setObsTypeFilter("all")}
+                >all</button>
+                {[...new Set(observations.map(o => o.type))].map(t => (
+                  <button
+                    key={t}
+                    className={`cmd-obs-filter-btn${obsTypeFilter === t ? " active" : ""}`}
+                    style={obsTypeFilter === t ? { background: `${OBS_TYPE_COLORS[t] ?? "rgba(255,255,255,0.3)"}20`, color: OBS_TYPE_COLORS[t] ?? "rgba(255,255,255,0.6)", borderColor: `${OBS_TYPE_COLORS[t] ?? "rgba(255,255,255,0.3)"}40` } : {}}
+                    onClick={() => setObsTypeFilter(t)}
+                  >{OBS_TYPE_LABELS[t] ?? t}</button>
+                ))}
+              </div>
+            )}
           </div>
           <div className="cmd-pc-body">
             {obsLoading && <div className="cmd-empty">Loading...</div>}
             {!obsLoading && (!observations || observations.length === 0) && (
               <div className="cmd-empty">No observations recorded yet</div>
             )}
-            {observations?.map((obs, i) => {
-              const color = OBS_TYPE_COLORS[obs.type] || "rgba(255,255,255,0.30)";
-              const label = OBS_TYPE_LABELS[obs.type] || obs.type;
-              return (
-                <div key={obs.id} className="cmd-obs-item" style={{ animationDelay: `${i * 0.02}s` }}>
-                  <span className="cmd-obs-type" style={{ background: `${color}20`, color }}>{label}</span>
-                  <span className="cmd-obs-text">{JSON.stringify(obs.data).slice(0, 150)}</span>
-                  <span className="cmd-obs-time">{new Date(obs.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-                </div>
-              );
-            })}
+            {observations
+              ?.filter(o => obsTypeFilter === "all" || o.type === obsTypeFilter)
+              .map((obs, i) => {
+                const color = OBS_TYPE_COLORS[obs.type] || "rgba(255,255,255,0.30)";
+                const label = OBS_TYPE_LABELS[obs.type] || obs.type;
+                const dataEntries = Object.entries(obs.data).filter(([, v]) => v !== null && v !== undefined && v !== "");
+                return (
+                  <div key={obs.id} className="cmd-obs-item" style={{ animationDelay: `${i * 0.02}s` }}>
+                    <div className="cmd-obs-row">
+                      <span className="cmd-obs-type" style={{ background: `${color}20`, color }}>{label}</span>
+                      <span className="cmd-obs-time">{new Date(obs.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                    </div>
+                    <div className="cmd-obs-data">
+                      {dataEntries.slice(0, 4).map(([k, v]) => (
+                        <span key={k} className="cmd-obs-kv">
+                          <span className="cmd-obs-key">{k}</span>
+                          <span className="cmd-obs-val">{String(v).slice(0, 80)}</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
           </div>
         </div>
       </div>
