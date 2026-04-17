@@ -1,7 +1,46 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Component, type ReactNode, type ErrorInfo } from "react";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { useVoice } from "./hooks/useVoice";
 import "./styles/sidebar.css";
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  override componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('[JARVIS] Page crash:', error, info.componentStack);
+  }
+
+  override render() {
+    if (this.state.error) {
+      return (
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          height: '100%', gap: '12px', color: 'var(--j-text-dim)', fontSize: '13px',
+        }}>
+          <div style={{ fontSize: '24px' }}>⚠</div>
+          <div style={{ fontWeight: 600, color: 'var(--j-text)' }}>Something went wrong</div>
+          <div style={{ color: 'var(--j-text-muted)', fontSize: '12px', maxWidth: '320px', textAlign: 'center' }}>
+            {(this.state.error as Error).message}
+          </div>
+          <button
+            onClick={() => this.setState({ error: null })}
+            style={{ marginTop: '8px', padding: '6px 16px', background: 'var(--j-accent)', color: '#000', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+          >
+            Retry
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 import ChatPage from "./pages/ChatPage";
 
@@ -280,6 +319,7 @@ export function App() {
             ))}
           </div>
         ) : null}
+        <ErrorBoundary>
         <React.Suspense fallback={<PageFallback />}>
           {route === "dashboard" && <DashboardPage messages={ws.messages} isConnected={ws.isConnected} voice={voice} agentActivity={ws.agentActivity} goalEvents={ws.goalEvents} workflowEvents={ws.workflowEvents} />}
           {route === "chat" && <ChatPage messages={ws.messages} isConnected={ws.isConnected} sendMessage={ws.sendMessage} voice={voice} activeThreadId={ws.activeThreadId} onSelectThread={ws.selectThread} onNewThread={ws.startNewThread} />}
@@ -297,6 +337,7 @@ export function App() {
           {route === "authority" && <AuthorityPage />}
           {route === "settings" && <SettingsPage section={settingsSection} />}
         </React.Suspense>
+        </ErrorBoundary>
       </main>
     </div>
   );

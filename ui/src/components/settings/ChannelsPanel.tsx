@@ -9,6 +9,7 @@ type ChannelStatusData = {
 type ChannelConfigData = {
   telegram: { enabled: boolean; has_token: boolean; allowed_users: number[] };
   discord: { enabled: boolean; has_token: boolean; allowed_users: string[]; guild_id: string | null };
+  whatsapp: { enabled: boolean; has_phone_number_id: boolean; has_access_token: boolean; has_verify_token: boolean; allowed_users: string[] };
 };
 
 type STTConfigData = {
@@ -57,6 +58,13 @@ export function ChannelsPanel() {
   const [dcAllowed, setDcAllowed] = useState("");
   const [dcGuild, setDcGuild] = useState("");
 
+  // WhatsApp form
+  const [waEnabled, setWaEnabled] = useState(false);
+  const [waPhoneNumberId, setWaPhoneNumberId] = useState("");
+  const [waAccessToken, setWaAccessToken] = useState("");
+  const [waVerifyToken, setWaVerifyToken] = useState("");
+  const [waAllowed, setWaAllowed] = useState("");
+
   // STT form
   const [sttProvider, setSttProvider] = useState("openai");
   const [sttKey, setSttKey] = useState("");
@@ -91,6 +99,8 @@ export function ChannelsPanel() {
       setDcEnabled(channelCfg.discord.enabled);
       setDcAllowed(channelCfg.discord.allowed_users.join(", "));
       setDcGuild(channelCfg.discord.guild_id ?? "");
+      setWaEnabled(channelCfg.whatsapp.enabled);
+      setWaAllowed(channelCfg.whatsapp.allowed_users.join(", "));
     }
   }, [channelCfg]);
 
@@ -150,6 +160,14 @@ export function ChannelsPanel() {
         ...(dcGuild ? { guild_id: dcGuild } : {}),
       };
 
+      body.whatsapp = {
+        enabled: waEnabled,
+        ...(waPhoneNumberId ? { phone_number_id: waPhoneNumberId } : {}),
+        ...(waAccessToken ? { access_token: waAccessToken } : {}),
+        ...(waVerifyToken ? { webhook_verify_token: waVerifyToken } : {}),
+        allowed_users: waAllowed.split(",").map(s => s.trim()).filter(Boolean),
+      };
+
       await api("/api/config/channels", {
         method: "POST",
         body: JSON.stringify(body),
@@ -157,6 +175,7 @@ export function ChannelsPanel() {
 
       setTgToken("");
       setDcToken("");
+      setWaAccessToken("");
       setMsg({ text: "Channel config saved. Restart JARVIS to apply.", type: "success" });
       refetchCfg();
       refetchStatus();
@@ -327,6 +346,62 @@ export function ChannelsPanel() {
           placeholder="Guild ID (optional, restrict to one server)"
           value={dcGuild}
           onChange={e => setDcGuild(e.target.value)}
+        />
+      </div>
+
+      {/* WhatsApp Section */}
+      <div style={sectionStyle}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={labelStyle}>WhatsApp</div>
+          <div style={rowStyle}>
+            <StatusDot color={status?.channels.whatsapp ? "var(--j-success)" : "var(--j-text-muted)"} />
+            <span style={{ fontSize: "11px", color: "var(--j-text-dim)" }}>
+              {status?.channels.whatsapp ? "Connected" : "Disconnected"}
+            </span>
+          </div>
+        </div>
+
+        <p style={hintStyle}>
+          Requires a <strong>Meta Business account</strong> with a WhatsApp Cloud API app.
+          Set the webhook URL to <code style={{ fontSize: "11px", background: "var(--j-bg)", padding: "1px 4px", borderRadius: "3px" }}>https://your-domain/webhooks/whatsapp</code>.
+        </p>
+
+        <label style={toggleRowStyle}>
+          <input
+            type="checkbox"
+            checked={waEnabled}
+            onChange={e => setWaEnabled(e.target.checked)}
+          />
+          <span style={{ fontSize: "13px", color: "var(--j-text)" }}>Enabled</span>
+        </label>
+
+        <input
+          style={inputStyle}
+          type="text"
+          placeholder={`Phone Number ID${channelCfg?.whatsapp.has_phone_number_id ? " (configured)" : ""}`}
+          value={waPhoneNumberId}
+          onChange={e => setWaPhoneNumberId(e.target.value)}
+        />
+        <input
+          style={inputStyle}
+          type="password"
+          placeholder={`System User Access Token${channelCfg?.whatsapp.has_access_token ? " (configured)" : ""}`}
+          value={waAccessToken}
+          onChange={e => setWaAccessToken(e.target.value)}
+        />
+        <input
+          style={inputStyle}
+          type="text"
+          placeholder={`Webhook Verify Token${channelCfg?.whatsapp.has_verify_token ? " (configured)" : ""}`}
+          value={waVerifyToken}
+          onChange={e => setWaVerifyToken(e.target.value)}
+        />
+        <input
+          style={inputStyle}
+          type="text"
+          placeholder="Allowed phone numbers in E.164 format (comma-separated, empty = all)"
+          value={waAllowed}
+          onChange={e => setWaAllowed(e.target.value)}
         />
       </div>
 

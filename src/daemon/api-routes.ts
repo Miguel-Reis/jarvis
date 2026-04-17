@@ -1405,6 +1405,13 @@ export function createApiRoutes(ctx: ApiContext): Record<string, unknown> {
             allowed_users: cfg.discord.allowed_users,
             guild_id: cfg.discord.guild_id ?? null,
           } : { enabled: false, has_token: false, allowed_users: [], guild_id: null },
+          whatsapp: cfg?.whatsapp ? {
+            enabled: cfg.whatsapp.enabled,
+            has_phone_number_id: !!cfg.whatsapp.phone_number_id,
+            has_access_token: !!cfg.whatsapp.access_token,
+            has_verify_token: !!cfg.whatsapp.webhook_verify_token,
+            allowed_users: cfg.whatsapp.allowed_users ?? [],
+          } : { enabled: false, has_phone_number_id: false, has_access_token: false, has_verify_token: false, allowed_users: [] },
         });
       },
       POST: async (req: Request) => {
@@ -1425,6 +1432,12 @@ export function createApiRoutes(ctx: ApiContext): Record<string, unknown> {
             freshConfig.channels.discord = {
               ...freshConfig.channels.discord,
               ...(body.discord as Record<string, unknown>),
+            } as any;
+          }
+          if (body.whatsapp && typeof body.whatsapp === 'object') {
+            freshConfig.channels.whatsapp = {
+              ...freshConfig.channels.whatsapp,
+              ...(body.whatsapp as Record<string, unknown>),
             } as any;
           }
 

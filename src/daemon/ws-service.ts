@@ -454,6 +454,11 @@ export class WebSocketService implements Service {
       timestamp: event.timestamp,
     };
     this.wsServer.broadcast(message);
+
+    // Fire goal_update workflow triggers (non-blocking)
+    if (event.goalId && this.triggerManager) {
+      try { this.triggerManager.checkGoalEvent(event.goalId, event.type, event.data); } catch { /* non-critical */ }
+    }
   }
 
   broadcastSiteEvent(event: { type: string; projectId: string; data: Record<string, unknown>; timestamp: number }): void {

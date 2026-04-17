@@ -34,6 +34,7 @@ const TRIGGER_TYPES = new Set([
   'trigger.notification',
   'trigger.screen',
   'trigger.message',
+  'trigger.goal_update',
 ]);
 
 type MessageTriggerEntry = {
@@ -41,6 +42,13 @@ type MessageTriggerEntry = {
   nodeId: string;
   pattern: RegExp;
   channel?: string;
+};
+
+type GoalTriggerEntry = {
+  workflowId: string;
+  nodeId: string;
+  goalId?: string;   // undefined = watch all goals
+  eventType?: string; // undefined = watch all event types
 };
 
 // ── TriggerManager ──
@@ -59,6 +67,8 @@ export class TriggerManager implements Service {
   private registrations: Map<string, Set<string>> = new Map();
   /** message triggers: matched against every incoming chat message */
   private messagePatterns: MessageTriggerEntry[] = [];
+  /** goal triggers: fired when a goal event is emitted */
+  private goalTriggers: GoalTriggerEntry[] = [];
 
   constructor(workflowEngine: WorkflowEngine) {
     this.engine = workflowEngine;
@@ -93,6 +103,7 @@ export class TriggerManager implements Service {
     this.poller.unregisterAll();
     this.registrations.clear();
     this.messagePatterns = [];
+    this.goalTriggers = [];
     // Webhooks are stateless HTTP handlers; nothing to teardown at the transport level
 
     this._status = 'stopped';
@@ -142,6 +153,7 @@ export class TriggerManager implements Service {
 
     this.webhooks.unregister(workflowId);
     this.messagePatterns = this.messagePatterns.filter(e => e.workflowId !== workflowId);
+    this.goalTriggers = this.goalTriggers.filter(e => e.workflowId !== workflowId);
     this.registrations.delete(workflowId);
     console.log(`[TriggerManager] Unregistered triggers for workflow "${workflowId}"`);
   }
@@ -163,6 +175,19 @@ export class TriggerManager implements Service {
           matchedPattern: entry.pattern.source,
         });
       }
+    }
+  }
+
+  /**
+   * Fire all `trigger.goal_update` workflows that match the given goal event.
+   * Call this from goal-service or ws-service whenever a goal changes.
+   */
+  checkGoalEvent(goalId: string, eventType: string, data: Record<string, unknown>): void {
+    for (const entry of this.goalTriggers) {
+      if (entry.goalId && entry.goalId !== goalId) continue;
+      if (entry.eventType && entry.eventType !== eventType) continue;
+      console.log(`[TriggerManager] Goal trigger fired for workflow "${entry.workflowId}" (goal: ${goalId}, event: ${eventType})`);
+      this.fire(entry.workflowId, 'goal_update', { goal_id: goalId, event_type: eventType, nodeId: entry.nodeId, ...data });
     }
   }
 
@@ -236,6 +261,10 @@ export class TriggerManager implements Service {
         this.registerMessageTrigger(workflowId, node);
         break;
 
+      case 'trigger.goal_update':
+        this.registerGoalTrigger(workflowId, node);
+        break;
+
       case 'trigger.manual':
         // Manual triggers are fired programmatically via fireTrigger() — no setup needed
         console.log(`[TriggerManager] Manual trigger registered for workflow "${workflowId}" (node: ${node.id})`);
@@ -278,6 +307,13 @@ export class TriggerManager implements Service {
 
     this.messagePatterns.push({ workflowId, nodeId: node.id, pattern, channel });
     console.log(`[TriggerManager] Message trigger registered for workflow "${workflowId}" — pattern: ${pattern}${channel ? ` (channel: ${channel})` : ''}`);
+  }
+
+  private registerGoalTrigger(workflowId: string, node: WorkflowNode): void {
+    const goalId = (node.config.goal_id as string | undefined) || undefined;
+    const eventType = (node.config.event_type as string | undefined) || undefined;
+    this.goalTriggers.push({ workflowId, nodeId: node.id, goalId, eventType });
+    console.log(`[TriggerManager] Goal update trigger registered for workflow "${workflowId}"${goalId ? ` (goal: ${goalId})` : ''}${eventType ? ` (event: ${eventType})` : ''}`);
   }
 
   private registerCronTrigger(workflowId: string, node: WorkflowNode, key: string): void {
