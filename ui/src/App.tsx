@@ -1,6 +1,7 @@
 import React, { useState, useEffect, Component, type ReactNode, type ErrorInfo } from "react";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { useVoice } from "./hooks/useVoice";
+import { ToastProvider } from "./components/Toast";
 import "./styles/sidebar.css";
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
@@ -194,6 +195,7 @@ export function App() {
   };
 
   return (
+    <ToastProvider>
     <div style={{ display: "flex", height: "100vh", width: "100vw", background: "#07070A" }}>
       {/* Sidebar — The Spine */}
       <nav className="sidebar" role="navigation" aria-label="Primary navigation">
@@ -355,6 +357,7 @@ export function App() {
         </ErrorBoundary>
       </main>
     </div>
+    </ToastProvider>
   );
 }
 

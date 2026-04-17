@@ -47,6 +47,7 @@ export default function GoalsPage({ goalEvents }: Props) {
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [createInitialText, setCreateInitialText] = useState("");
+  const [showDailyActions, setShowDailyActions] = useState(false);
 
   const openCreate = (prefill = "") => {
     setCreateInitialText(prefill);
@@ -136,6 +137,22 @@ export default function GoalsPage({ goalEvents }: Props) {
           </svg>
         </button>
 
+        {/* Daily plan */}
+        <button
+          className={`goals-search-btn${showDailyActions ? " active" : ""}`}
+          onClick={() => setShowDailyActions((v) => !v)}
+          aria-label="Toggle daily actions plan"
+          title="Daily Plan"
+          style={{ fontSize: "11px", padding: "0 10px", width: "auto", fontWeight: showDailyActions ? 700 : 500, gap: "5px" }}
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <rect x="1" y="2" width="10" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
+            <path d="M4 1v2M8 1v2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+            <path d="M3 6h6M3 8.5h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+          </svg>
+          Daily Plan
+        </button>
+
         {/* New goal */}
         <button
           className="goals-new-btn"
@@ -183,6 +200,11 @@ export default function GoalsPage({ goalEvents }: Props) {
               onClose={handleClose}
               onUpdated={handleUpdated}
             />
+          )}
+
+          {/* Daily actions panel */}
+          {showDailyActions && !selectedGoal && (
+            <DailyActionsPanel onClose={() => setShowDailyActions(false)} onSelectGoal={(g) => { setSelectedGoal(g); setShowDailyActions(false); }} />
           )}
         </div>
       )}
@@ -290,5 +312,90 @@ function EmptyState({ onCreateClick }: EmptyStateProps) {
         ))}
       </div>
     </div>
+  );
+}
+
+/* ----------------------------------------------------------------
+   Daily Actions Panel
+   ---------------------------------------------------------------- */
+type DailyActionsPanelProps = {
+  onClose: () => void;
+  onSelectGoal: (goal: Goal) => void;
+};
+
+function DailyActionsPanel({ onClose, onSelectGoal }: DailyActionsPanelProps) {
+  const [actions, setActions] = useState<Goal[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/goals/daily-actions")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => setActions(data))
+      .catch(() => setActions([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const healthColor = (health: string) => {
+    if (health === "on_track") return "#34D399";
+    if (health === "at_risk") return "#FBBF24";
+    return "#FB7185";
+  };
+
+  return (
+    <aside className="goal-detail-panel" aria-label="Daily actions plan">
+      <div className="gdp-header">
+        <div className="gdp-title-row">
+          <span className="gdp-title">Daily Plan</span>
+          <span className="gdp-subtitle">{loading ? "…" : `${actions.length} action${actions.length !== 1 ? "s" : ""} today`}</span>
+        </div>
+        <button className="gdp-close-btn" onClick={onClose} aria-label="Close daily plan" title="Close">×</button>
+      </div>
+
+      <div className="gdp-body" style={{ padding: "16px" }}>
+        {loading ? (
+          <div style={{ color: "rgba(255,255,255,0.35)", fontSize: "13px", textAlign: "center", paddingTop: "32px" }}>Loading...</div>
+        ) : actions.length === 0 ? (
+          <div style={{ color: "rgba(255,255,255,0.35)", fontSize: "13px", textAlign: "center", paddingTop: "32px", lineHeight: 1.6 }}>
+            No daily actions scheduled.<br />
+            Create goals with level "daily_action" to see them here.
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {actions.map((action) => (
+              <button
+                key={action.id}
+                onClick={() => onSelectGoal(action)}
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: "10px",
+                  padding: "10px 12px",
+                  background: "rgba(255,255,255,0.03)",
+                  border: "1px solid rgba(255,255,255,0.06)",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  width: "100%",
+                  transition: "background 150ms",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.06)")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.03)")}
+              >
+                <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: healthColor(action.health), flexShrink: 0, marginTop: "4px", boxShadow: `0 0 6px ${healthColor(action.health)}80` }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.88)", fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{action.title}</div>
+                  {action.description && (
+                    <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.38)", marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{action.description}</div>
+                  )}
+                </div>
+                <div style={{ fontSize: "10px", fontWeight: 700, padding: "2px 6px", borderRadius: "4px", background: `${healthColor(action.health)}20`, color: healthColor(action.health), flexShrink: 0 }}>
+                  {Math.round(action.score * 10)}%
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </aside>
   );
 }

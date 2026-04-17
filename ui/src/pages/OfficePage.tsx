@@ -7,21 +7,16 @@ import AgentBuilderView from "../components/office/AgentBuilderView";
 import type { AgentWithLive, LiveAgentInfo } from "../components/office/CommandCenterView";
 import "../styles/agents.css";
 
-/* ── Static agent roster ── */
-const AGENT_ROSTER = [
-  { roleId: "personal-assistant",   name: "Personal Assistant",   emoji: "\u{1F916}",               authority: 5, tools: 14, avatarBg: "ag-avatar-violet", isPrimary: true },
-  { roleId: "software-engineer",    name: "Software Engineer",    emoji: "\u{1F468}\u200D\u{1F4BB}", authority: 4, tools: 8,  avatarBg: "ag-avatar-blue" },
-  { roleId: "research-analyst",     name: "Research Analyst",     emoji: "\u{1F52C}",                authority: 3, tools: 6,  avatarBg: "ag-avatar-emerald" },
-  { roleId: "content-writer",       name: "Content Writer",       emoji: "\u270D\uFE0F",             authority: 3, tools: 5,  avatarBg: "ag-avatar-violet" },
-  { roleId: "data-analyst",         name: "Data Analyst",         emoji: "\u{1F4CA}",                authority: 3, tools: 7,  avatarBg: "ag-avatar-cyan" },
-  { roleId: "system-administrator", name: "System Administrator", emoji: "\u{1F5A5}\uFE0F",          authority: 4, tools: 10, avatarBg: "ag-avatar-amber" },
-  { roleId: "legal-advisor",        name: "Legal Advisor",        emoji: "\u2696\uFE0F",             authority: 3, tools: 4,  avatarBg: "ag-avatar-rose" },
-  { roleId: "financial-analyst",    name: "Financial Analyst",    emoji: "\u{1F4B0}",                authority: 3, tools: 5,  avatarBg: "ag-avatar-emerald" },
-  { roleId: "hr-specialist",        name: "HR Specialist",        emoji: "\u{1F465}",                authority: 2, tools: 4,  avatarBg: "ag-avatar-blue" },
-  { roleId: "project-coordinator",  name: "Project Coordinator",  emoji: "\u{1F4CB}",                authority: 3, tools: 6,  avatarBg: "ag-avatar-amber" },
-  { roleId: "marketing-strategist", name: "Marketing Strategist", emoji: "\u{1F4E3}",                authority: 3, tools: 5,  avatarBg: "ag-avatar-rose" },
-  { roleId: "customer-support",     name: "Customer Support",     emoji: "\u{1F3A7}",                authority: 2, tools: 4,  avatarBg: "ag-avatar-cyan" },
-];
+/* ── Avatar palette — cycles deterministically by index ── */
+const AVATAR_CLASSES = ["ag-avatar-violet", "ag-avatar-blue", "ag-avatar-emerald", "ag-avatar-cyan", "ag-avatar-amber", "ag-avatar-rose"];
+const ROLE_EMOJIS: Record<string, string> = {
+  "personal-assistant": "\u{1F916}", "software-engineer": "\u{1F468}\u200D\u{1F4BB}",
+  "research-analyst": "\u{1F52C}", "content-writer": "\u270D\uFE0F",
+  "data-analyst": "\u{1F4CA}", "system-administrator": "\u{1F5A5}\uFE0F",
+  "legal-advisor": "\u2696\uFE0F", "financial-analyst": "\u{1F4B0}",
+  "hr-specialist": "\u{1F465}", "project-coordinator": "\u{1F4CB}",
+  "marketing-strategist": "\u{1F4E3}", "customer-support": "\u{1F3A7}",
+};
 
 type Props = {
   agentActivity: AgentActivityEvent[];
@@ -100,10 +95,16 @@ export default function OfficePage({ agentActivity }: Props) {
     );
   }
 
-  // Build combined agent list
-  const allAgents: AgentWithLive[] = AGENT_ROSTER.map((r) => ({
-    ...r,
-    live: getLive(r.roleId),
+  // Build combined agent list from live API specialists (fallback: empty until loaded)
+  const allAgents: AgentWithLive[] = specialists.map((s, i) => ({
+    roleId: s.id,
+    name: s.name,
+    emoji: ROLE_EMOJIS[s.id] ?? "\u{1F916}",
+    authority: s.authority_level,
+    tools: s.tools.length,
+    avatarBg: AVATAR_CLASSES[i % AVATAR_CLASSES.length]!,
+    isPrimary: i === 0,
+    live: getLive(s.id),
   }));
 
   // Apply search filter
@@ -115,7 +116,7 @@ export default function OfficePage({ agentActivity }: Props) {
 
   // Stats
   const activeCount = allAgents.filter((agent) => isAgentActive(agent)).length;
-  const totalCount = AGENT_ROSTER.length;
+  const totalCount = allAgents.length;
 
   const selectedSpecialistMeta = specialists.find((specialist) => specialist.id === selectedSpecialist) ?? null;
 

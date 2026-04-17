@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { useToast } from "../components/Toast";
 import "../styles/authority.css";
 
 const API = window.location.origin;
@@ -70,7 +71,7 @@ type Suggestion = {
   suggestedRule: { action: string; allowed: boolean; requires_approval: boolean };
 };
 
-type Tab = "approvals" | "audit" | "config";
+type Tab = "approvals" | "audit" | "config" | "learning";
 
 const LEVEL_LABELS: Record<number, string> = {
   1: "Read-only", 2: "Suggest", 3: "Conservative", 4: "Moderate",
@@ -279,6 +280,9 @@ export default function AuthorityPage() {
             <button className={`au-tab-btn${tab === "config" ? " active" : ""}`} onClick={() => setTab("config")}>
               Rules & Config
             </button>
+            <button className={`au-tab-btn${tab === "learning" ? " active" : ""}`} onClick={() => setTab("learning")}>
+              Learning
+            </button>
           </div>
 
           {tab === "approvals" && <ApprovalQueue onRefresh={refreshPending} />}
@@ -286,6 +290,7 @@ export default function AuthorityPage() {
           {tab === "config" && <ConfigTab onConfigChange={() => {
             fetch(`${API}/api/authority/config`).then(r => r.json()).then(setConfig).catch(() => {});
           }} />}
+          {tab === "learning" && <LearningTab />}
         </div>
       </div>
     </div>
@@ -782,6 +787,113 @@ function AddContextRuleForm({ onAdd }: { onAdd: (r: AuthorityConfig["context_rul
         if (!description.trim()) return;
         onAdd({ id: `rule_${Date.now()}`, action, condition, params: buildParams(), effect, description: description.trim() });
       }}>Add Rule</button>
+    </div>
+  );
+}
+
+// ── Learning Suggestions Tab ──
+
+function LearningTab() {
+  const { showToast } = useToast();
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [acting, setActing] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch(`${API}/api/authority/learning/suggestions`);
+      if (res.ok) setSuggestions(await res.json());
+    } catch { /* ignore */ }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handle = async (suggestion: Suggestion, action: "accept" | "dismiss") => {
+    const key = suggestion.toolName + action;
+    setActing(key);
+    try {
+      await fetch(`${API}/api/authority/learning/${action}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tool_name: suggestion.toolName, action_category: suggestion.actionCategory }),
+      });
+      showToast(
+        action === "accept"
+          ? `Rule accepted for ${suggestion.toolName}`
+          : `Suggestion dismissed`,
+        action === "accept" ? "success" : "info"
+      );
+      setSuggestions((prev) => prev.filter((s) => s.toolName !== suggestion.toolName || s.actionCategory !== suggestion.actionCategory));
+    } catch {
+      showToast("Action failed", "error");
+    } finally {
+      setActing(null);
+    }
+  };
+
+  if (loading) return <div className="au-loading">Loading suggestions...</div>;
+
+  if (suggestions.length === 0) {
+    return (
+      <div className="au-tab-content">
+        <div className="au-empty">
+          <div style={{ fontSize: "28px", marginBottom: "10px", opacity: 0.5 }}>🧠</div>
+          <div style={{ fontWeight: 600, marginBottom: "6px" }}>No suggestions yet</div>
+          <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.35)", maxWidth: "320px", textAlign: "center", lineHeight: 1.6 }}>
+            JARVIS learns from your approval patterns. After approving the same action repeatedly,
+            it will suggest creating a permanent rule here.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="au-tab-content">
+      <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.35)", marginBottom: "16px", lineHeight: 1.6 }}>
+        Based on your approval history, JARVIS suggests the following automatic rules.
+        Accepting a suggestion creates a permanent override — you can remove it in <em>Rules & Config</em>.
+      </div>
+      {suggestions.map((s) => {
+        const key = s.toolName + "accept";
+        const dismissKey = s.toolName + "dismiss";
+        const rule = s.suggestedRule;
+        const effectColor = rule.allowed && !rule.requires_approval ? "#34D399" : rule.requires_approval ? "#FBBF24" : "#FB7185";
+        const effectLabel = rule.allowed && !rule.requires_approval ? "Allow always" : rule.requires_approval ? "Ask once, then allow" : "Deny always";
+        return (
+          <div key={`${s.actionCategory}:${s.toolName}`} className="au-audit-entry" style={{ padding: "14px 16px", marginBottom: "8px", flexDirection: "column", alignItems: "stretch", gap: "10px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <div className="au-ae-dot" style={{ background: effectColor, boxShadow: `0 0 6px ${effectColor}66`, flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="au-ae-tool">{s.toolName}</div>
+                <div className="au-ae-detail">{s.actionCategory} · approved {s.consecutiveApprovals}× in a row</div>
+              </div>
+              <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: "6px", background: `${effectColor}20`, color: effectColor, border: `1px solid ${effectColor}40`, whiteSpace: "nowrap" }}>
+                {effectLabel}
+              </span>
+            </div>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+              <button
+                className="au-em-btn reset"
+                style={{ fontSize: "12px", padding: "5px 14px" }}
+                disabled={acting === dismissKey}
+                onClick={() => handle(s, "dismiss")}
+              >
+                Dismiss
+              </button>
+              <button
+                className="au-em-btn resume"
+                style={{ fontSize: "12px", padding: "5px 14px" }}
+                disabled={acting === key}
+                onClick={() => handle(s, "accept")}
+              >
+                {acting === key ? "Accepting…" : "Accept Rule"}
+              </button>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
