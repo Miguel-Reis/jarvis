@@ -243,6 +243,26 @@ export default function TasksPage({ taskEvents }: Props) {
     }
   };
 
+  const handleFieldChange = useCallback(async (id: string, fields: { priority?: string; context?: string | null }) => {
+    setLocalTasks((prev) => prev.map((t) => t.id === id ? { ...t, ...fields } : t));
+    try {
+      await api(`/api/vault/commitments/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(fields),
+      });
+    } catch {
+      showToast("Failed to update task", "error");
+      refetch();
+    }
+  }, [refetch, showToast]);
+
+  // CMD+N shortcut
+  useEffect(() => {
+    const handler = () => setModalOpen(true);
+    window.addEventListener("jarvis:new-item", handler);
+    return () => window.removeEventListener("jarvis:new-item", handler);
+  }, []);
+
   const handleTaskCreated = useCallback(() => {
     setRefreshKey((k) => k + 1);
   }, []);
@@ -358,9 +378,18 @@ export default function TasksPage({ taskEvents }: Props) {
 
       {/* Kanban columns */}
       {loading ? (
-        <div className="tk-loading">
-          <div className="tk-loading-orb" />
-          <div className="tk-loading-text">Loading tasks...</div>
+        <div className="tk-skeleton-board">
+          {COLUMNS.map((col) => (
+            <div key={col.status} className="tk-skeleton-col">
+              <div className="tk-skeleton-col-head" />
+              {[80, 60, 90].map((w, i) => (
+                <div key={i} className="tk-skeleton-card" style={{ animationDelay: `${i * 0.1}s` }}>
+                  <div className="tk-skeleton-line" style={{ width: `${w}%` }} />
+                  <div className="tk-skeleton-line tiny" />
+                </div>
+              ))}
+            </div>
+          ))}
         </div>
       ) : (
         <div className="tk-kanban">
@@ -397,6 +426,7 @@ export default function TasksPage({ taskEvents }: Props) {
                       justUpdated={recentlyUpdated.has(task.id)}
                       onDragStart={handleDragStart}
                       onStatusChange={handleStatusChange}
+                      onFieldChange={handleFieldChange}
                     />
                   ))}
                   {items.length === 0 && (
@@ -428,22 +458,73 @@ export default function TasksPage({ taskEvents }: Props) {
 
 // ── Task Card (Gravity Wells style) ──
 
+const PRIORITIES = ["low", "normal", "high", "critical"] as const;
+const PRIORITY_COLORS: Record<string, string> = {
+  low: "#6B7280",
+  normal: "#8B5CF6",
+  high: "#F59E0B",
+  critical: "#EF4444",
+};
+
 function TaskCardGravity({
   task,
   index,
   justUpdated,
   onDragStart,
   onStatusChange,
+  onFieldChange,
 }: {
   task: Commitment;
   index: number;
   justUpdated: boolean;
   onDragStart: (e: React.DragEvent, taskId: string, fromStatus: string) => void;
   onStatusChange: (id: string, status: string) => void;
+  onFieldChange: (id: string, fields: { priority?: string; context?: string | null }) => void;
 }) {
   const isDone = task.status === "completed" || task.status === "failed";
   const assigneeLabel = getAssigneeLabel(task.assigned_to);
   const overdue = isOverdue(task.when_due, task.status);
+
+  const [priorityOpen, setPriorityOpen] = useState(false);
+  const [editingContext, setEditingContext] = useState(false);
+  const [contextVal, setContextVal] = useState(task.context ?? "");
+  const contextRef = useRef<HTMLInputElement>(null);
+  const priorityRef = useRef<HTMLDivElement>(null);
+
+  // Sync context value if task changes externally
+  useEffect(() => { setContextVal(task.context ?? ""); }, [task.context]);
+
+  // Focus context input when opened
+  useEffect(() => {
+    if (editingContext) contextRef.current?.focus();
+  }, [editingContext]);
+
+  // Close priority dropdown on outside click
+  useEffect(() => {
+    if (!priorityOpen) return;
+    const close = (e: MouseEvent) => {
+      if (priorityRef.current && !priorityRef.current.contains(e.target as Node)) {
+        setPriorityOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", close);
+    return () => window.removeEventListener("mousedown", close);
+  }, [priorityOpen]);
+
+  const handleContextBlur = () => {
+    setEditingContext(false);
+    const newVal = contextVal.trim() || null;
+    if (newVal !== (task.context ?? null)) {
+      onFieldChange(task.id, { context: newVal });
+    }
+  };
+
+  const handleContextKey = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === "Escape") {
+      e.preventDefault();
+      contextRef.current?.blur();
+    }
+  };
 
   return (
     <div
@@ -453,7 +534,34 @@ function TaskCardGravity({
       onDragStart={(e) => onDragStart(e, task.id, task.status)}
     >
       <div className="tk-card-top">
-        <div className={`tk-priority-pip ${task.priority}`} />
+        {/* Priority pip — click to change */}
+        <div ref={priorityRef} style={{ position: "relative", flexShrink: 0 }}>
+          <div
+            className={`tk-priority-pip ${task.priority}`}
+            style={{ cursor: isDone ? "default" : "pointer" }}
+            title={`Priority: ${task.priority}${isDone ? "" : " — click to change"}`}
+            onClick={(e) => { if (!isDone) { e.stopPropagation(); setPriorityOpen(v => !v); } }}
+          />
+          {priorityOpen && (
+            <div className="tk-priority-menu">
+              {PRIORITIES.map(p => (
+                <button
+                  key={p}
+                  className={`tk-priority-option${task.priority === p ? " active" : ""}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPriorityOpen(false);
+                    if (p !== task.priority) onFieldChange(task.id, { priority: p });
+                  }}
+                >
+                  <span className="tk-priority-option-pip" style={{ background: PRIORITY_COLORS[p] }} />
+                  {p.charAt(0).toUpperCase() + p.slice(1)}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className={`tk-card-title${isDone ? " done" : ""}`}>{task.what}</div>
         {!isDone && (
           <div className="tk-card-actions">
@@ -486,7 +594,30 @@ function TaskCardGravity({
             {overdue ? "Overdue · " : ""}{formatDueDate(task.when_due)}
           </span>
         )}
-        {task.context && <span className="tk-meta-tag context">{task.context}</span>}
+
+        {/* Context — click to edit inline */}
+        {editingContext ? (
+          <input
+            ref={contextRef}
+            className="tk-context-input"
+            value={contextVal}
+            onChange={(e) => setContextVal(e.target.value)}
+            onBlur={handleContextBlur}
+            onKeyDown={handleContextKey}
+            placeholder="context..."
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : (
+          <span
+            className="tk-meta-tag context"
+            style={{ cursor: isDone ? "default" : "pointer", opacity: task.context ? 1 : 0.4 }}
+            title={isDone ? undefined : "Click to edit context"}
+            onClick={(e) => { if (!isDone) { e.stopPropagation(); setEditingContext(true); } }}
+          >
+            {task.context || (isDone ? null : "add context")}
+          </span>
+        )}
+
         {task.result && task.status === "completed" && (
           <span className="tk-meta-tag result-tag" title={task.result}>{task.result}</span>
         )}

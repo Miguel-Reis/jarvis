@@ -598,3 +598,109 @@
   font-size: 12px;
   color: rgba(255,255,255,0.30);
 }
+
+/* ── Priority inline dropdown ── */
+.tk-priority-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  background: #12121E;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  z-index: 200;
+  overflow: hidden;
+  min-width: 110px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+}
+
+.tk-priority-option {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 7px 10px;
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.6);
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background 100ms;
+}
+
+.tk-priority-option:hover { background: rgba(255,255,255,0.05); }
+.tk-priority-option.active { color: #fff; background: rgba(139,92,246,0.08); }
+
+.tk-priority-option-pip {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── Context inline input ── */
+.tk-context-input {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(139,92,246,0.4);
+  border-radius: 4px;
+  color: rgba(255,255,255,0.75);
+  font-size: 10px;
+  font-family: inherit;
+  padding: 2px 6px;
+  outline: none;
+  max-width: 140px;
+  transition: border-color 150ms;
+}
+
+.tk-context-input:focus { border-color: rgba(139,92,246,0.7); }
+
+/* ── Loading skeletons ── */
+.tk-skeleton-board {
+  display: flex;
+  gap: 12px;
+  flex: 1;
+  padding: 0 20px 20px;
+  overflow: hidden;
+}
+
+.tk-skeleton-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tk-skeleton-col-head {
+  height: 36px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.04);
+  animation: tk-shimmer 1.4s ease-in-out infinite;
+}
+
+.tk-skeleton-card {
+  border-radius: 10px;
+  background: rgba(255,255,255,0.03);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: tk-shimmer 1.4s ease-in-out infinite;
+}
+
+.tk-skeleton-line {
+  height: 10px;
+  border-radius: 5px;
+  background: rgba(255,255,255,0.06);
+}
+
+.tk-skeleton-line.short { width: 55%; }
+.tk-skeleton-line.medium { width: 75%; }
+.tk-skeleton-line.full { width: 100%; }
+.tk-skeleton-line.tiny { width: 35%; height: 8px; }
+
+@keyframes tk-shimmer {
+  0%   { opacity: 0.6; }
+  50%  { opacity: 1; }
+  100% { opacity: 0.6; }
+}

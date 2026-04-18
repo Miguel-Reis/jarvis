@@ -3395,3 +3395,42 @@
   font-family: var(--font-mono);
   font-weight: 600;
 }
+
+/* ── Loading skeletons ── */
+.goals-skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  padding: 20px 24px;
+}
+
+.goals-skeleton-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  animation: goals-shimmer 1.4s ease-in-out infinite;
+}
+
+.goals-skeleton-line {
+  height: 12px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.07);
+}
+
+.goals-skeleton-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.05);
+  margin-top: 8px;
+  width: 100%;
+}
+
+@keyframes goals-shimmer {
+  0%   { opacity: 0.55; }
+  50%  { opacity: 1; }
+  100% { opacity: 0.55; }
+}

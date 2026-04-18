@@ -97,9 +97,17 @@ export default function WorkflowList({
 }) {
   if (loading) {
     return (
-      <div className="wf-loading">
-        <div className="wf-loading-orb" />
-        <span className="wf-loading-text">Loading workflows...</span>
+      <div className="wf-skeleton-list">
+        {[1,2,3,4].map((i) => (
+          <div key={i} className="wf-skeleton-row" style={{ animationDelay: `${(i-1)*0.1}s` }}>
+            <div className="wf-skeleton-icon" />
+            <div className="wf-skeleton-body">
+              <div className="wf-skeleton-line" style={{ width: "55%" }} />
+              <div className="wf-skeleton-line" style={{ width: "35%", height: "8px", marginTop: "4px" }} />
+            </div>
+            <div className="wf-skeleton-badge" />
+          </div>
+        ))}
       </div>
     );
   }

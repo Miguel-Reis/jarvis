@@ -57,6 +57,12 @@ export default function GoalsPage({ goalEvents }: Props) {
     setShowCreate(true);
   };
 
+  useEffect(() => {
+    const handler = () => openCreate();
+    window.addEventListener("jarvis:new-item", handler);
+    return () => window.removeEventListener("jarvis:new-item", handler);
+  }, []);
+
   const fetchGoals = useCallback(async () => {
     try {
       const resp = await fetch("/api/goals?limit=200");
@@ -258,9 +264,14 @@ export default function GoalsPage({ goalEvents }: Props) {
 
       {/* Content area */}
       {loading ? (
-        <div className="goals-loading" role="status" aria-label="Loading goals">
-          <div className="goals-loading-orb" aria-hidden="true" />
-          <span className="goals-loading-text">Loading goals...</span>
+        <div className="goals-skeleton-grid" role="status" aria-label="Loading goals">
+          {[1,2,3,4,5,6].map((i) => (
+            <div key={i} className="goals-skeleton-card" style={{ animationDelay: `${(i-1) * 0.08}s` }}>
+              <div className="goals-skeleton-line" style={{ width: "70%" }} />
+              <div className="goals-skeleton-line" style={{ width: "45%", height: "8px", marginTop: "4px" }} />
+              <div className="goals-skeleton-bar" />
+            </div>
+          ))}
         </div>
       ) : goals.length === 0 ? (
         <EmptyState onCreateClick={openCreate} />

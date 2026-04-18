@@ -288,6 +288,30 @@ export function updateCommitmentDue(id: string, when_due: number | null): Commit
 }
 
 /**
+ * Update arbitrary fields (what, context, priority) on a commitment.
+ */
+export function updateCommitmentFields(
+  id: string,
+  fields: { what?: string; context?: string | null; priority?: CommitmentPriority }
+): Commitment | null {
+  const db = getDb();
+  const commitment = getCommitment(id);
+  if (!commitment) return null;
+
+  const sets: string[] = [];
+  const vals: unknown[] = [];
+  if (fields.what !== undefined) { sets.push('what = ?'); vals.push(fields.what); }
+  if ('context' in fields) { sets.push('context = ?'); vals.push(fields.context ?? null); }
+  if (fields.priority !== undefined) { sets.push('priority = ?'); vals.push(fields.priority); }
+  if (sets.length === 0) return commitment;
+
+  vals.push(id);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  db.prepare(`UPDATE commitments SET ${sets.join(', ')} WHERE id = ?`).run(...(vals as any[]));
+  return getCommitment(id);
+}
+
+/**
  * Bulk update sort order for commitments (used by kanban drag & drop).
  */
 export function reorderCommitments(

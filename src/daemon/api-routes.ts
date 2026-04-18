@@ -24,7 +24,7 @@ import { findEntities, getEntity, searchEntitiesByName, createEntity, deleteEnti
 import { findFacts, createFact, deleteFact } from '../vault/facts.ts';
 import { findRelationships, getEntityRelationships } from '../vault/relationships.ts';
 import { getDb } from '../vault/schema.ts';
-import { findCommitments, getUpcoming, createCommitment, getCommitment, updateCommitmentStatus, reorderCommitments } from '../vault/commitments.ts';
+import { findCommitments, getUpcoming, createCommitment, getCommitment, updateCommitmentStatus, updateCommitmentFields, reorderCommitments } from '../vault/commitments.ts';
 import { getOrCreateConversation, getMessages, getRecentConversation } from '../vault/conversations.ts';
 import {
   createThread,
@@ -573,8 +573,24 @@ export function createApiRoutes(ctx: ApiContext): Record<string, unknown> {
       },
       PATCH: async (req: Request & { params: { id: string } }) => {
         try {
-          const body = await req.json() as { status?: CommitmentStatus; result?: string };
+          const body = await req.json() as { status?: CommitmentStatus; result?: string; priority?: string; context?: string | null; what?: string };
           const id = req.params.id;
+
+          // Field-only update (priority / context / what)
+          if (!body.status && (body.priority !== undefined || 'context' in body || body.what !== undefined)) {
+            const validPriorities = ['low', 'normal', 'high', 'critical'];
+            if (body.priority && !validPriorities.includes(body.priority)) {
+              return error(`Invalid priority. Must be one of: ${validPriorities.join(', ')}`);
+            }
+            const updated = updateCommitmentFields(id, {
+              ...(body.what !== undefined ? { what: body.what } : {}),
+              ...('context' in body ? { context: body.context } : {}),
+              ...(body.priority !== undefined ? { priority: body.priority as CommitmentPriority } : {}),
+            });
+            if (!updated) return error('Commitment not found', 404);
+            ctx.wsService?.broadcastTaskUpdate(updated, 'updated');
+            return json(updated);
+          }
 
           if (!body.status) return error('Missing "status" field');
 

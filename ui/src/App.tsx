@@ -246,12 +246,29 @@ export function App() {
     return () => window.removeEventListener('click', close);
   }, [bellOpen]);
 
-  // CMD+K / CTRL+K global search
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+
+  // Global keyboard shortcuts
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+      const mod = e.metaKey || e.ctrlKey;
+      // Ignore when typing in an input/textarea
+      const tag = (e.target as HTMLElement).tagName;
+      const isEditable = tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement).isContentEditable;
+
+      if (mod && e.key === "k") { e.preventDefault(); setSearchOpen(v => !v); return; }
+      if (mod && e.key === "n" && !isEditable) {
         e.preventDefault();
-        setSearchOpen(v => !v);
+        window.dispatchEvent(new CustomEvent("jarvis:new-item"));
+        return;
+      }
+      if (mod && e.key === "/" && !isEditable) {
+        e.preventDefault();
+        setShortcutsOpen(v => !v);
+        return;
+      }
+      if (e.key === "Escape") {
+        setShortcutsOpen(false);
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -265,6 +282,7 @@ export function App() {
   return (
     <ToastProvider>
     <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
+    {shortcutsOpen && <ShortcutsOverlay onClose={() => setShortcutsOpen(false)} />}
     <div style={{ display: "flex", height: "100vh", width: "100vw", background: "#07070A" }}>
       {/* Sidebar — The Spine */}
       <nav className="sidebar" role="navigation" aria-label="Primary navigation">
@@ -516,5 +534,84 @@ function SidebarNavItem({ icon, label, active, onClick }: {
       <span className="nav-label">{label}</span>
       <div className="nav-active-dot" aria-hidden="true" />
     </button>
+  );
+}
+
+/* ================================================================
+   SHORTCUTS OVERLAY
+   ================================================================ */
+const SHORTCUT_GROUPS = [
+  {
+    title: "Navigation",
+    shortcuts: [
+      { keys: ["⌘", "K"], description: "Global search" },
+      { keys: ["⌘", "/"], description: "Show this overlay" },
+      { keys: ["Esc"], description: "Close overlay / panel" },
+    ],
+  },
+  {
+    title: "Actions",
+    shortcuts: [
+      { keys: ["⌘", "N"], description: "New item (current page)" },
+    ],
+  },
+];
+
+function ShortcutsOverlay({ onClose }: { onClose: () => void }) {
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 1000,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        backdropFilter: "blur(4px)",
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background: "#10101A", border: "1px solid rgba(139,92,246,0.2)", borderRadius: "16px",
+          padding: "24px", minWidth: "340px", boxShadow: "0 24px 64px rgba(0,0,0,0.8)",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
+          <span style={{ fontSize: "13px", fontWeight: 700, color: "rgba(255,255,255,0.85)", letterSpacing: "0.5px" }}>
+            Keyboard Shortcuts
+          </span>
+          <button
+            onClick={onClose}
+            style={{ background: "none", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer", fontSize: "18px", lineHeight: 1, padding: "0 4px" }}
+          >
+            ×
+          </button>
+        </div>
+
+        {SHORTCUT_GROUPS.map((group) => (
+          <div key={group.title} style={{ marginBottom: "20px" }}>
+            <div style={{ fontSize: "10px", fontWeight: 700, color: "rgba(139,92,246,0.7)", letterSpacing: "1px", textTransform: "uppercase", marginBottom: "10px" }}>
+              {group.title}
+            </div>
+            {group.shortcuts.map((s, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.55)" }}>{s.description}</span>
+                <div style={{ display: "flex", gap: "4px" }}>
+                  {s.keys.map((k, j) => (
+                    <kbd key={j} style={{
+                      background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)",
+                      borderRadius: "5px", padding: "2px 7px", fontSize: "11px", fontFamily: "inherit",
+                      color: "rgba(255,255,255,0.75)", fontWeight: 500,
+                    }}>{k}</kbd>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ))}
+
+        <div style={{ fontSize: "10px", color: "rgba(255,255,255,0.25)", textAlign: "center", marginTop: "4px" }}>
+          Press <kbd style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "4px", padding: "1px 5px", fontSize: "10px" }}>Esc</kbd> to close
+        </div>
+      </div>
+    </div>
   );
 }

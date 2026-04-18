@@ -239,6 +239,13 @@ export default function WorkflowsPage({
     }
   }, [handleSelect]);
 
+  // CMD+N shortcut
+  useEffect(() => {
+    const handler = () => handleCreate();
+    window.addEventListener("jarvis:new-item", handler);
+    return () => window.removeEventListener("jarvis:new-item", handler);
+  }, [handleCreate]);
+
   const selectedWorkflow = workflows?.find(w => w.id === selectedWorkflowId);
 
   // ── Canvas View ──
