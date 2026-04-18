@@ -15,10 +15,49 @@ export class AwarenessIntelligence {
   private llm: LLMManager;
   private lastCloudCallAt = 0;
   private cooldownMs: number;
+  private visionUnsupported = false; // latched once we know the model lacks vision
 
   constructor(llm: LLMManager, cooldownMs: number = 30000) {
     this.llm = llm;
     this.cooldownMs = cooldownMs;
+  }
+
+  /**
+   * Send a message that may contain image blocks.
+   * If the provider rejects image input (model doesn't support vision),
+   * automatically retries with image blocks stripped — using OCR text only.
+   */
+  private async chatWithVisionFallback(
+    content: ContentBlock[],
+    opts: { max_tokens: number }
+  ): Promise<string> {
+    // If we already know vision is unsupported, strip images immediately
+    if (this.visionUnsupported) {
+      return this.llm.chat(
+        [{ role: 'user', content: content.filter(b => b.type === 'text') }],
+        opts
+      ).then(r => r.content);
+    }
+
+    try {
+      const response = await this.llm.chat([{ role: 'user', content }], opts);
+      return response.content;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('does not support image input') || msg.includes('image') && msg.includes('400')) {
+        // Latch — avoid wasting tokens on every future call
+        if (!this.visionUnsupported) {
+          this.visionUnsupported = true;
+          console.warn('[Intelligence] Model does not support vision — falling back to OCR-only analysis');
+        }
+        // Retry without image blocks
+        const textOnly = content.filter(b => b.type === 'text');
+        if (textOnly.length === 0) return '';
+        const response = await this.llm.chat([{ role: 'user', content: textOnly }], opts);
+        return response.content;
+      }
+      throw err;
+    }
   }
 
   /**
@@ -88,11 +127,7 @@ Be brief and direct. No preamble.`,
     ];
 
     try {
-      const response = await this.llm.chat(
-        [{ role: 'user', content }],
-        { max_tokens: 300 }
-      );
-      return response.content;
+      return await this.chatWithVisionFallback(content, { max_tokens: 300 });
     } catch (err) {
       console.error('[Intelligence] General analysis failed:', err instanceof Error ? err.message : err);
       return '';
@@ -139,11 +174,7 @@ Be concise. 2-3 sentences max.`,
     ];
 
     try {
-      const response = await this.llm.chat(
-        [{ role: 'user', content }],
-        { max_tokens: 200 }
-      );
-      return response.content;
+      return await this.chatWithVisionFallback(content, { max_tokens: 200 });
     } catch (err) {
       console.error('[Intelligence] Delta analysis failed:', err instanceof Error ? err.message : err);
       return '';
@@ -172,11 +203,7 @@ Be concise. 2-3 sentences max.`,
     const content: ContentBlock[] = [imageBlock, { type: 'text', text: prompt }];
 
     try {
-      const response = await this.llm.chat(
-        [{ role: 'user', content }],
-        { max_tokens: 600 }
-      );
-      return response.content;
+      return await this.chatWithVisionFallback(content, { max_tokens: 600 });
     } catch (err) {
       console.error('[Intelligence] Struggle analysis failed:', err instanceof Error ? err.message : err);
       return '';
