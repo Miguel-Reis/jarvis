@@ -72,6 +72,31 @@ export function initDatabase(dbPath: string = ":memory:"): Database {
 }
 
 /**
+ * Create an FTS5 virtual table with insert/delete/update triggers for content synchronization.
+ * Gracefully degrades if FTS5 is unavailable.
+ */
+function createFtsIndex(db: Database, name: string, table: string, columns: string[]): void {
+  const ftsName = `${name}_fts`;
+  const cols = columns.join(', ');
+  try {
+    db.run(
+      `CREATE VIRTUAL TABLE IF NOT EXISTS ${ftsName} USING fts5(${cols}, content='${table}', content_rowid='rowid', tokenize='porter unicode61')`
+    );
+    db.run(
+      `CREATE TRIGGER IF NOT EXISTS ${ftsName}_insert AFTER INSERT ON ${table} BEGIN INSERT INTO ${ftsName}(rowid, ${cols}) VALUES (new.rowid, ${columns.map(c => `new.${c}`).join(', ')}); END`
+    );
+    db.run(
+      `CREATE TRIGGER IF NOT EXISTS ${ftsName}_delete BEFORE DELETE ON ${table} BEGIN INSERT INTO ${ftsName}(${ftsName}, rowid, ${cols}) VALUES ('delete', old.rowid, ${columns.map(c => `old.${c}`).join(', ')}); END`
+    );
+    db.run(
+      `CREATE TRIGGER IF NOT EXISTS ${ftsName}_update AFTER UPDATE ON ${table} BEGIN INSERT INTO ${ftsName}(${ftsName}, rowid, ${cols}) VALUES ('delete', old.rowid, ${columns.map(c => `old.${c}`).join(', ')}); INSERT INTO ${ftsName}(rowid, ${cols}) VALUES (new.rowid, ${columns.map(c => `new.${c}`).join(', ')}); END`
+    );
+  } catch {
+    // FTS5 not available or already exists — degrade gracefully
+  }
+}
+
+/**
  * Create all database tables and indexes
  */
 function createTables(db: Database): void {
@@ -292,65 +317,9 @@ function createTables(db: Database): void {
     CREATE INDEX IF NOT EXISTS idx_conv_msg_time ON conversation_messages(created_at)
   `);
 
-  // FTS5 full-text index for conversation messages (BM25 ranking)
-  try {
-    db.run(`
-      CREATE VIRTUAL TABLE IF NOT EXISTS conv_messages_fts USING fts5(
-        content,
-        content='conversation_messages',
-        content_rowid='rowid',
-        tokenize='porter unicode61'
-      )
-    `);
-    db.run(`
-      CREATE TRIGGER IF NOT EXISTS conv_fts_insert AFTER INSERT ON conversation_messages BEGIN
-        INSERT INTO conv_messages_fts(rowid, content) VALUES (new.rowid, new.content);
-      END
-    `);
-    db.run(`
-      CREATE TRIGGER IF NOT EXISTS conv_fts_delete BEFORE DELETE ON conversation_messages BEGIN
-        INSERT INTO conv_messages_fts(conv_messages_fts, rowid, content) VALUES ('delete', old.rowid, old.content);
-      END
-    `);
-    db.run(`
-      CREATE TRIGGER IF NOT EXISTS conv_fts_update AFTER UPDATE ON conversation_messages BEGIN
-        INSERT INTO conv_messages_fts(conv_messages_fts, rowid, content) VALUES ('delete', old.rowid, old.content);
-        INSERT INTO conv_messages_fts(rowid, content) VALUES (new.rowid, new.content);
-      END
-    `);
-  } catch {
-    // FTS5 not available or already exists — degrade gracefully
-  }
-
-  // FTS5 full-text index for facts (predicate + object)
-  try {
-    db.run(`
-      CREATE VIRTUAL TABLE IF NOT EXISTS facts_fts USING fts5(
-        predicate, object,
-        content='facts',
-        content_rowid='rowid',
-        tokenize='porter unicode61'
-      )
-    `);
-    db.run(`
-      CREATE TRIGGER IF NOT EXISTS facts_fts_insert AFTER INSERT ON facts BEGIN
-        INSERT INTO facts_fts(rowid, predicate, object) VALUES (new.rowid, new.predicate, new.object);
-      END
-    `);
-    db.run(`
-      CREATE TRIGGER IF NOT EXISTS facts_fts_delete BEFORE DELETE ON facts BEGIN
-        INSERT INTO facts_fts(facts_fts, rowid, predicate, object) VALUES ('delete', old.rowid, old.predicate, old.object);
-      END
-    `);
-    db.run(`
-      CREATE TRIGGER IF NOT EXISTS facts_fts_update AFTER UPDATE ON facts BEGIN
-        INSERT INTO facts_fts(facts_fts, rowid, predicate, object) VALUES ('delete', old.rowid, old.predicate, old.object);
-        INSERT INTO facts_fts(rowid, predicate, object) VALUES (new.rowid, new.predicate, new.object);
-      END
-    `);
-  } catch {
-    // FTS5 not available or already exists — degrade gracefully
-  }
+  // FTS5 indexes — created via factory for DRY trigger generation
+  createFtsIndex(db, 'conv_messages', 'conversation_messages', ['content']);
+  createFtsIndex(db, 'facts', 'facts', ['predicate', 'object']);
 
   // Content pipeline: items moving through creation stages
   db.run(`
