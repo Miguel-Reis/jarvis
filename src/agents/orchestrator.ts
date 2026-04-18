@@ -13,8 +13,9 @@ import type { AuditTrail } from '../authority/audit.ts';
 import type { EmergencyController } from '../authority/emergency.ts';
 import { getActionForTool } from '../authority/tool-action-map.ts';
 
-const MAX_TOOL_ITERATIONS = 200;
+const MAX_TOOL_ITERATIONS = 40;
 const MAX_TOOL_RESULT_CHARS = 6000; // Cap individual tool results to control context size
+const STALL_WINDOW = 3; // Identical consecutive iteration signatures → stall
 
 export class AgentOrchestrator {
   private hierarchy: AgentHierarchy;
@@ -228,12 +229,22 @@ export class AgentOrchestrator {
 
     const tools = this.getLLMTools();
     let finalText = '';
+    const recentIterSigsSync: string[] = [];
 
     // Tool execution loop
     for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
       const llmResponse: LLMResponse = await this.llmManager.chat(messages, { tools });
 
       if (llmResponse.finish_reason === 'tool_use' && llmResponse.tool_calls.length > 0) {
+        // Stall detection
+        const iterSig = llmResponse.tool_calls.map(tc => `${tc.name}:${JSON.stringify(tc.arguments)}`).join('|');
+        recentIterSigsSync.push(iterSig);
+        if (recentIterSigsSync.length > STALL_WINDOW) recentIterSigsSync.shift();
+        if (recentIterSigsSync.length === STALL_WINDOW && recentIterSigsSync.every(s => s === iterSig)) {
+          finalText = `[Loop detected: the same tool call(s) repeated ${STALL_WINDOW} times without progress. Stopping to avoid an infinite loop.]`;
+          break;
+        }
+
         // Add assistant message with tool calls to local messages
         messages.push({
           role: 'assistant',
@@ -324,6 +335,7 @@ export class AgentOrchestrator {
     const totalUsage = { input_tokens: 0, output_tokens: 0 };
     let finalText = '';
     let responseModel = 'unknown';
+    const recentIterSigs: string[] = [];
 
     // Tool execution loop
     for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
@@ -391,6 +403,27 @@ export class AgentOrchestrator {
 
       // Tool calls present — execute them
       finalText += accumulatedText;
+
+      // Stall detection: if last STALL_WINDOW iterations had identical tool signatures, abort
+      const iterSig = toolCalls.map(tc => `${tc.name}:${JSON.stringify(tc.arguments)}`).join('|');
+      recentIterSigs.push(iterSig);
+      if (recentIterSigs.length > STALL_WINDOW) recentIterSigs.shift();
+      if (recentIterSigs.length === STALL_WINDOW && recentIterSigs.every(s => s === iterSig)) {
+        const stallMsg = `\n\n[Loop detected: the same tool call(s) repeated ${STALL_WINDOW} times without progress. Stopping to avoid an infinite loop. Please try a different approach or ask the user for clarification.]`;
+        yield { type: 'text', text: stallMsg };
+        yield {
+          type: 'done',
+          response: {
+            content: finalText + stallMsg,
+            tool_calls: [],
+            usage: totalUsage,
+            model: responseModel,
+            finish_reason: 'stop',
+          },
+        };
+        primary.addMessage('assistant', finalText + stallMsg);
+        return;
+      }
 
       // Add assistant message with tool calls to local messages
       messages.push({
