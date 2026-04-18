@@ -148,11 +148,15 @@ export type AuthConfig = {
 export type McpServerConfig = {
   /** Unique name for this MCP server (used as tool name prefix: mcp_{name}_*) */
   name: string;
-  /** Executable to spawn (e.g. "npx", "python", "/usr/local/bin/my-mcp-server") */
-  command: string;
-  /** Arguments passed to the command */
+  /** Transport mechanism: 'stdio' spawns a process; 'sse' connects to an HTTP endpoint */
+  transport?: 'stdio' | 'sse';
+  /** For transport='stdio': executable to spawn (e.g. "npx", "python") */
+  command?: string;
+  /** For transport='stdio': arguments passed to the command */
   args?: string[];
-  /** Extra environment variables for the server process */
+  /** For transport='sse': base URL of the MCP HTTP server */
+  url?: string;
+  /** Extra environment variables for the server process (stdio only) */
   env?: Record<string, string>;
 };
 
