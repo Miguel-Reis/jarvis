@@ -4,6 +4,7 @@ import { createFact } from './facts.ts';
 import { createRelationship } from './relationships.ts';
 import { createCommitment } from './commitments.ts';
 import { withTransaction } from './schema.ts';
+import { getActiveProjectId } from './projects.ts';
 
 export type ExtractionResult = {
   entities: Array<{ name: string; type: string; properties?: Record<string, unknown> }>;
@@ -170,6 +171,7 @@ export async function extractAndStore(
     const extraction = parseExtractionResponse(response.content);
 
     // Store all extracted data atomically — if any step fails, nothing is committed
+    const activeProject = getActiveProjectId();
     const entityMap = withTransaction(() => {
       const map = new Map<string, string>(); // name -> id
 
@@ -186,7 +188,7 @@ export async function extractAndStore(
         if (existing.length > 0) {
           map.set(name, existing[0]!.id);
         } else {
-          const entity = createEntity(type, name, properties, 'llm_extraction');
+          const entity = createEntity(type, name, properties, 'llm_extraction', activeProject);
           map.set(name, entity.id);
         }
       }
@@ -225,6 +227,7 @@ export async function extractAndStore(
           priority: (priority as any) ?? 'normal',
           context: 'Extracted from conversation',
           created_from: 'llm_extraction',
+          project_id: activeProject,
         });
       }
 
