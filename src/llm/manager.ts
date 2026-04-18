@@ -15,6 +15,9 @@ export class LLMManager {
   private static readonly STREAM_CHUNK_TIMEOUT_MS = 60_000; // 60s between stream chunks
   private static readonly isDebugging = process.env.JARVIS_LOG_LEVEL === 'debug' || process.env.DEBUG_LLM === 'true';
 
+  /** Providers known to reject image content — images stripped on every call. */
+  private noVisionProviders = new Set<string>();
+
   constructor() {}
 
   registerProvider(provider: LLMProvider): void {
@@ -147,6 +150,21 @@ export class LLMManager {
     };
   }
 
+  private static isVisionError(error: unknown): boolean {
+    const msg = (error instanceof Error ? error.message : String(error)).toLowerCase();
+    return msg.includes('does not support image input') ||
+      msg.includes('image input') ||
+      (msg.includes('image') && (msg.includes('400') || msg.includes('unsupported')));
+  }
+
+  private static stripImages(messages: LLMMessage[]): LLMMessage[] {
+    return messages.map(m => {
+      if (!Array.isArray(m.content)) return m;
+      const textOnly = m.content.filter(b => b.type !== 'image');
+      return { ...m, content: textOnly.length > 0 ? textOnly : [{ type: 'text' as const, text: '' }] };
+    });
+  }
+
   /**
    * Classify error for better retry logic
    */
@@ -186,10 +204,15 @@ export class LLMManager {
       }
 
       const errors: string[] = [];
+      // Strip images upfront if this provider is known to reject them
+      let effectiveMessages = this.noVisionProviders.has(providerName)
+        ? LLMManager.stripImages(messages)
+        : messages;
+
       for (let attempt = 1; attempt <= LLMManager.MAX_RETRIES_PER_PROVIDER; attempt++) {
         const { signal, cancel, timeoutId } = this.withTimeoutSignal(providerName);
         try {
-          const result = await provider.chat(messages, { ...options, signal });
+          const result = await provider.chat(effectiveMessages, { ...options, signal });
           clearTimeout(timeoutId);
           if (LLMManager.isDebugging && attempt > 1) {
             console.log(`[DEBUG] LLM ${providerName} succeeded on retry attempt ${attempt}`);
@@ -198,6 +221,16 @@ export class LLMManager {
         } catch (err) {
           cancel();
           const errorMsg = err instanceof Error ? err.message : String(err);
+
+          if (LLMManager.isVisionError(err) && !this.noVisionProviders.has(providerName)) {
+            this.noVisionProviders.add(providerName);
+            this._visionCache = false;
+            console.warn(`[LLM] ${providerName} rejected image input — disabling vision for this provider`);
+            effectiveMessages = LLMManager.stripImages(messages);
+            // Retry immediately without counting as a new attempt
+            continue;
+          }
+
           errors.push(`attempt ${attempt}: ${errorMsg}`);
 
           const shouldRetry = this.shouldRetry(err);
@@ -234,13 +267,26 @@ export class LLMManager {
       }
 
       const errors: string[] = [];
+      let effectiveMessages = this.noVisionProviders.has(providerName)
+        ? LLMManager.stripImages(messages)
+        : messages;
+
       for (let attempt = 1; attempt <= LLMManager.MAX_RETRIES_PER_PROVIDER; attempt++) {
         let emittedContent = false;
         try {
           let hasError = false;
-          for await (const event of this.streamWithChunkTimeout(provider.stream(messages, options), providerName)) {
+          for await (const event of this.streamWithChunkTimeout(provider.stream(effectiveMessages, options), providerName)) {
             if (event.type === 'error') {
               hasError = true;
+
+              if (LLMManager.isVisionError(event.error) && !this.noVisionProviders.has(providerName)) {
+                this.noVisionProviders.add(providerName);
+                this._visionCache = false;
+                console.warn(`[LLM] ${providerName} rejected image input — disabling vision for this provider`);
+                effectiveMessages = LLMManager.stripImages(messages);
+                break; // retry without counting as error
+              }
+
               errors.push(`attempt ${attempt}: ${event.error}`);
               console.error(
                 `[LLM] Provider ${providerName} stream error (attempt ${attempt}/${LLMManager.MAX_RETRIES_PER_PROVIDER}): ${event.error}`
@@ -262,6 +308,15 @@ export class LLMManager {
           }
         } catch (err) {
           const errorMsg = err instanceof Error ? err.message : String(err);
+
+          if (LLMManager.isVisionError(err) && !this.noVisionProviders.has(providerName)) {
+            this.noVisionProviders.add(providerName);
+            this._visionCache = false;
+            console.warn(`[LLM] ${providerName} rejected image input — disabling vision for this provider`);
+            effectiveMessages = LLMManager.stripImages(messages);
+            continue;
+          }
+
           errors.push(`attempt ${attempt}: ${errorMsg}`);
 
           const shouldRetry = this.shouldRetry(err);
