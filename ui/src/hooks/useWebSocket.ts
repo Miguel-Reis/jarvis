@@ -300,6 +300,14 @@ export function useWebSocket() {
       } catch (err) {
         console.warn("[WS] Failed to load history:", err);
       }
+      // Load any pre-existing pending approvals
+      try {
+        const ar = await fetch("/api/authority/approvals?status=pending");
+        if (ar.ok) {
+          const pending = await ar.json() as ApprovalRequest[];
+          if (pending.length > 0) setPendingApprovals(pending);
+        }
+      } catch {}
     };
 
     ws.onclose = () => {
@@ -555,6 +563,9 @@ export function useWebSocket() {
           // Remove resolved approvals
           setPendingApprovals((prev) => prev.filter((r) => r.id !== req.id));
         }
+      } else if (payload.source === "approval_update" && payload.request) {
+        const req = payload.request as ApprovalRequest;
+        setPendingApprovals((prev) => prev.filter((r) => r.id !== req.id));
       } else if (payload.source === "assistant_message" && payload.text) {
         setMessages((prev) => [
           ...prev,
