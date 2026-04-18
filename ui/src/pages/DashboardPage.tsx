@@ -974,6 +974,15 @@ function GoalsPanel({ goals }: { goals: GoalData[] }) {
   );
 }
 
+type DashboardData = {
+  agents: AgentInfo[];
+  health: HealthData;
+  entityCount: number;
+  recentEntities: VaultEntity[];
+  activeGoals: GoalData[];
+  workflows: WorkflowData[];
+};
+
 /* ================================================================
    DASHBOARD PAGE — root export, data fetching
    ================================================================ */
@@ -985,76 +994,35 @@ export default function DashboardPage({ messages, isConnected, voice, agentActiv
   const [goals, setGoals] = useState<GoalData[]>([]);
   const [workflows, setWorkflows] = useState<WorkflowData[]>([]);
 
-  // Fetch agents (poll every 5s)
-  const fetchAgents = useCallback(async () => {
+  const fetchDashboard = useCallback(async () => {
     try {
-      const data = await api<AgentInfo[]>("/api/agents");
-      setAgents(data);
-    } catch { /* keep previous */ }
-  }, []);
-
-  // Fetch health (poll every 10s)
-  const fetchHealth = useCallback(async () => {
-    try {
-      const data = await api<HealthData>("/api/health");
-      setHealth(data);
-    } catch { /* keep previous */ }
-  }, []);
-
-  // Fetch entities (on mount + every 30s)
-  const fetchEntities = useCallback(async () => {
-    try {
-      const data = await api<VaultEntity[]>("/api/vault/entities");
-      setEntityCount(data.length);
-      setEntities(data.slice(0, 20)); // keep top 20 most recent
-    } catch { /* keep previous */ }
-  }, []);
-
-  // Fetch goals (on mount + on goal events)
-  const fetchGoals = useCallback(async () => {
-    try {
-      const data = await api<GoalData[]>("/api/goals?status=active&limit=8");
-      setGoals(data);
-    } catch { /* keep previous */ }
-  }, []);
-
-  // Fetch workflows (on mount + on workflow events)
-  const fetchWorkflows = useCallback(async () => {
-    try {
-      const data = await api<WorkflowData[]>("/api/workflows");
-      setWorkflows(data);
+      const data = await api<DashboardData>("/api/dashboard");
+      setAgents(data.agents);
+      setHealth(data.health);
+      setEntityCount(data.entityCount);
+      setEntities(data.recentEntities);
+      setGoals(data.activeGoals);
+      setWorkflows(data.workflows);
     } catch { /* keep previous */ }
   }, []);
 
   // Initial fetch
-  useEffect(() => {
-    fetchAgents();
-    fetchHealth();
-    fetchEntities();
-    fetchGoals();
-    fetchWorkflows();
-  }, [fetchAgents, fetchHealth, fetchEntities, fetchGoals, fetchWorkflows]);
+  useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
 
-  // Polling intervals
+  // Polling — single endpoint every 8s
   useEffect(() => {
-    const agentIv = setInterval(fetchAgents, 5000);
-    const healthIv = setInterval(fetchHealth, 10000);
-    const entityIv = setInterval(fetchEntities, 30000);
-    return () => {
-      clearInterval(agentIv);
-      clearInterval(healthIv);
-      clearInterval(entityIv);
-    };
-  }, [fetchAgents, fetchHealth, fetchEntities]);
+    const iv = setInterval(fetchDashboard, 8000);
+    return () => clearInterval(iv);
+  }, [fetchDashboard]);
 
   // Re-fetch on WS events
   useEffect(() => {
-    if (goalEvents.length > 0) fetchGoals();
-  }, [goalEvents.length, fetchGoals]);
+    if (goalEvents.length > 0) fetchDashboard();
+  }, [goalEvents.length, fetchDashboard]);
 
   useEffect(() => {
-    if (workflowEvents.length > 0) fetchWorkflows();
-  }, [workflowEvents.length, fetchWorkflows]);
+    if (workflowEvents.length > 0) fetchDashboard();
+  }, [workflowEvents.length, fetchDashboard]);
 
   return (
     <div className="dashboard">

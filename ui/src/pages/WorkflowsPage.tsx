@@ -6,6 +6,15 @@ import WorkflowList from "../components/workflows/WorkflowList";
 import WorkflowCanvas from "../components/workflows/WorkflowCanvas";
 import "../styles/workflows.css";
 
+type WorkflowSuggestion = {
+  id: string;
+  title: string;
+  description: string;
+  confidence: number;
+  category: string;
+  patternEvidence: string[];
+};
+
 export type Workflow = {
   id: string;
   name: string;
@@ -66,6 +75,10 @@ export default function WorkflowsPage({
   const [importing, setImporting] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
   const [defMap, setDefMap] = useState<Map<string, WorkflowDefinition>>(new Map());
+  const [suggestions, setSuggestions] = useState<WorkflowSuggestion[]>([]);
+  const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem("wf-dismissed-suggestions") ?? "[]")); } catch { return new Set(); }
+  });
   const { data: workflows, loading, refetch } = useApiData<Workflow[]>("/api/workflows");
 
   // Fetch definitions for mini preview chain on cards
@@ -130,6 +143,42 @@ export default function WorkflowsPage({
     setSelectedWorkflowId(id);
     setView("canvas");
   }, []);
+
+  // Fetch workflow suggestions on mount
+  useEffect(() => {
+    fetch("/api/workflows/suggest")
+      .then(r => r.ok ? r.json() as Promise<WorkflowSuggestion[]> : [])
+      .then(data => setSuggestions(data))
+      .catch(() => {});
+  }, []);
+
+  const handleDismissSuggestion = useCallback(async (id: string) => {
+    try { await fetch(`/api/workflows/suggest/${id}/dismiss`, { method: "POST" }); } catch {}
+    setDismissedSuggestions(prev => {
+      const next = new Set(prev);
+      next.add(id);
+      try { localStorage.setItem("wf-dismissed-suggestions", JSON.stringify([...next])); } catch {}
+      return next;
+    });
+  }, []);
+
+  const handleCreateFromSuggestion = useCallback(async (s: WorkflowSuggestion) => {
+    try {
+      const wf = await api<Workflow>("/api/workflows", {
+        method: "POST",
+        body: JSON.stringify({ name: s.title, description: s.description }),
+      });
+      handleDismissSuggestion(s.id);
+      handleSelect(wf.id);
+    } catch {
+      showToast("Failed to create workflow from suggestion", "error");
+    }
+  }, [showToast, handleSelect, handleDismissSuggestion]);
+
+  const visibleSuggestions = useMemo(
+    () => suggestions.filter(s => !dismissedSuggestions.has(s.id)),
+    [suggestions, dismissedSuggestions]
+  );
 
   const handleBack = useCallback(() => {
     setView("list");
@@ -379,6 +428,47 @@ export default function WorkflowsPage({
           <div className="wf-stat-sub">this session</div>
         </div>
       </div>
+
+      {/* Suggestions Panel */}
+      {visibleSuggestions.length > 0 && (
+        <div style={{ padding: "0 20px 4px" }}>
+          <div style={{ fontSize: "11px", fontWeight: 600, color: "rgba(255,255,255,0.35)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "8px" }}>
+            Suggested for you
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            {visibleSuggestions.slice(0, 3).map(s => (
+              <div key={s.id} style={{
+                display: "flex", alignItems: "center", gap: "12px",
+                padding: "10px 14px", borderRadius: "10px",
+                background: "rgba(139,92,246,0.07)", border: "1px solid rgba(139,92,246,0.18)",
+              }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: "12px", fontWeight: 600, color: "rgba(255,255,255,0.88)", marginBottom: "2px" }}>{s.title}</div>
+                  <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.45)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.description}</div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "4px", flexShrink: 0 }}>
+                  <span style={{ fontSize: "10px", padding: "2px 6px", borderRadius: "4px", background: "rgba(139,92,246,0.15)", color: "#A78BFA", fontWeight: 600 }}>
+                    {Math.round(s.confidence * 100)}%
+                  </span>
+                  <button
+                    onClick={() => handleCreateFromSuggestion(s)}
+                    style={{ padding: "4px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, background: "rgba(139,92,246,0.2)", border: "1px solid rgba(139,92,246,0.35)", color: "#A78BFA", cursor: "pointer" }}
+                  >
+                    Create
+                  </button>
+                  <button
+                    onClick={() => handleDismissSuggestion(s.id)}
+                    style={{ padding: "4px 8px", borderRadius: "6px", fontSize: "11px", background: "none", border: "1px solid rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.3)", cursor: "pointer" }}
+                    title="Dismiss"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Content */}
       <WorkflowList

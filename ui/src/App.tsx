@@ -2,6 +2,7 @@ import React, { useState, useEffect, Component, type ReactNode, type ErrorInfo }
 import { useWebSocket } from "./hooks/useWebSocket";
 import { useVoice } from "./hooks/useVoice";
 import { ToastProvider } from "./components/Toast";
+import { GlobalSearch } from "./components/GlobalSearch";
 import "./styles/sidebar.css";
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
@@ -149,6 +150,7 @@ export function App() {
   const [wakeWordEnabled, setWakeWordEnabled] = useState(
     () => localStorage.getItem('jarvis_wake_word_enabled') !== 'false'
   );
+  const [searchOpen, setSearchOpen] = useState(false);
 
   // Keep wake word pref in sync when changed from settings panel
   useEffect(() => {
@@ -190,12 +192,25 @@ export function App() {
     }
   }, []);
 
+  // CMD+K / CTRL+K global search
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setSearchOpen(v => !v);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   const navigate = (r: Route) => {
     window.location.hash = `#/${r}`;
   };
 
   return (
     <ToastProvider>
+    <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
     <div style={{ display: "flex", height: "100vh", width: "100vw", background: "#07070A" }}>
       {/* Sidebar — The Spine */}
       <nav className="sidebar" role="navigation" aria-label="Primary navigation">

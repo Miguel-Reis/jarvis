@@ -50,6 +50,13 @@ function formatTime(ts: number): string {
   return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+type NewEventForm = {
+  what: string;
+  when_due: string;
+  priority: "critical" | "high" | "normal" | "low";
+  context: string;
+};
+
 export default function CalendarPage({ taskEvents, contentEvents }: Props) {
   const { showToast } = useToast();
   const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()));
@@ -58,6 +65,14 @@ export default function CalendarPage({ taskEvents, contentEvents }: Props) {
   const [loading, setLoading] = useState(true);
   const lastTaskProcessed = useRef(0);
   const lastContentProcessed = useRef(0);
+  const [showNewEvent, setShowNewEvent] = useState(false);
+  const [newEventForm, setNewEventForm] = useState<NewEventForm>({
+    what: "",
+    when_due: "",
+    priority: "normal",
+    context: "",
+  });
+  const [savingEvent, setSavingEvent] = useState(false);
 
   const fetchEvents = useCallback(async (ws: Date) => {
     setLoading(true);
@@ -91,6 +106,30 @@ export default function CalendarPage({ taskEvents, contentEvents }: Props) {
     lastContentProcessed.current = newE[newE.length - 1]!.timestamp;
     fetchEvents(weekStart);
   }, [contentEvents, weekStart, fetchEvents]);
+
+  const handleCreateEvent = useCallback(async () => {
+    if (!newEventForm.what.trim()) { showToast("Event title is required", "error"); return; }
+    setSavingEvent(true);
+    try {
+      await api("/api/vault/commitments", {
+        method: "POST",
+        body: JSON.stringify({
+          what: newEventForm.what.trim(),
+          when_due: newEventForm.when_due ? new Date(newEventForm.when_due).getTime() : null,
+          priority: newEventForm.priority,
+          context: newEventForm.context.trim() || undefined,
+        }),
+      });
+      showToast("Event created", "success");
+      setShowNewEvent(false);
+      setNewEventForm({ what: "", when_due: "", priority: "normal", context: "" });
+      fetchEvents(weekStart);
+    } catch {
+      showToast("Failed to create event", "error");
+    } finally {
+      setSavingEvent(false);
+    }
+  }, [newEventForm, weekStart, showToast, fetchEvents]);
 
   const prevWeek = useCallback(() => {
     setWeekStart(ws => { const d = new Date(ws); d.setDate(ws.getDate() - 7); return d; });
@@ -147,7 +186,85 @@ export default function CalendarPage({ taskEvents, contentEvents }: Props) {
           <div className="cal-legend-item"><div className="ldot" style={{ background: "#22D3EE" }} />Tasks</div>
           <div className="cal-legend-item"><div className="ldot" style={{ background: "#FBBF24" }} />Content</div>
         </div>
+        <button
+          onClick={() => {
+            const defaultDate = new Date(selectedDate);
+            defaultDate.setHours(9, 0, 0, 0);
+            const iso = defaultDate.toISOString().slice(0, 16);
+            setNewEventForm(f => ({ ...f, when_due: iso }));
+            setShowNewEvent(true);
+          }}
+          style={{ padding: "6px 14px", borderRadius: "8px", fontSize: "12px", fontWeight: 600, background: "rgba(34,211,238,0.15)", border: "1px solid rgba(34,211,238,0.3)", color: "#22D3EE", cursor: "pointer", flexShrink: 0 }}
+        >
+          + New Event
+        </button>
       </div>
+
+      {/* New Event Modal */}
+      {showNewEvent && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setShowNewEvent(false)}>
+          <div style={{ background: "#0E0E18", border: "1px solid rgba(34,211,238,0.25)", borderRadius: "14px", width: "440px", maxWidth: "92vw", boxShadow: "0 24px 64px rgba(0,0,0,0.6)" }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 18px 12px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+              <span style={{ fontSize: "14px", fontWeight: 700, color: "rgba(255,255,255,0.92)" }}>New Event</span>
+              <button onClick={() => setShowNewEvent(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.35)", fontSize: "20px", lineHeight: 1 }}>×</button>
+            </div>
+            <div style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: "12px" }}>
+              <div>
+                <label style={{ fontSize: "11px", fontWeight: 600, color: "rgba(255,255,255,0.45)", display: "block", marginBottom: "4px" }}>TITLE</label>
+                <input
+                  autoFocus
+                  value={newEventForm.what}
+                  onChange={e => setNewEventForm(f => ({ ...f, what: e.target.value }))}
+                  placeholder="What needs to be done?"
+                  style={{ width: "100%", boxSizing: "border-box", padding: "8px 10px", borderRadius: "7px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.88)", fontSize: "13px", outline: "none" }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: "11px", fontWeight: 600, color: "rgba(255,255,255,0.45)", display: "block", marginBottom: "4px" }}>DUE DATE & TIME</label>
+                <input
+                  type="datetime-local"
+                  value={newEventForm.when_due}
+                  onChange={e => setNewEventForm(f => ({ ...f, when_due: e.target.value }))}
+                  style={{ width: "100%", boxSizing: "border-box", padding: "8px 10px", borderRadius: "7px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.88)", fontSize: "13px", outline: "none", colorScheme: "dark" }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: "11px", fontWeight: 600, color: "rgba(255,255,255,0.45)", display: "block", marginBottom: "4px" }}>PRIORITY</label>
+                <select
+                  value={newEventForm.priority}
+                  onChange={e => setNewEventForm(f => ({ ...f, priority: e.target.value as NewEventForm["priority"] }))}
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: "7px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.88)", fontSize: "13px", outline: "none" }}
+                >
+                  <option value="low">Low</option>
+                  <option value="normal">Normal</option>
+                  <option value="high">High</option>
+                  <option value="critical">Critical</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: "11px", fontWeight: 600, color: "rgba(255,255,255,0.45)", display: "block", marginBottom: "4px" }}>CONTEXT (optional)</label>
+                <textarea
+                  value={newEventForm.context}
+                  onChange={e => setNewEventForm(f => ({ ...f, context: e.target.value }))}
+                  placeholder="Additional context..."
+                  rows={2}
+                  style={{ width: "100%", boxSizing: "border-box", padding: "8px 10px", borderRadius: "7px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.88)", fontSize: "13px", outline: "none", resize: "vertical" }}
+                />
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", padding: "0 18px 16px" }}>
+              <button onClick={() => setShowNewEvent(false)} style={{ padding: "7px 14px", borderRadius: "7px", fontSize: "12px", background: "none", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.45)", cursor: "pointer" }}>Cancel</button>
+              <button
+                onClick={handleCreateEvent}
+                disabled={savingEvent || !newEventForm.what.trim()}
+                style={{ padding: "7px 16px", borderRadius: "7px", fontSize: "12px", fontWeight: 700, background: "rgba(34,211,238,0.2)", border: "1px solid rgba(34,211,238,0.35)", color: "#22D3EE", cursor: "pointer", opacity: savingEvent || !newEventForm.what.trim() ? 0.4 : 1 }}
+              >
+                {savingEvent ? "Creating…" : "Create Event"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Day summary cards */}
       <div className="cal-day-summaries">

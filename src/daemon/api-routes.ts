@@ -280,6 +280,29 @@ export function createApiRoutes(ctx: ApiContext): Record<string, unknown> {
       GET: () => json(ctx.healthMonitor.getHealth()),
     },
 
+    // --- Dashboard aggregate ---
+    '/api/dashboard': {
+      GET: () => {
+        try {
+          const { agents } = buildAgentSnapshots(ctx);
+          const health = ctx.healthMonitor.getHealth();
+          const entities = findEntities({});
+          const goalsModule = require('../vault/goals.ts');
+          const activeGoals = goalsModule.findGoals({ status: 'active', limit: 8 });
+          const { findWorkflows } = require('../vault/workflows.ts');
+          const workflows = findWorkflows({});
+          return json({
+            agents,
+            health,
+            entityCount: entities.length,
+            recentEntities: entities.slice(0, 20),
+            activeGoals,
+            workflows,
+          });
+        } catch (err) { return error(`${err}`); }
+      },
+    },
+
     // --- Vault: Entities ---
     '/api/vault/entities': {
       GET: (req: Request) => {
@@ -2352,15 +2375,24 @@ export function createApiRoutes(ctx: ApiContext): Record<string, unknown> {
           const health = url.searchParams.get('health') ?? undefined;
           const parent_id = url.searchParams.get('parent_id');
           const limit = parseInt(url.searchParams.get('limit') ?? '100', 10);
+          const q = url.searchParams.get('q')?.toLowerCase();
           const goals = require('../vault/goals.ts');
-          return json(goals.findGoals({
+          let results = goals.findGoals({
             status: status as any,
             level: level as any,
             tag,
             health: health as any,
             parent_id: parent_id === 'null' ? null : parent_id ?? undefined,
-            limit,
-          }));
+            limit: q ? 200 : limit,
+          });
+          if (q) {
+            results = results.filter((g: any) =>
+              g.title?.toLowerCase().includes(q) ||
+              g.description?.toLowerCase().includes(q) ||
+              g.success_criteria?.toLowerCase().includes(q)
+            ).slice(0, limit);
+          }
+          return json(results);
         } catch (err) { return error(`${err}`); }
       },
       POST: async (req: Request) => {
