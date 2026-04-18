@@ -24,7 +24,11 @@ export class AwarenessIntelligence {
 
   private async getVisionSupport(): Promise<boolean> {
     if (this.visionSupported === null) {
-      this.visionSupported = await this.llm.supportsVision();
+      try {
+        this.visionSupported = await this.llm.supportsVision();
+      } catch {
+        this.visionSupported = false;
+      }
       if (!this.visionSupported) {
         console.warn('[Intelligence] Model does not support vision — all analysis will use OCR text only');
       }
@@ -40,6 +44,29 @@ export class AwarenessIntelligence {
       source: { type: 'base64', media_type: 'image/png', data: imageBase64 },
     });
     return [imageBlock, textBlock];
+  }
+
+  private async chatSafe(
+    content: ContentBlock[],
+    opts: { max_tokens: number }
+  ): Promise<string> {
+    try {
+      const response = await this.llm.chat([{ role: 'user', content }], opts);
+      return response.content;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('does not support image input') || (msg.includes('image') && msg.includes('400'))) {
+        // Provider lied about vision support — latch and retry text-only
+        this.visionSupported = false;
+        this.llm.clearVisionCache();
+        console.warn('[Intelligence] Model rejected image input — switching to OCR-only');
+        const textOnly = content.filter(b => b.type === 'text');
+        if (textOnly.length === 0) return '';
+        const retry = await this.llm.chat([{ role: 'user', content: textOnly }], opts);
+        return retry.content;
+      }
+      throw err;
+    }
   }
 
   /**
@@ -107,8 +134,7 @@ Be brief and direct. No preamble.`,
 
     try {
       const content = await this.buildContent(imageBase64, textBlock);
-      const response = await this.llm.chat([{ role: 'user', content }], { max_tokens: 300 });
-      return response.content;
+      return await this.chatSafe(content, { max_tokens: 300 });
     } catch (err) {
       console.error('[Intelligence] General analysis failed:', err instanceof Error ? err.message : err);
       return '';
@@ -148,8 +174,7 @@ Be concise. 2-3 sentences max.`,
 
     try {
       const content = await this.buildContent(imageBase64, textBlock);
-      const response = await this.llm.chat([{ role: 'user', content }], { max_tokens: 200 });
-      return response.content;
+      return await this.chatSafe(content, { max_tokens: 200 });
     } catch (err) {
       console.error('[Intelligence] Delta analysis failed:', err instanceof Error ? err.message : err);
       return '';
@@ -173,8 +198,7 @@ Be concise. 2-3 sentences max.`,
 
     try {
       const content = await this.buildContent(imageBase64, textBlock);
-      const response = await this.llm.chat([{ role: 'user', content }], { max_tokens: 600 });
-      return response.content;
+      return await this.chatSafe(content, { max_tokens: 600 });
     } catch (err) {
       console.error('[Intelligence] Struggle analysis failed:', err instanceof Error ? err.message : err);
       return '';

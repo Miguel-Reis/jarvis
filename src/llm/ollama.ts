@@ -254,9 +254,9 @@ export class OllamaProvider implements LLMProvider {
       // Ollama marks vision models with the "clip" family (CLIP vision encoder)
       const families = data.details?.families ?? [];
       if (families.includes('clip') || families.includes('mllama')) return true;
-      // Secondary check: model_info keys for vision encoders
-      const infoKeys = Object.keys(data.model_info ?? {}).join(' ');
-      if (infoKeys.includes('vision') || infoKeys.includes('clip')) return true;
+      // Secondary check: model_info must have explicit clip/vision encoder namespace keys
+      const infoKeys = Object.keys(data.model_info ?? {});
+      if (infoKeys.some(k => k.startsWith('clip.') || k.startsWith('vision.'))) return true;
       return false;
     } catch {
       return false; // Unreachable daemon or unknown — assume no vision
