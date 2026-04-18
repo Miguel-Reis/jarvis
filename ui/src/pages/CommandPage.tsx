@@ -252,12 +252,22 @@ export default function CommandPage() {
                     <div className="cmd-obs-row">
                       <span className="cmd-obs-type" style={{ background: `${color}20`, color }}>{label}</span>
                       <span className="cmd-obs-time">{new Date(obs.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                      <button
+                        className="cmd-obs-copy"
+                        title="Copy JSON"
+                        onClick={() => navigator.clipboard?.writeText(JSON.stringify(obs.data, null, 2))}
+                      >
+                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                          <rect x="3" y="0.5" width="6" height="7" rx="1" stroke="currentColor" strokeWidth="1"/>
+                          <rect x="0.5" y="2.5" width="6" height="7" rx="1" stroke="currentColor" strokeWidth="1"/>
+                        </svg>
+                      </button>
                     </div>
                     <div className="cmd-obs-data">
-                      {dataEntries.slice(0, 4).map(([k, v]) => (
+                      {dataEntries.map(([k, v]) => (
                         <span key={k} className="cmd-obs-kv">
                           <span className="cmd-obs-key">{k}</span>
-                          <span className="cmd-obs-val">{String(v).slice(0, 80)}</span>
+                          <span className="cmd-obs-val">{String(v).slice(0, 200)}</span>
                         </span>
                       ))}
                     </div>

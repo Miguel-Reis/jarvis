@@ -144,7 +144,7 @@
 .cmd-obs-item {
   display: flex; gap: 8px; padding: 6px 8px;
   background: #12121C; border-radius: 6px; margin-bottom: 4px;
-  font-size: 10px; align-items: flex-start;
+  font-size: 10px; align-items: flex-start; position: relative;
   animation: cmd-obsIn 0.25s cubic-bezier(0.16,1,0.3,1) backwards;
 }
 @keyframes cmd-obsIn { from { opacity: 0; transform: translateY(3px); } }
@@ -199,3 +199,9 @@
 .cmd-obs-kv { display: flex; gap: 6px; align-items: baseline; font-size: 10px; line-height: 1.4; }
 .cmd-obs-key { color: rgba(255,255,255,0.35); font-family: 'JetBrains Mono', monospace; flex-shrink: 0; min-width: 60px; }
 .cmd-obs-val { color: rgba(255,255,255,0.75); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.cmd-obs-copy {
+  opacity: 0; background: none; border: none; cursor: pointer; padding: 1px 2px;
+  color: rgba(255,255,255,0.30); transition: opacity 0.12s, color 0.12s; flex-shrink: 0; line-height: 1;
+}
+.cmd-obs-item:hover .cmd-obs-copy { opacity: 1; }
+.cmd-obs-copy:hover { color: rgba(255,255,255,0.65); }
