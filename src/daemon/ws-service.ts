@@ -18,6 +18,7 @@ import { setDefaultCwd } from '../actions/tools/builtin.ts';
 import type { ApprovalRequest } from '../authority/approval.ts';
 import type { EmergencyState } from '../authority/emergency.ts';
 import { createCommitment, updateCommitmentStatus, updateCommitmentAssignee } from '../vault/commitments.ts';
+import { saveNotification } from '../vault/notifications.ts';
 import { WebSocketServer, type WSMessage } from '../comms/websocket.ts';
 import { StreamRelay } from '../comms/streaming.ts';
 import { getOrCreateConversation, addMessage } from '../vault/conversations.ts';
@@ -224,6 +225,17 @@ export class WebSocketService implements Service {
     };
     this.wsServer.broadcast(message);
 
+    // Persist to notification history
+    const firstLine = text.split('\n')[0]?.slice(0, 100) ?? '';
+    const rest = text.length > firstLine.length ? text.slice(firstLine.length + 1).slice(0, 500) : '';
+    try {
+      saveNotification(firstLine, rest, {
+        type: priority === 'urgent' ? 'warning' : 'info',
+        source: 'proactive',
+        priority,
+      });
+    } catch { /* non-fatal */ }
+
     // Push urgent notifications to external channels (Telegram, Discord)
     if (priority === 'urgent' && this.channelService) {
       this.channelService.broadcastToAll(`[URGENT] ${text}`).catch(err =>
@@ -318,6 +330,15 @@ export class WebSocketService implements Service {
     };
     this.wsServer.broadcast(message);
 
+    // Persist approval request to notification history
+    try {
+      saveNotification(
+        `Approval needed: ${request.tool_name}`,
+        `${request.agent_name} · ${request.action_category}${request.reason ? ` — ${request.reason}` : ''}`,
+        { type: 'approval', source: 'authority', priority: request.urgency === 'urgent' ? 'urgent' : 'normal' }
+      );
+    } catch { /* non-fatal */ }
+
     // Push urgent approvals to external channels
     if (request.urgency === 'urgent' && this.channelService) {
       const text = `[APPROVAL NEEDED] ${request.agent_name} wants to run ${request.tool_name} (${request.action_category}).\nReason: ${request.reason}\nReply: approve ${shortId} / deny ${shortId}`;
@@ -341,6 +362,15 @@ export class WebSocketService implements Service {
       timestamp: Date.now(),
     };
     this.wsServer.broadcast(message);
+
+    // Persist emergency state change
+    try {
+      saveNotification(
+        `System emergency: ${state}`,
+        `Emergency controller changed state to "${state}"`,
+        { type: 'emergency', source: 'authority', priority: 'urgent' }
+      );
+    } catch { /* non-fatal */ }
   }
 
   /**

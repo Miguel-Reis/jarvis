@@ -144,6 +144,16 @@ const SETTINGS_NAV: { section: SettingsSection; label: string }[] = [
 /* ================================================================
    APP
    ================================================================ */
+type NotifItem = {
+  id: string;
+  title: string;
+  body: string;
+  type: string;
+  priority: string;
+  read: boolean;
+  created_at: number;
+};
+
 export function App() {
   const [route, setRoute] = useState<Route>(getRoute);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>(getSettingsSection);
@@ -151,6 +161,9 @@ export function App() {
     () => localStorage.getItem('jarvis_wake_word_enabled') !== 'false'
   );
   const [searchOpen, setSearchOpen] = useState(false);
+  const [bellOpen, setBellOpen] = useState(false);
+  const [notifications, setNotifications] = useState<NotifItem[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // Keep wake word pref in sync when changed from settings panel
   useEffect(() => {
@@ -191,6 +204,47 @@ export function App() {
       window.location.hash = "#/dashboard";
     }
   }, []);
+
+  // Notification polling
+  const fetchNotifications = React.useCallback(async () => {
+    try {
+      const res = await fetch('/api/notifications?limit=20');
+      if (!res.ok) return;
+      const data = await res.json();
+      setNotifications(data.items ?? []);
+      setUnreadCount(data.unread ?? 0);
+    } catch {}
+  }, []);
+
+  useEffect(() => { fetchNotifications(); }, [fetchNotifications]);
+  useEffect(() => {
+    const iv = setInterval(fetchNotifications, 15000);
+    return () => clearInterval(iv);
+  }, [fetchNotifications]);
+
+  const markAllRead = React.useCallback(async () => {
+    try {
+      await fetch('/api/notifications/read-all', { method: 'POST' });
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      setUnreadCount(0);
+    } catch {}
+  }, []);
+
+  const markOneRead = React.useCallback(async (id: string) => {
+    try {
+      await fetch(`/api/notifications/${id}/read`, { method: 'POST' });
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch {}
+  }, []);
+
+  // Close bell on outside click
+  useEffect(() => {
+    if (!bellOpen) return;
+    const close = () => setBellOpen(false);
+    setTimeout(() => window.addEventListener('click', close), 0);
+    return () => window.removeEventListener('click', close);
+  }, [bellOpen]);
 
   // CMD+K / CTRL+K global search
   useEffect(() => {
@@ -292,6 +346,70 @@ export function App() {
                 {label}
               </button>
             ))}
+          </div>
+        </div>
+
+        {/* Bell */}
+        <div className="sidebar-bell-row">
+          <div style={{ position: "relative" }}>
+            <button
+              className="sidebar-bell-btn"
+              onClick={() => { setBellOpen(v => !v); if (!bellOpen && unreadCount > 0) markAllRead(); }}
+              title="Notifications"
+              aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ""}`}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M8 2a4.5 4.5 0 0 1 4.5 4.5c0 2.5.5 4 1.5 4.5H2c1-.5 1.5-2 1.5-4.5A4.5 4.5 0 0 1 8 2z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
+                <path d="M6.5 13.5a1.5 1.5 0 0 0 3 0" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+              </svg>
+              {unreadCount > 0 && (
+                <span className="sidebar-bell-badge">{unreadCount > 9 ? "9+" : unreadCount}</span>
+              )}
+            </button>
+
+            {bellOpen && (
+              <div className="sidebar-notif-panel" onClick={e => e.stopPropagation()}>
+                <div className="sidebar-notif-header">
+                  <span>Notifications</span>
+                  {notifications.some(n => !n.read) && (
+                    <button className="sidebar-notif-mark-all" onClick={markAllRead}>Mark all read</button>
+                  )}
+                </div>
+                <div className="sidebar-notif-list">
+                  {notifications.length === 0 ? (
+                    <div className="sidebar-notif-empty">No notifications</div>
+                  ) : notifications.map(n => {
+                    const typeColor: Record<string, string> = {
+                      emergency: "#FB7185", approval: "#FBBF24", warning: "#FB923C",
+                      error: "#FB7185", success: "#34D399", info: "#60A5FA",
+                    };
+                    const color = typeColor[n.type] ?? "#60A5FA";
+                    const ago = (() => {
+                      const d = Math.floor((Date.now() - n.created_at) / 1000);
+                      if (d < 60) return `${d}s ago`;
+                      if (d < 3600) return `${Math.floor(d / 60)}m ago`;
+                      if (d < 86400) return `${Math.floor(d / 3600)}h ago`;
+                      return `${Math.floor(d / 86400)}d ago`;
+                    })();
+                    return (
+                      <div
+                        key={n.id}
+                        className={`sidebar-notif-item${n.read ? " read" : ""}`}
+                        onClick={() => !n.read && markOneRead(n.id)}
+                      >
+                        <div className="sidebar-notif-dot" style={{ background: color }} />
+                        <div className="sidebar-notif-body">
+                          <div className="sidebar-notif-title">{n.title}</div>
+                          {n.body && <div className="sidebar-notif-text">{n.body}</div>}
+                          <div className="sidebar-notif-time">{ago}</div>
+                        </div>
+                        {!n.read && <div className="sidebar-notif-unread-dot" />}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

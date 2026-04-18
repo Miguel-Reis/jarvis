@@ -768,4 +768,22 @@ function createTables(db: Database): void {
   if (!webappCols.some((c) => c.name === 'keywords')) {
     db.run(`ALTER TABLE webapp_templates ADD COLUMN keywords TEXT NOT NULL DEFAULT '[]'`);
   }
+
+  // Notification history: persisted in-app notifications
+  db.run(`
+    CREATE TABLE IF NOT EXISTS notifications (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL DEFAULT '',
+      body TEXT NOT NULL DEFAULT '',
+      type TEXT NOT NULL DEFAULT 'info'
+        CHECK(type IN ('info', 'success', 'warning', 'error', 'approval', 'emergency')),
+      source TEXT NOT NULL DEFAULT 'system',
+      priority TEXT NOT NULL DEFAULT 'normal'
+        CHECK(priority IN ('urgent', 'normal', 'low')),
+      read INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL
+    )
+  `);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_notif_read ON notifications(read)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_notif_created ON notifications(created_at)`);
 }

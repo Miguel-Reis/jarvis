@@ -280,6 +280,45 @@ export function createApiRoutes(ctx: ApiContext): Record<string, unknown> {
       GET: () => json(ctx.healthMonitor.getHealth()),
     },
 
+    // --- Notification history ---
+    '/api/notifications': {
+      GET: (req: Request) => {
+        try {
+          const { listNotifications, countUnread } = require('../vault/notifications.ts');
+          const params = getSearchParams(req);
+          const limit = parseInt(params.get('limit') ?? '50', 10);
+          const unreadOnly = params.get('unread') === 'true';
+          const items = listNotifications({ limit, unreadOnly });
+          const unread = countUnread();
+          return json({ items, unread });
+        } catch (err) { return error(`${err}`); }
+      },
+    },
+
+    '/api/notifications/read-all': {
+      POST: () => {
+        try {
+          const { markAllRead, countUnread } = require('../vault/notifications.ts');
+          markAllRead();
+          return json({ ok: true, unread: countUnread() });
+        } catch (err) { return error(`${err}`); }
+      },
+    },
+
+    '/api/notifications/:id/read': {
+      POST: (req: Request) => {
+        try {
+          const url = new URL(req.url);
+          const parts = url.pathname.split('/');
+          const id = parts[parts.length - 2]!;
+          const { markRead, countUnread } = require('../vault/notifications.ts');
+          const ok = markRead(id);
+          if (!ok) return error('Notification not found', 404);
+          return json({ ok: true, unread: countUnread() });
+        } catch (err) { return error(`${err}`); }
+      },
+    },
+
     // --- Dashboard aggregate ---
     '/api/dashboard': {
       GET: () => {
