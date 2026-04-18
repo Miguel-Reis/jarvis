@@ -1098,6 +1098,50 @@ export function createApiRoutes(ctx: ApiContext): Record<string, unknown> {
       },
     },
 
+    // --- Auto-update ---
+    '/api/system/update': {
+      GET: async () => {
+        try {
+          const { $ } = await import('bun');
+          const branch = (await $`git rev-parse --abbrev-ref HEAD`.text()).trim();
+          const localSha = (await $`git rev-parse HEAD`.text()).trim();
+          await $`git fetch origin ${branch} --quiet`.quiet();
+          const remoteSha = (await $`git rev-parse origin/${branch}`.text()).trim();
+          return json({
+            branch,
+            local_sha: localSha.slice(0, 8),
+            remote_sha: remoteSha.slice(0, 8),
+            up_to_date: localSha === remoteSha,
+            auto_update_enabled: process.env['JARVIS_AUTO_UPDATE'] === 'true',
+          });
+        } catch (err) {
+          return error(`Failed to check for updates: ${err instanceof Error ? err.message : err}`);
+        }
+      },
+      POST: async () => {
+        try {
+          const { $ } = await import('bun');
+          const branch = (await $`git rev-parse --abbrev-ref HEAD`.text()).trim();
+          await $`git fetch origin ${branch} --quiet`.quiet();
+          const localSha = (await $`git rev-parse HEAD`.text()).trim();
+          const remoteSha = (await $`git rev-parse origin/${branch}`.text()).trim();
+
+          if (localSha === remoteSha) {
+            return json({ ok: true, message: 'Already up to date.', updated: false });
+          }
+
+          await $`git pull --ff-only origin ${branch}`.quiet();
+          await $`bun install --frozen-lockfile`.quiet().catch(() => $`bun install`.quiet());
+
+          // Schedule restart after response is sent
+          setTimeout(() => process.exit(0), 500);
+          return json({ ok: true, message: 'Update applied. Restarting...', updated: true, new_sha: remoteSha.slice(0, 8) });
+        } catch (err) {
+          return error(`Update failed: ${err instanceof Error ? err.message : err}`);
+        }
+      },
+    },
+
     // --- LLM Configuration (DB + encrypted keychain) ---
     '/api/config/llm': {
       GET: async () => {
@@ -1561,6 +1605,12 @@ export function createApiRoutes(ctx: ApiContext): Record<string, unknown> {
             has_verify_token: !!cfg.whatsapp.webhook_verify_token,
             allowed_users: cfg.whatsapp.allowed_users ?? [],
           } : { enabled: false, has_phone_number_id: false, has_access_token: false, has_verify_token: false, allowed_users: [] },
+          signal: cfg?.signal ? {
+            enabled: cfg.signal.enabled,
+            phone: cfg.signal.phone,
+            api_url: cfg.signal.api_url ?? 'http://localhost:8080',
+            allowed_senders: cfg.signal.allowed_senders ?? [],
+          } : { enabled: false, phone: '', api_url: 'http://localhost:8080', allowed_senders: [] },
         });
       },
       POST: async (req: Request) => {
@@ -1587,6 +1637,12 @@ export function createApiRoutes(ctx: ApiContext): Record<string, unknown> {
             freshConfig.channels.whatsapp = {
               ...freshConfig.channels.whatsapp,
               ...(body.whatsapp as Record<string, unknown>),
+            } as any;
+          }
+          if (body.signal && typeof body.signal === 'object') {
+            freshConfig.channels.signal = {
+              ...freshConfig.channels.signal,
+              ...(body.signal as Record<string, unknown>),
             } as any;
           }
 

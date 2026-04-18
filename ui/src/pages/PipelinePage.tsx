@@ -50,6 +50,8 @@ export default function PipelinePage({ contentEvents, sendMessage }: Props) {
   const [modalOpen, setModalOpen] = useState(false);
   const [recentlyUpdated, setRecentlyUpdated] = useState<Set<string>>(new Set());
   const lastProcessedRef = useRef(0);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOverStage, setDragOverStage] = useState<string | null>(null);
 
   const { data: items, loading, refetch } = useApiData<ContentItem[]>("/api/content", [refreshKey]);
   const [localItems, setLocalItems] = useState<ContentItem[]>([]);
@@ -114,6 +116,49 @@ export default function PipelinePage({ contentEvents, sendMessage }: Props) {
   const handleDeleted = useCallback(() => { setSelectedId(null); refetch(); }, [refetch]);
   const handleChanged = useCallback(() => { refetch(); }, [refetch]);
 
+  // ── Drag-and-drop handlers ──
+  const handleDragStart = useCallback((e: React.DragEvent, itemId: string) => {
+    e.dataTransfer.setData("contentItemId", itemId);
+    e.dataTransfer.effectAllowed = "move";
+    setDraggingId(itemId);
+  }, []);
+
+  const handleDragEnd = useCallback(() => {
+    setDraggingId(null);
+    setDragOverStage(null);
+  }, []);
+
+  const handleStageDragOver = useCallback((e: React.DragEvent, stage: string) => {
+    if (!draggingId) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverStage(stage);
+  }, [draggingId]);
+
+  const handleStageDrop = useCallback(async (e: React.DragEvent, targetStage: string) => {
+    e.preventDefault();
+    const itemId = e.dataTransfer.getData("contentItemId");
+    setDraggingId(null);
+    setDragOverStage(null);
+    if (!itemId) return;
+
+    const current = localItems.find(i => i.id === itemId);
+    if (!current || current.stage === targetStage) return;
+
+    // Optimistic update
+    setLocalItems(prev => prev.map(i => i.id === itemId ? { ...i, stage: targetStage } : i));
+    try {
+      await api(`/api/content/${itemId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ stage: targetStage }),
+      });
+      refetch();
+    } catch {
+      showToast("Failed to move item", "error");
+      refetch();
+    }
+  }, [localItems, refetch, showToast]);
+
   return (
     <div className="pl-page">
       <div className="pl-atmosphere" />
@@ -146,14 +191,21 @@ export default function PipelinePage({ contentEvents, sendMessage }: Props) {
                 }} />
               )}
               <div
-                className={`pl-pipe-stage${isActive ? " active" : ""}`}
+                className={`pl-pipe-stage${isActive ? " active" : ""}${dragOverStage === stage.value ? " drag-over" : ""}`}
                 onClick={() => setStageFilter(isActive ? "" : stage.value)}
+                onDragOver={(e) => handleStageDragOver(e, stage.value)}
+                onDragLeave={() => setDragOverStage(null)}
+                onDrop={(e) => handleStageDrop(e, stage.value)}
               >
                 <div className="pl-pipe-node" style={{
                   borderColor: stage.color,
                   color: stage.color,
-                  background: `${stage.color}15`,
-                  boxShadow: (isActive || count > 0) ? `0 0 10px ${stage.color}40` : "none",
+                  background: dragOverStage === stage.value ? `${stage.color}30` : `${stage.color}15`,
+                  boxShadow: dragOverStage === stage.value
+                    ? `0 0 20px ${stage.color}80`
+                    : (isActive || count > 0) ? `0 0 10px ${stage.color}40` : "none",
+                  transform: dragOverStage === stage.value ? "scale(1.25)" : undefined,
+                  transition: "all 150ms",
                 }}>
                   {count}
                 </div>
@@ -166,9 +218,14 @@ export default function PipelinePage({ contentEvents, sendMessage }: Props) {
 
       {/* Content area */}
       {loading ? (
-        <div className="pl-loading">
-          <div className="pl-loading-orb" />
-          <div className="pl-loading-text">Loading pipeline...</div>
+        <div className="pl-skeleton-grid">
+          {[1,2,3,4,5,6].map((i) => (
+            <div key={i} className="pl-skeleton-card" style={{ animationDelay: `${(i-1)*0.07}s` }}>
+              <div className="pl-skeleton-line" style={{ width: "30%", height: "8px" }} />
+              <div className="pl-skeleton-line" style={{ width: "80%", marginTop: "8px" }} />
+              <div className="pl-skeleton-line" style={{ width: "50%", height: "8px", marginTop: "6px" }} />
+            </div>
+          ))}
         </div>
       ) : (
         <div className="pl-content-area">
@@ -187,8 +244,11 @@ export default function PipelinePage({ contentEvents, sendMessage }: Props) {
                   return (
                     <div
                       key={item.id}
-                      className={`pl-content-card${item.id === selectedId ? " selected" : ""}${recentlyUpdated.has(item.id) ? " just-updated" : ""}`}
+                      className={`pl-content-card${item.id === selectedId ? " selected" : ""}${recentlyUpdated.has(item.id) ? " just-updated" : ""}${draggingId === item.id ? " dragging" : ""}`}
                       style={{ animationDelay: `${0.03 + i * 0.03}s` }}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, item.id)}
+                      onDragEnd={handleDragEnd}
                       onClick={() => setSelectedId(item.id)}
                     >
                       <div className="pl-cc-top">

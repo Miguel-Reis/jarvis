@@ -17,6 +17,7 @@ import { ChannelManager } from '../comms/index.ts';
 import { TelegramAdapter } from '../comms/channels/telegram.ts';
 import { DiscordAdapter } from '../comms/channels/discord.ts';
 import { WhatsAppAdapter } from '../comms/channels/whatsapp.ts';
+import { SignalAdapter } from '../comms/channels/signal.ts';
 import { createSTTProvider } from '../comms/voice.ts';
 import { getOrCreateConversation, addMessage } from '../vault/conversations.ts';
 
@@ -86,6 +87,15 @@ export class ChannelService implements Service {
           allowedUsers: channels.whatsapp.allowed_users,
         });
         this.manager.register(whatsapp);
+      }
+
+      if (channels?.signal?.enabled && channels.signal.phone) {
+        const signal = new SignalAdapter({
+          phone: channels.signal.phone,
+          api_url: channels.signal.api_url,
+          allowed_senders: channels.signal.allowed_senders,
+        });
+        this.manager.register(signal);
       }
 
       // 3. Set unified message handler — same brain for all channels

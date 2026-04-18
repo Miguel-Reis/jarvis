@@ -10,6 +10,7 @@ type ChannelConfigData = {
   telegram: { enabled: boolean; has_token: boolean; allowed_users: number[] };
   discord: { enabled: boolean; has_token: boolean; allowed_users: string[]; guild_id: string | null };
   whatsapp: { enabled: boolean; has_phone_number_id: boolean; has_access_token: boolean; has_verify_token: boolean; allowed_users: string[] };
+  signal: { enabled: boolean; phone: string; api_url: string; allowed_senders: string[] };
 };
 
 type STTConfigData = {
@@ -76,6 +77,12 @@ export function ChannelsPanel() {
   const [waVerifyToken, setWaVerifyToken] = useState("");
   const [waAllowed, setWaAllowed] = useState("");
 
+  // Signal form
+  const [sigEnabled, setSigEnabled] = useState(false);
+  const [sigPhone, setSigPhone] = useState("");
+  const [sigApiUrl, setSigApiUrl] = useState("http://localhost:8080");
+  const [sigAllowed, setSigAllowed] = useState("");
+
   // STT form
   const [sttProvider, setSttProvider] = useState("openai");
   const [sttKey, setSttKey] = useState("");
@@ -116,6 +123,12 @@ export function ChannelsPanel() {
       setDcGuild(channelCfg.discord.guild_id ?? "");
       setWaEnabled(channelCfg.whatsapp.enabled);
       setWaAllowed(channelCfg.whatsapp.allowed_users.join(", "));
+      if (channelCfg.signal) {
+        setSigEnabled(channelCfg.signal.enabled);
+        setSigPhone(channelCfg.signal.phone ?? "");
+        setSigApiUrl(channelCfg.signal.api_url ?? "http://localhost:8080");
+        setSigAllowed(channelCfg.signal.allowed_senders.join(", "));
+      }
     }
   }, [channelCfg]);
 
@@ -190,6 +203,13 @@ export function ChannelsPanel() {
         ...(waAccessToken ? { access_token: waAccessToken } : {}),
         ...(waVerifyToken ? { webhook_verify_token: waVerifyToken } : {}),
         allowed_users: waAllowed.split(",").map(s => s.trim()).filter(Boolean),
+      };
+
+      body.signal = {
+        enabled: sigEnabled,
+        phone: sigPhone.trim(),
+        api_url: sigApiUrl.trim() || "http://localhost:8080",
+        allowed_senders: sigAllowed.split(",").map(s => s.trim()).filter(Boolean),
       };
 
       await api("/api/config/channels", {
@@ -443,6 +463,48 @@ export function ChannelsPanel() {
           placeholder="Allowed phone numbers in E.164 format (comma-separated, empty = all)"
           value={waAllowed}
           onChange={e => setWaAllowed(e.target.value)}
+        />
+      </div>
+
+      {/* Signal section */}
+      <div className="sp-section" style={{ marginTop: "16px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div className="sp-label">
+            Signal
+            <StatusDot color={status?.channels.signal ? "var(--j-success)" : "var(--j-text-muted)"} />
+            <span style={{ fontSize: "10px", color: status?.channels.signal ? "var(--j-success)" : "var(--j-text-muted)", marginLeft: "4px" }}>
+              {status?.channels.signal ? "Connected" : "Disconnected"}
+            </span>
+          </div>
+        </div>
+        <p className="sp-hint">
+          Requires <code style={{ fontSize: "11px", background: "var(--j-bg)", padding: "1px 4px", borderRadius: "3px" }}>signal-cli</code> running as a REST daemon.{" "}
+          Start with: <code style={{ fontSize: "11px", background: "var(--j-bg)", padding: "1px 4px", borderRadius: "3px" }}>signal-cli -a +NUMBER daemon --http --port 8080</code>
+        </p>
+        <label className="sp-toggle-row">
+          <input type="checkbox" className="sp-toggle" checked={sigEnabled} onChange={e => setSigEnabled(e.target.checked)} />
+          Enable Signal
+        </label>
+        <input
+          className="sp-input"
+          type="text"
+          placeholder="Your Signal number in E.164 format (e.g. +351912345678)"
+          value={sigPhone}
+          onChange={e => setSigPhone(e.target.value)}
+        />
+        <input
+          className="sp-input"
+          type="text"
+          placeholder="signal-cli API URL (default: http://localhost:8080)"
+          value={sigApiUrl}
+          onChange={e => setSigApiUrl(e.target.value)}
+        />
+        <input
+          className="sp-input"
+          type="text"
+          placeholder="Allowed senders in E.164 format (comma-separated, empty = all)"
+          value={sigAllowed}
+          onChange={e => setSigAllowed(e.target.value)}
         />
       </div>
 

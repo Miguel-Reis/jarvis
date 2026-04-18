@@ -237,3 +237,88 @@ body {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* ================================================================
+   MOBILE RESPONSIVE — Bottom Navigation
+   ================================================================ */
+.mobile-bottom-nav {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  /* Hide sidebar on mobile */
+  .sidebar {
+    display: none !important;
+  }
+
+  /* Main layout goes full width */
+  .jarvis-layout {
+    flex-direction: column;
+  }
+
+  /* Show bottom nav */
+  .mobile-bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    background: rgba(7,7,10,0.97);
+    border-top: 1px solid rgba(255,255,255,0.06);
+    z-index: 100;
+    align-items: center;
+    justify-content: space-around;
+    padding: 0 4px;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .mobile-bottom-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 6px 10px;
+    border-radius: 10px;
+    border: none;
+    background: none;
+    color: rgba(255,255,255,0.35);
+    cursor: pointer;
+    transition: color 150ms, background 150ms;
+    font-family: inherit;
+    flex: 1;
+  }
+
+  .mobile-bottom-nav-item.active {
+    color: #A78BFA;
+    background: rgba(139,92,246,0.1);
+  }
+
+  .mobile-bottom-nav-item:hover {
+    color: rgba(255,255,255,0.65);
+    background: rgba(255,255,255,0.04);
+  }
+
+  .mobile-nav-icon {
+    font-size: 16px;
+    line-height: 1;
+  }
+
+  .mobile-nav-label {
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+  }
+
+  /* Add bottom padding to main content so it doesn't hide behind nav */
+  main {
+    padding-bottom: 56px;
+  }
+
+  /* Smaller header fonts */
+  .jarvis-layout > main {
+    overflow-y: auto;
+  }
+}

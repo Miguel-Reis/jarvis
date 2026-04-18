@@ -283,7 +283,7 @@ export function App() {
     <ToastProvider>
     <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
     {shortcutsOpen && <ShortcutsOverlay onClose={() => setShortcutsOpen(false)} />}
-    <div style={{ display: "flex", height: "100vh", width: "100vw", background: "#07070A" }}>
+    <div className="jarvis-layout" style={{ display: "flex", height: "100vh", width: "100vw", background: "#07070A" }}>
       {/* Sidebar — The Spine */}
       <nav className="sidebar" role="navigation" aria-label="Primary navigation">
 
@@ -507,6 +507,9 @@ export function App() {
         </React.Suspense>
         </ErrorBoundary>
       </main>
+
+      {/* Mobile bottom navigation */}
+      <MobileBottomNav route={route} navigate={navigate} />
     </div>
     </ToastProvider>
   );
@@ -534,6 +537,37 @@ function SidebarNavItem({ icon, label, active, onClick }: {
       <span className="nav-label">{label}</span>
       <div className="nav-active-dot" aria-hidden="true" />
     </button>
+  );
+}
+
+/* ================================================================
+   MOBILE BOTTOM NAV
+   ================================================================ */
+const MOBILE_NAV: NavEntry[] = [
+  { icon: "\u25C7", label: "Dashboard", route: "dashboard" },
+  { icon: "\u25CE", label: "Chat",      route: "chat" },
+  { icon: "\u25C6", label: "Goals",     route: "goals" },
+  { icon: "\u2726", label: "Tasks",     route: "tasks" },
+  { icon: "\u2B21", label: "Flows",     route: "workflows" },
+  { icon: "\u25A0", label: "Sites",     route: "sites" },
+];
+
+function MobileBottomNav({ route, navigate }: { route: Route; navigate: (r: Route) => void }) {
+  return (
+    <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
+      {MOBILE_NAV.map((item) => (
+        <button
+          key={item.route}
+          className={`mobile-bottom-nav-item${route === item.route ? " active" : ""}`}
+          onClick={() => navigate(item.route)}
+          aria-label={item.label}
+          aria-current={route === item.route ? "page" : undefined}
+        >
+          <span className="mobile-nav-icon">{item.icon}</span>
+          <span className="mobile-nav-label">{item.label}</span>
+        </button>
+      ))}
+    </nav>
   );
 }
 

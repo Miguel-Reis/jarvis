@@ -37,6 +37,7 @@ import { ApprovalDelivery } from "../authority/approval-delivery.ts";
 import { DeferredExecutor } from "../authority/deferred-executor.ts";
 import { sendDesktopNotification } from "../comms/desktop-notify.ts";
 import { SidecarManager } from "../sidecar/manager.ts";
+import { createUpdater, type Updater } from "./updater.ts";
 
 // Constants
 const DEFAULT_PORT = 3142;  // JARVIS port
@@ -59,6 +60,7 @@ let bgAgent: BackgroundAgentService | null = null;
 let mcpServiceInstance: McpService | null = null;
 let awarenessService: import('../awareness/service.ts').AwarenessService | null = null;
 let goalService: import('../goals/service.ts').GoalService | null = null;
+let updater: Updater | null = null;
 
 /**
  * Parse command line arguments
@@ -143,6 +145,9 @@ async function handleShutdown(signal: string): Promise<void> {
   console.log(`\n[Daemon] Received ${signal}, shutting down gracefully...`);
 
   try {
+    // Stop auto-updater
+    if (updater) { updater.stop(); updater = null; }
+
     // Clear heartbeat timer
     if (heartbeatTimer) {
       clearInterval(heartbeatTimer);
@@ -1050,6 +1055,10 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
     console.log('');
     console.log('Press Ctrl+C to stop');
     console.log('');
+
+    // Start auto-updater (enabled via JARVIS_AUTO_UPDATE=true)
+    updater = createUpdater();
+    await updater.start();
 
     // Print initial health status
     console.log(healthMonitor.formatHealth());

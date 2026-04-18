@@ -9,7 +9,7 @@ import { IntegrationsPanel } from "../components/settings/IntegrationsPanel";
 import { ChannelsPanel } from "../components/settings/ChannelsPanel";
 import { SidecarPanel } from "../components/settings/SidecarPanel";
 import { UserProfilePanel } from "../components/settings/UserProfilePanel";
-import { ServicePanel } from "../components/settings/ServicePanel";
+import { ServicePanel, UpdatePanel } from "../components/settings/ServicePanel";
 import { MCPPanel } from "../components/settings/MCPPanel";
 
 const SECTION_META: Record<SettingsSection, { title: string; subtitle: string }> = {
@@ -49,6 +49,7 @@ export default function SettingsPage({ section }: { section: SettingsSection }) 
           {section === "general" && (
             <>
               <ServicePanel />
+              <UpdatePanel />
               <PersonalityPanel />
               <RolePanel />
               <HeartbeatPanel />

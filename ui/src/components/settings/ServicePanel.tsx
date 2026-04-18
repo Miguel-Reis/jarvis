@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { api, useApiData } from "../../hooks/useApi";
 
 type AutostartStatus = {
@@ -119,6 +119,99 @@ export function ServicePanel() {
         </button>
         <button type="button" className="sp-btn-secondary" onClick={refetch}>
           Refresh Status
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ── Auto-Update Panel ── */
+
+type UpdateStatus = {
+  branch: string;
+  local_sha: string;
+  remote_sha: string;
+  up_to_date: boolean;
+  auto_update_enabled: boolean;
+};
+
+export function UpdatePanel() {
+  const [status, setStatus] = useState<UpdateStatus | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const [msg, setMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
+
+  const check = useCallback(async () => {
+    setChecking(true);
+    setMsg(null);
+    try {
+      const data = await api<UpdateStatus>("/api/system/update");
+      setStatus(data);
+    } catch (err) {
+      setMsg({ text: err instanceof Error ? err.message : "Failed to check", type: "error" });
+    } finally {
+      setChecking(false);
+    }
+  }, []);
+
+  useEffect(() => { check(); }, [check]);
+
+  const applyUpdate = async () => {
+    setUpdating(true);
+    setMsg(null);
+    try {
+      const res = await api<{ ok: boolean; message: string; updated: boolean }>("/api/system/update", { method: "POST" });
+      setMsg({ text: res.message, type: "success" });
+      if (res.updated) setTimeout(check, 4000);
+    } catch (err) {
+      setMsg({ text: err instanceof Error ? err.message : "Update failed", type: "error" });
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  return (
+    <div className="sp-card" style={{ marginTop: "16px" }}>
+      <div style={headerRowStyle}>
+        <div>
+          <h3 className="sp-card-title" style={{ margin: 0 }}>Auto-Update</h3>
+          <div style={subtleStyle}>
+            Pull the latest code from the remote branch and restart JARVIS.
+          </div>
+        </div>
+        {status && (
+          <span style={{
+            ...statusBadgeStyle,
+            color: status.up_to_date ? "var(--j-success)" : "#FBBF24",
+            borderColor: status.up_to_date ? "rgba(52,211,153,0.25)" : "rgba(251,191,36,0.25)",
+            background: status.up_to_date ? "rgba(52,211,153,0.10)" : "rgba(251,191,36,0.08)",
+          }}>
+            {status.up_to_date ? "Up to date" : "Update available"}
+          </span>
+        )}
+      </div>
+
+      {status && (
+        <div style={infoGridStyle}>
+          <InfoRow label="Branch" value={status.branch} />
+          <InfoRow label="Local" value={status.local_sha} />
+          <InfoRow label="Remote" value={status.remote_sha} />
+          <InfoRow label="Auto-update" value={status.auto_update_enabled ? "Enabled (JARVIS_AUTO_UPDATE=true)" : "Disabled — set JARVIS_AUTO_UPDATE=true to enable"} />
+        </div>
+      )}
+
+      {msg && (
+        <div className={`sp-msg ${msg.type === "success" ? "sp-msg--success" : "sp-msg--error"}`}>
+          {msg.text}
+        </div>
+      )}
+
+      <div className="sp-actions">
+        <button className="sp-btn-primary" onClick={applyUpdate} disabled={updating || checking || status?.up_to_date}>
+          {updating ? "Updating..." : "Pull & Restart"}
+        </button>
+        <button className="sp-btn-secondary" onClick={check} disabled={checking}>
+          {checking ? "Checking..." : "Check for Updates"}
         </button>
       </div>
     </div>

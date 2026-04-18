@@ -28,6 +28,12 @@ export type ChannelConfig = {
     webhook_verify_token: string; // Token to verify Meta webhook ownership
     allowed_users?: string[]; // Optional E.164 phone number allowlist (e.g. "+351912345678")
   };
+  signal?: {
+    enabled: boolean;
+    phone: string;            // Registered E.164 number (e.g. "+351912345678")
+    api_url?: string;         // signal-cli REST daemon URL (default: http://localhost:8080)
+    allowed_senders?: string[]; // Optional allowlist of sender numbers
+  };
 };
 
 export type STTConfig = {
