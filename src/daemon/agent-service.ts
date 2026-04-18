@@ -50,6 +50,7 @@ import {
   recordInteraction,
 } from '../personality/learner.ts';
 import { getDueCommitments, getUpcoming } from '../vault/commitments.ts';
+import { getActiveProjectId, getProject } from '../vault/projects.ts';
 import { findContent } from '../vault/content-pipeline.ts';
 import { getRecentObservations } from '../vault/observations.ts';
 import { extractAndStore } from '../vault/extractor.ts';
@@ -556,6 +557,18 @@ export class AgentService implements Service, IAgentService {
         arch: process.arch,
       },
     };
+
+    try {
+      const activeProjectId = getActiveProjectId();
+      if (activeProjectId) {
+        const project = getProject(activeProjectId);
+        if (project) {
+          context.currentProject = { name: project.name, description: project.description || undefined, path: project.path || undefined };
+        }
+      }
+    } catch (err) {
+      console.error('[AgentService] Error loading active project:', err);
+    }
 
     try {
       const profile = getUserProfile();

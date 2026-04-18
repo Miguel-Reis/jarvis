@@ -7,7 +7,10 @@ import { ChatInput } from "../components/chat/ChatInput";
 import { ThreadSidebar } from "../components/chat/ThreadSidebar";
 import { SystemPanel } from "../components/chat/SystemPanel";
 import { ApprovalBanner } from "../components/chat/ApprovalBanner";
+import { useApiData } from "../hooks/useApi";
 import "../styles/chat.css";
+
+type ActiveProjectResp = { project: { id: string; name: string; color: string } | null };
 
 const SYS_PANEL_KEY = "jarvis-sys-panel-collapsed";
 
@@ -34,6 +37,9 @@ export default function ChatPage({
   pendingApprovals,
   onResolveApproval,
 }: ChatPageProps) {
+  const { data: activeProjectData } = useApiData<ActiveProjectResp>("/api/projects/active", []);
+  const activeProject = activeProjectData?.project ?? null;
+
   const [disableImages, setDisableImages] = useState(false);
   const [sysPanelCollapsed, setSysPanelCollapsed] = useState<boolean>(() => {
     try { return localStorage.getItem(SYS_PANEL_KEY) === "1"; } catch { return false; }
@@ -135,6 +141,19 @@ export default function ChatPage({
           <div className="chat-status-bar chat-status-voice">
             <span className={`chat-status-dot ${voice?.voiceState === "recording" ? "chat-status-dot-recording" : "chat-status-dot-voice"}`} />
             {voiceStatus}
+          </div>
+        )}
+
+        {/* Active project chip */}
+        {activeProject && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: "6px",
+            padding: "4px 14px", borderBottom: "1px solid rgba(255,255,255,0.04)",
+            fontSize: "11px", color: "rgba(255,255,255,0.40)",
+          }}>
+            <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: activeProject.color, flexShrink: 0 }} />
+            <span>Project: <strong style={{ color: "rgba(255,255,255,0.65)" }}>{activeProject.name}</strong></span>
+            <a href="#/projects" style={{ marginLeft: "auto", color: "rgba(255,255,255,0.25)", textDecoration: "none", fontSize: "10px" }}>change</a>
           </div>
         )}
 

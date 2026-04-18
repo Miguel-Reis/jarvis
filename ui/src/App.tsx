@@ -61,8 +61,9 @@ const WorkflowsPage = React.lazy(() => import("./pages/WorkflowsPage"));
 const GoalsPage = React.lazy(() => import("./pages/GoalsPage"));
 const DashboardPage = React.lazy(() => import("./pages/DashboardPage"));
 const SitesPage = React.lazy(() => import("./pages/SitesPage"));
+const ProjectsPage = React.lazy(() => import("./pages/ProjectsPage"));
 
-type Route = "dashboard" | "chat" | "tasks" | "pipeline" | "memory" | "calendar" | "office" | "knowledge" | "command" | "authority" | "awareness" | "workflows" | "goals" | "sites" | "settings";
+type Route = "dashboard" | "chat" | "tasks" | "pipeline" | "memory" | "calendar" | "office" | "knowledge" | "command" | "authority" | "awareness" | "workflows" | "goals" | "sites" | "projects" | "settings";
 
 export type SettingsSection = "general" | "profile" | "llm" | "channels" | "integrations" | "sidecar" | "mcp";
 
@@ -71,7 +72,7 @@ const SETTINGS_SECTIONS: SettingsSection[] = ["general", "profile", "llm", "chan
 function getRoute(): Route {
   const hash = window.location.hash.replace("#/", "");
   if (hash.startsWith("settings")) return "settings";
-  if (["dashboard", "chat", "tasks", "pipeline", "memory", "calendar", "office", "knowledge", "command", "authority", "awareness", "workflows", "goals", "sites"].includes(hash)) {
+  if (["dashboard", "chat", "tasks", "pipeline", "memory", "calendar", "office", "knowledge", "command", "authority", "awareness", "workflows", "goals", "sites", "projects"].includes(hash)) {
     return hash as Route;
   }
   return "dashboard";
@@ -111,6 +112,7 @@ type NavEntry = { icon: string; label: string; route: Route };
 const NAV_CORE: NavEntry[] = [
   { icon: "\u25C7", label: "Dashboard",  route: "dashboard" },
   { icon: "\u25CE", label: "Chat",       route: "chat" },
+  { icon: "\u25A3", label: "Projects",   route: "projects" },
   { icon: "\u25C6", label: "Goals",      route: "goals" },
   { icon: "\u2B21", label: "Workflows",  route: "workflows" },
   { icon: "\u25A0", label: "Sites",      route: "sites" },
@@ -502,6 +504,7 @@ export function App() {
           {route === "workflows" && <WorkflowsPage workflowEvents={ws.workflowEvents} sendMessage={ws.sendMessage} />}
           {route === "goals" && <GoalsPage goalEvents={ws.goalEvents} />}
           {route === "sites" && <SitesPage sendMessage={ws.sendMessage} isConnected={ws.isConnected} messages={ws.messages} />}
+          {route === "projects" && <ProjectsPage />}
           {route === "authority" && <AuthorityPage />}
           {route === "settings" && <SettingsPage section={settingsSection} />}
         </React.Suspense>

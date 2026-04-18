@@ -20,6 +20,7 @@ import type { EmergencyController } from '../authority/emergency.ts';
 import type { DeferredExecutor } from '../authority/deferred-executor.ts';
 import type { ActionCategory } from '../roles/authority.ts';
 
+import { createProject, listProjects, getProject, updateProject, deleteProject, getActiveProjectId, setActiveProjectId } from '../vault/projects.ts';
 import { findEntities, getEntity, searchEntitiesByName, createEntity, deleteEntity } from '../vault/entities.ts';
 import { findFacts, createFact, deleteFact } from '../vault/facts.ts';
 import { findRelationships, getEntityRelationships } from '../vault/relationships.ts';
@@ -3312,6 +3313,53 @@ export function createApiRoutes(ctx: ApiContext): Record<string, unknown> {
         } catch (err) {
           return error(err instanceof Error ? err.message : String(err));
         }
+      },
+    },
+
+    // ── Projects ────────────────────────────────────────────────────────
+    '/api/projects': {
+      GET: () => {
+        return json({ projects: listProjects(), activeProjectId: getActiveProjectId() });
+      },
+      POST: async (req: Request) => {
+        const body = await req.json() as { name?: string; description?: string; path?: string; color?: string };
+        if (!body.name?.trim()) return error('name is required');
+        const project = createProject(body.name.trim(), { description: body.description, path: body.path, color: body.color });
+        return json({ ok: true, project });
+      },
+    },
+
+    '/api/projects/active': {
+      GET: () => {
+        const id = getActiveProjectId();
+        return json({ project: id ? getProject(id) : null });
+      },
+      PUT: async (req: Request) => {
+        const body = await req.json() as { id?: string | null };
+        setActiveProjectId(body.id ?? null);
+        return json({ ok: true });
+      },
+    },
+
+    '/api/projects/:id': {
+      GET: (req: Request) => {
+        const id = decodeURIComponent(new URL(req.url).pathname.split('/').pop()!);
+        const project = getProject(id);
+        if (!project) return error('Project not found', 404);
+        return json(project);
+      },
+      PUT: async (req: Request) => {
+        const id = decodeURIComponent(new URL(req.url).pathname.split('/').pop()!);
+        const body = await req.json() as { name?: string; description?: string; path?: string; color?: string };
+        const project = updateProject(id, body);
+        if (!project) return error('Project not found', 404);
+        return json({ ok: true, project });
+      },
+      DELETE: (req: Request) => {
+        const id = decodeURIComponent(new URL(req.url).pathname.split('/').pop()!);
+        if (!deleteProject(id)) return error('Project not found', 404);
+        if (getActiveProjectId() === id) setActiveProjectId(null);
+        return json({ ok: true });
       },
     },
 

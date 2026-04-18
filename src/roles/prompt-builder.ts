@@ -21,6 +21,11 @@ export type PromptContext = {
     shell: string; // e.g. "powershell.exe", "/bin/bash"
     arch: string;  // e.g. "x64", "arm64"
   };
+  currentProject?: {
+    name: string;
+    description?: string;
+    path?: string;
+  };
 };
 
 /**
@@ -218,6 +223,15 @@ export function buildSystemPrompt(role: RoleDefinition, context?: PromptContext)
       for (const item of context.contentPipeline) {
         sections.push(`- ${item}`);
       }
+    }
+
+    if (context.currentProject) {
+      sections.push('');
+      sections.push('## Current Project');
+      sections.push(`You are working in the context of project: **${context.currentProject.name}**`);
+      if (context.currentProject.path) sections.push(`Root path: ${context.currentProject.path}`);
+      if (context.currentProject.description) sections.push(context.currentProject.description);
+      sections.push('Stay focused on this project. Do not confuse it with other projects the user may have worked on.');
     }
 
     if (context.activeGoals) {

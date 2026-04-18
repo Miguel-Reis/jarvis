@@ -786,4 +786,18 @@ function createTables(db: Database): void {
   `);
   db.run(`CREATE INDEX IF NOT EXISTS idx_notif_read ON notifications(read)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_notif_created ON notifications(created_at)`);
+
+  // Projects: scope context for agent conversations
+  db.run(`
+    CREATE TABLE IF NOT EXISTS projects (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      path TEXT NOT NULL DEFAULT '',
+      color TEXT NOT NULL DEFAULT '#6b7280',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_projects_name ON projects(name)`);
 }
