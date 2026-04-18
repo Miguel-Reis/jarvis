@@ -76,8 +76,8 @@ export function createManageWorkflowTool(deps: WorkflowToolDeps): ToolDefinition
             // Register triggers so cron/webhook/poll triggers activate
             try {
               deps.triggerManager.registerWorkflow(workflow.id, definition);
-            } catch {
-              // Non-fatal — triggers can be registered later
+            } catch (triggerErr) {
+              console.error('[Workflows] Failed to register triggers for', workflow.id, triggerErr);
             }
 
             const nodeTypes = definition.nodes.map(n => n.type).join(', ');

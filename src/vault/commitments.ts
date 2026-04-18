@@ -90,25 +90,14 @@ export function createCommitment(
     null
   );
 
-  const commitment: Commitment = {
-    id,
-    what,
-    when_due: opts?.when_due ?? null,
-    context: opts?.context ?? null,
-    priority,
-    status: 'pending',
-    retry_policy: opts?.retry_policy ?? null,
-    created_from: opts?.created_from ?? null,
-    assigned_to: opts?.assigned_to ?? null,
-    created_at: now,
-    completed_at: null,
-    result: null,
-    sort_order: 0,
-  };
+  const commitment = getCommitment(id);
+  if (!commitment) throw new Error(`Failed to persist commitment '${what}' — database did not return the inserted row`);
 
   // Index for semantic search — fire-and-forget
   const embeddingText = [what, opts?.context].filter(Boolean).join(' ');
-  embedAndStore('commitment', id, embeddingText).catch(() => {});
+  embedAndStore('commitment', id, embeddingText).catch((err) => {
+    console.error('[Commitments] Failed to index commitment for search:', err);
+  });
 
   return commitment;
 }

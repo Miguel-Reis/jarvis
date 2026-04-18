@@ -609,9 +609,15 @@ export class AgentOrchestrator {
         result = result.slice(0, MAX_TOOL_RESULT_CHARS) + `\n... (truncated, was ${result.length} chars)`;
       }
 
+      // Surface tool-level errors clearly so the LLM doesn't treat them as success.
+      // Tools that fail but don't throw return strings starting with "Failed" or "Error".
+      if (/^(Error|Failed|Error executing)\b/i.test(result)) {
+        return `[TOOL_ERROR] ${toolCall.name} reported a failure:\n${result}\n\nDo NOT assume the action succeeded. Tell the user what went wrong and ask how to proceed.`;
+      }
+
       return result;
     } catch (err) {
-      return `Error executing ${toolCall.name}: ${err instanceof Error ? err.message : String(err)}`;
+      return `[TOOL_ERROR] ${toolCall.name} threw an exception:\n${err instanceof Error ? err.message : String(err)}\n\nDo NOT assume the action succeeded. Tell the user what went wrong and ask how to proceed.`;
     }
   }
 
