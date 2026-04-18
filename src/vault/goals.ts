@@ -55,6 +55,7 @@ export function createGoal(
     description?: string;
     success_criteria?: string;
     time_horizon?: string;
+    project_id?: string | null;
     deadline?: number;
     estimated_hours?: number;
     authority_level?: number;
@@ -70,10 +71,10 @@ export function createGoal(
 
   db.prepare(
     `INSERT INTO goals (id, parent_id, level, title, description, success_criteria,
-      time_horizon, score, score_reason, status, health, deadline, started_at,
+      project_id, time_horizon, score, score_reason, status, health, deadline, started_at,
       estimated_hours, actual_hours, authority_level, tags, dependencies,
       escalation_stage, escalation_started_at, sort_order, created_at, updated_at, completed_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 0.0, NULL, ?, 'on_track', ?, ?, ?, 0, ?, ?, ?, 'none', NULL, ?, ?, ?, NULL)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0.0, NULL, ?, 'on_track', ?, ?, ?, 0, ?, ?, ?, 'none', NULL, ?, ?, ?, NULL)`
   ).run(
     id,
     opts?.parent_id ?? null,
@@ -81,6 +82,7 @@ export function createGoal(
     title,
     opts?.description ?? '',
     opts?.success_criteria ?? '',
+    opts?.project_id ?? null,
     opts?.time_horizon ?? 'quarterly',
     opts?.status ?? 'active',
     opts?.deadline ?? null,
@@ -136,6 +138,10 @@ export function findGoals(query: GoalQuery = {}): Goal[] {
   if (query.health) {
     conditions.push('health = ?');
     params.push(query.health);
+  }
+  if (query.project_id !== undefined) {
+    conditions.push('project_id IS ?');
+    params.push(query.project_id);
   }
   if (query.tag) {
     conditions.push("tags LIKE ?");

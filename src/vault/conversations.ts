@@ -1,4 +1,5 @@
 import { getDb, generateId } from './schema.ts';
+import { getActiveProjectId } from './projects.ts';
 
 export type MessageRole = 'user' | 'assistant' | 'system';
 
@@ -59,21 +60,22 @@ function parseMessage(row: MessageRow): ConversationMessage {
 /**
  * Get or create the active conversation for a channel.
  * Returns the most recent conversation for the channel, or creates a new one.
- * If project_id is provided, scopes to that project.
+ * Automatically scoped to the active project from getActiveProjectId().
  */
 export function getOrCreateConversation(channel: string, project_id?: string | null): Conversation {
+  const activeProject = project_id ?? getActiveProjectId();
   const db = getDb();
   const now = Date.now();
 
   // Look for a recent conversation on this channel (within last 4 hours)
-  // If project_id is provided, also match by project
+  // Prefer conversations scoped to the active project
   const cutoff = now - 4 * 60 * 60 * 1000;
   let existing: ConversationRow | null = null;
 
-  if (project_id) {
+  if (activeProject) {
     existing = db.prepare(
       'SELECT * FROM conversations WHERE channel = ? AND project_id = ? AND last_message_at > ? ORDER BY last_message_at DESC LIMIT 1'
-    ).get(channel, project_id, cutoff) as ConversationRow | null;
+    ).get(channel, activeProject, cutoff) as ConversationRow | null;
   }
 
   if (!existing) {
@@ -86,17 +88,17 @@ export function getOrCreateConversation(channel: string, project_id?: string | n
     return parseConversation(existing);
   }
 
-  // Create new conversation
+  // Create new conversation scoped to active project
   const id = generateId();
   db.prepare(
     'INSERT INTO conversations (id, channel, project_id, started_at, last_message_at, message_count) VALUES (?, ?, ?, ?, ?, 0)'
-  ).run(id, channel, project_id ?? null, now, now);
+  ).run(id, channel, activeProject ?? null, now, now);
 
   return {
     id,
     agent_id: null,
     channel,
-    project_id: project_id ?? null,
+    project_id: activeProject ?? null,
     started_at: now,
     last_message_at: now,
     message_count: 0,

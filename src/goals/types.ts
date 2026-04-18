@@ -30,6 +30,7 @@ export type Goal = {
   title: string;
   description: string;
   success_criteria: string;
+  project_id: string | null;
   time_horizon: TimeHorizon;
   score: number;                     // 0.0-1.0 OKR score (0.7 = good)
   score_reason: string | null;
@@ -87,6 +88,7 @@ export type GoalQuery = {
   level?: GoalLevel;
   parent_id?: string | null;
   health?: GoalHealth;
+  project_id?: string | null;
   tag?: string;
   time_horizon?: TimeHorizon;
   limit?: number;
