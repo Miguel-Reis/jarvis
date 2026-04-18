@@ -50,6 +50,7 @@ export default function GoalsPage({ goalEvents }: Props) {
   const [showDailyActions, setShowDailyActions] = useState(false);
   const [showOverdue, setShowOverdue] = useState(false);
   const [overdueGoals, setOverdueGoals] = useState<Goal[]>([]);
+  const [exportOpen, setExportOpen] = useState(false);
 
   const openCreate = (prefill = "") => {
     setCreateInitialText(prefill);
@@ -98,6 +99,36 @@ export default function GoalsPage({ goalEvents }: Props) {
   };
 
   const activeCount = goals.filter((g) => g.status === "active").length;
+
+  const handleExport = useCallback((format: "csv" | "json") => {
+    const data = showOverdue ? overdueGoals : goals;
+    let content: string;
+    let mime: string;
+    let filename: string;
+
+    if (format === "json") {
+      content = JSON.stringify(data, null, 2);
+      mime = "application/json";
+      filename = `goals-${new Date().toISOString().slice(0, 10)}.json`;
+    } else {
+      const cols = ["id", "title", "level", "status", "health", "score", "deadline", "time_horizon", "created_at"];
+      const escape = (v: unknown) => {
+        const s = v == null ? "" : typeof v === "number" && v > 1e12 ? new Date(v).toISOString() : String(v);
+        return `"${s.replace(/"/g, '""')}"`;
+      };
+      const rows = data.map(g => cols.map(c => escape(g[c as keyof Goal])).join(","));
+      content = [cols.join(","), ...rows].join("\n");
+      mime = "text/csv";
+      filename = `goals-${new Date().toISOString().slice(0, 10)}.csv`;
+    }
+
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+    setExportOpen(false);
+  }, [goals, overdueGoals, showOverdue]);
 
   const handleToggleOverdue = useCallback(async () => {
     if (showOverdue) { setShowOverdue(false); return; }
@@ -188,6 +219,28 @@ export default function GoalsPage({ goalEvents }: Props) {
           </svg>
           Daily Plan
         </button>
+
+        {/* Export */}
+        <div style={{ position: "relative", display: "inline-block" }}>
+          <button
+            className="goals-search-btn"
+            onClick={() => setExportOpen(v => !v)}
+            title="Export goals"
+            style={{ fontSize: "11px", padding: "0 10px", width: "auto", gap: "5px" }}
+          >
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+              <path d="M6 1v7M3 5l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M1 10h10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+            </svg>
+            Export
+          </button>
+          {exportOpen && (
+            <div style={{ position: "absolute", right: 0, top: "calc(100% + 4px)", background: "#12121E", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", zIndex: 100, minWidth: "100px", overflow: "hidden" }}>
+              <button onClick={() => handleExport("csv")} style={{ width: "100%", padding: "8px 14px", background: "none", border: "none", color: "rgba(255,255,255,0.7)", fontSize: "12px", cursor: "pointer", textAlign: "left" }}>CSV</button>
+              <button onClick={() => handleExport("json")} style={{ width: "100%", padding: "8px 14px", background: "none", border: "none", color: "rgba(255,255,255,0.7)", fontSize: "12px", cursor: "pointer", textAlign: "left" }}>JSON</button>
+            </div>
+          )}
+        </div>
 
         {/* New goal */}
         <button

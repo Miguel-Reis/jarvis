@@ -78,6 +78,7 @@ export default function TasksPage({ taskEvents }: Props) {
   const { showToast } = useToast();
   const [refreshKey, setRefreshKey] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
   const [recentlyUpdated, setRecentlyUpdated] = useState<Set<string>>(new Set());
@@ -246,6 +247,35 @@ export default function TasksPage({ taskEvents }: Props) {
     setRefreshKey((k) => k + 1);
   }, []);
 
+  const handleExport = useCallback((format: "csv" | "json") => {
+    const tasks = localTasks;
+    let content: string;
+    let mime: string;
+    let filename: string;
+
+    if (format === "json") {
+      content = JSON.stringify(tasks, null, 2);
+      mime = "application/json";
+      filename = `tasks-${new Date().toISOString().slice(0, 10)}.json`;
+    } else {
+      const cols = ["id", "what", "status", "priority", "when_due", "assigned_to", "created_at", "completed_at", "context"];
+      const escape = (v: unknown) => {
+        const s = v == null ? "" : v instanceof Date ? v.toISOString() : typeof v === "number" && v > 1e12 ? new Date(v).toISOString() : String(v);
+        return `"${s.replace(/"/g, '""')}"`;
+      };
+      const rows = tasks.map(t => cols.map(c => escape(t[c as keyof Commitment])).join(","));
+      content = [cols.join(","), ...rows].join("\n");
+      mime = "text/csv";
+      filename = `tasks-${new Date().toISOString().slice(0, 10)}.csv`;
+    }
+
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  }, [localTasks]);
+
   return (
     <div className="tk-page">
       {/* Atmosphere */}
@@ -271,6 +301,26 @@ export default function TasksPage({ taskEvents }: Props) {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
+        </div>
+
+        <div style={{ position: "relative", display: "inline-block" }}>
+          <button
+            className="tk-new-btn"
+            style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.55)" }}
+            onClick={() => setExportOpen(v => !v)}
+          >
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+              <path d="M6 1v7M3 5l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M1 10h10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+            </svg>
+            Export
+          </button>
+          {exportOpen && (
+            <div style={{ position: "absolute", right: 0, top: "calc(100% + 4px)", background: "#12121E", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", zIndex: 100, minWidth: "100px", overflow: "hidden" }}>
+              <button onClick={() => { handleExport("csv"); setExportOpen(false); }} style={{ width: "100%", padding: "8px 14px", background: "none", border: "none", color: "rgba(255,255,255,0.7)", fontSize: "12px", cursor: "pointer", textAlign: "left" }}>CSV</button>
+              <button onClick={() => { handleExport("json"); setExportOpen(false); }} style={{ width: "100%", padding: "8px 14px", background: "none", border: "none", color: "rgba(255,255,255,0.7)", fontSize: "12px", cursor: "pointer", textAlign: "left" }}>JSON</button>
+            </div>
+          )}
         </div>
 
         <button className="tk-new-btn" onClick={() => setModalOpen(true)}>
