@@ -42,6 +42,7 @@ export type LLMOptions = {
   tools?: LLMTool[];
   stream?: boolean;
   tool_choice?: 'auto' | 'none' | 'required';  // 'auto' enables tool calling when available
+  signal?: AbortSignal;
 };
 
 export interface LLMProvider {

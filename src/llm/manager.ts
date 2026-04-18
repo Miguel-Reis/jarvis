@@ -64,7 +64,8 @@ export class LLMManager {
   }
 
   private formatFailure(providerName: string, errors: string[]): string {
-    return `Provider '${providerName}' failed after ${LLMManager.MAX_RETRIES_PER_PROVIDER} attempts:\n${errors.map((error) => `  ${error}`).join('\n')}`;
+    const n = errors.length;
+    return `Provider '${providerName}' failed after ${n} attempt${n === 1 ? '' : 's'}:\n${errors.map((error) => `  ${error}`).join('\n')}`;
   }
 
   /**
@@ -113,18 +114,19 @@ export class LLMManager {
   }
 
   /**
-   * Add request timeout wrapper for network resilience
+   * Add request timeout with AbortController so the underlying fetch is cancelled.
+   * Returns [result, controller] — caller should abort the controller on error.
    */
-  private async withTimeout<T>(promise: Promise<T>, provider: string): Promise<T> {
-    return Promise.race([
-      promise,
-      new Promise<T>((_, reject) =>
-        setTimeout(
-          () => reject(new Error(`LLM request to ${provider} timed out after ${LLMManager.REQUEST_TIMEOUT_MS}ms`)),
-          LLMManager.REQUEST_TIMEOUT_MS
-        )
-      )
-    ]);
+  private withTimeoutSignal(provider: string): { signal: AbortSignal; cancel: (reason?: string) => void; timeoutId: ReturnType<typeof setTimeout> } {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      controller.abort(`LLM request to ${provider} timed out after ${LLMManager.REQUEST_TIMEOUT_MS}ms`);
+    }, LLMManager.REQUEST_TIMEOUT_MS);
+    return {
+      signal: controller.signal,
+      cancel: (reason?: string) => { clearTimeout(timeoutId); controller.abort(reason); },
+      timeoutId,
+    };
   }
 
   /**
@@ -134,8 +136,11 @@ export class LLMManager {
     if (!(error instanceof Error)) return false;
 
     const msg = error.message.toLowerCase();
-    // Retry on network/timeout errors, not on auth/validation errors
+    // Retry on network/timeout/abort errors, not on auth/validation errors
     return msg.includes('timeout') ||
+      msg.includes('timed out') ||
+      msg.includes('aborted') ||
+      msg.includes('abort') ||
       msg.includes('econnrefused') ||
       msg.includes('enotfound') ||
       msg.includes('network') ||
@@ -164,13 +169,16 @@ export class LLMManager {
 
       const errors: string[] = [];
       for (let attempt = 1; attempt <= LLMManager.MAX_RETRIES_PER_PROVIDER; attempt++) {
+        const { signal, cancel, timeoutId } = this.withTimeoutSignal(providerName);
         try {
-          const result = await this.withTimeout(provider.chat(messages, options), providerName);
+          const result = await provider.chat(messages, { ...options, signal });
+          clearTimeout(timeoutId);
           if (LLMManager.isDebugging && attempt > 1) {
             console.log(`[DEBUG] LLM ${providerName} succeeded on retry attempt ${attempt}`);
           }
           return result;
         } catch (err) {
+          cancel();
           const errorMsg = err instanceof Error ? err.message : String(err);
           errors.push(`attempt ${attempt}: ${errorMsg}`);
 
@@ -179,7 +187,11 @@ export class LLMManager {
             `[LLM] Provider ${providerName} failed (attempt ${attempt}/${LLMManager.MAX_RETRIES_PER_PROVIDER})${!shouldRetry ? ' [no retry]' : ''}: ${errorMsg}`
           );
 
-          if (!shouldRetry) break;
+          if (!shouldRetry || attempt === LLMManager.MAX_RETRIES_PER_PROVIDER) break;
+
+          // Exponential backoff: 1s, 2s, 4s
+          const backoffMs = Math.min(1000 * Math.pow(2, attempt - 1), 8000);
+          await new Promise(r => setTimeout(r, backoffMs));
         }
       }
 
