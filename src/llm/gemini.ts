@@ -227,6 +227,10 @@ export class GeminiProvider implements LLMProvider {
     }
   }
 
+  async supportsVision(): Promise<boolean> {
+    return true; // All Gemini 1.5+ models support vision
+  }
+
   async listModels(): Promise<string[]> {
     try {
       const response = await fetch(

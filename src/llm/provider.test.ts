@@ -101,6 +101,7 @@ describe('LLMManager', () => {
     const primary = {
       name: 'primary',
       listModels: async () => ['primary-model'],
+      supportsVision: async () => true,
       chat: async () => {
         throw new Error('401 invalid_api_key');
       },
@@ -110,6 +111,7 @@ describe('LLMManager', () => {
     };
     const fallback = {
       name: 'fallback',
+      supportsVision: async () => true,
       listModels: async () => ['fallback-model'],
       chat: async () => ({
         content: 'fallback ok',
@@ -184,6 +186,7 @@ describe('LLMManager', () => {
     const primary = {
       name: 'primary',
       listModels: async () => ['primary-model'],
+      supportsVision: async () => true,
       chat: async () => {
         throw new Error('503 temporarily unavailable');
       },
@@ -193,6 +196,7 @@ describe('LLMManager', () => {
     };
     const fallback = {
       name: 'fallback',
+      supportsVision: async () => true,
       listModels: async () => ['fallback-model'],
       chat: async () => ({
         content: 'fallback stream ok',

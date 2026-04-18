@@ -265,6 +265,10 @@ export class AnthropicProvider implements LLMProvider {
     }
   }
 
+  async supportsVision(): Promise<boolean> {
+    return true; // All Claude 3+ models support vision
+  }
+
   async listModels(): Promise<string[]> {
     // Anthropic doesn't have a models endpoint, so return known models
     return [

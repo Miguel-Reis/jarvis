@@ -237,6 +237,12 @@ export class GroqProvider implements LLMProvider {
     }
   }
 
+  async supportsVision(): Promise<boolean> {
+    // Groq currently supports vision only on llama-3.2-*-vision models
+    const m = this.defaultModel.toLowerCase();
+    return m.includes('vision') || m.includes('llava');
+  }
+
   async listModels(): Promise<string[]> {
     try {
       const response = await fetch('https://api.groq.com/openai/v1/models', {

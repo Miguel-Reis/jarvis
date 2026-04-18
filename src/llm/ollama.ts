@@ -238,6 +238,31 @@ export class OllamaProvider implements LLMProvider {
     }
   }
 
+  async supportsVision(): Promise<boolean> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/show`, {
+        method: 'POST',
+        headers: { ...this.authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: this.defaultModel }),
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!response.ok) return false;
+      const data = await response.json() as {
+        details?: { families?: string[]; family?: string };
+        model_info?: Record<string, unknown>;
+      };
+      // Ollama marks vision models with the "clip" family (CLIP vision encoder)
+      const families = data.details?.families ?? [];
+      if (families.includes('clip') || families.includes('mllama')) return true;
+      // Secondary check: model_info keys for vision encoders
+      const infoKeys = Object.keys(data.model_info ?? {}).join(' ');
+      if (infoKeys.includes('vision') || infoKeys.includes('clip')) return true;
+      return false;
+    } catch {
+      return false; // Unreachable daemon or unknown — assume no vision
+    }
+  }
+
   async listModels(): Promise<string[]> {
     try {
       const response = await fetch(`${this.baseUrl}/api/tags`, {

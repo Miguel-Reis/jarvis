@@ -269,6 +269,12 @@ export class LiteLLMProvider implements LLMProvider {
     }
   }
 
+  async supportsVision(): Promise<boolean> {
+    // LiteLLM is a proxy — it passes images through to the underlying model.
+    // We can't know at this level, so assume true and let the underlying model reject if needed.
+    return true;
+  }
+
   async listModels(): Promise<string[]> {
     try {
       const response = await fetch(`${this.baseUrl}/v1/models`, {

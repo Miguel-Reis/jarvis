@@ -271,6 +271,11 @@ export class OpenRouterProvider implements LLMProvider {
     }
   }
 
+  async supportsVision(): Promise<boolean> {
+    // OpenRouter routes to many models — assume vision is supported and let rejections surface
+    return true;
+  }
+
   async listModels(): Promise<string[]> {
     try {
       const response = await fetch('https://openrouter.ai/api/v1/models', {

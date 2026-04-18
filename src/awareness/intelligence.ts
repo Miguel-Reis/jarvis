@@ -15,49 +15,31 @@ export class AwarenessIntelligence {
   private llm: LLMManager;
   private lastCloudCallAt = 0;
   private cooldownMs: number;
-  private visionUnsupported = false; // latched once we know the model lacks vision
+  private visionSupported: boolean | null = null;
 
   constructor(llm: LLMManager, cooldownMs: number = 30000) {
     this.llm = llm;
     this.cooldownMs = cooldownMs;
   }
 
-  /**
-   * Send a message that may contain image blocks.
-   * If the provider rejects image input (model doesn't support vision),
-   * automatically retries with image blocks stripped — using OCR text only.
-   */
-  private async chatWithVisionFallback(
-    content: ContentBlock[],
-    opts: { max_tokens: number }
-  ): Promise<string> {
-    // If we already know vision is unsupported, strip images immediately
-    if (this.visionUnsupported) {
-      return this.llm.chat(
-        [{ role: 'user', content: content.filter(b => b.type === 'text') }],
-        opts
-      ).then(r => r.content);
-    }
-
-    try {
-      const response = await this.llm.chat([{ role: 'user', content }], opts);
-      return response.content;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes('does not support image input') || msg.includes('image') && msg.includes('400')) {
-        // Latch — avoid wasting tokens on every future call
-        if (!this.visionUnsupported) {
-          this.visionUnsupported = true;
-          console.warn('[Intelligence] Model does not support vision — falling back to OCR-only analysis');
-        }
-        // Retry without image blocks
-        const textOnly = content.filter(b => b.type === 'text');
-        if (textOnly.length === 0) return '';
-        const response = await this.llm.chat([{ role: 'user', content: textOnly }], opts);
-        return response.content;
+  private async getVisionSupport(): Promise<boolean> {
+    if (this.visionSupported === null) {
+      this.visionSupported = await this.llm.supportsVision();
+      if (!this.visionSupported) {
+        console.warn('[Intelligence] Model does not support vision — all analysis will use OCR text only');
       }
-      throw err;
     }
+    return this.visionSupported;
+  }
+
+  private async buildContent(imageBase64: string, textBlock: ContentBlock): Promise<ContentBlock[]> {
+    const hasVision = await this.getVisionSupport();
+    if (!hasVision) return [textBlock];
+    const imageBlock: ContentBlock = guardImageSize({
+      type: 'image',
+      source: { type: 'base64', media_type: 'image/png', data: imageBase64 },
+    });
+    return [imageBlock, textBlock];
   }
 
   /**
@@ -91,7 +73,12 @@ export class AwarenessIntelligence {
       return true;
     }
 
-    // Escalate for very short/empty OCR (image-heavy screen)
+    // Skip escalation for image-heavy screens when vision is not available
+    if (context.ocrText.trim().length < 20 && this.visionSupported === false) {
+      return false;
+    }
+
+    // Escalate for very short/empty OCR (image-heavy screen, vision available)
     if (context.ocrText.trim().length < 20) {
       return true;
     }
@@ -105,16 +92,9 @@ export class AwarenessIntelligence {
   async analyzeGeneral(imageBase64: string, context: ScreenContext): Promise<string> {
     this.lastCloudCallAt = Date.now();
 
-    const imageBlock: ContentBlock = guardImageSize({
-      type: 'image',
-      source: { type: 'base64', media_type: 'image/png', data: imageBase64 },
-    });
-
-    const content: ContentBlock[] = [
-      imageBlock,
-      {
-        type: 'text',
-        text: `Analyze this screenshot. The user is in "${context.appName}" (window: "${context.windowTitle}").
+    const textBlock: ContentBlock = {
+      type: 'text',
+      text: `Analyze this screenshot. The user is in "${context.appName}" (window: "${context.windowTitle}").
 OCR extracted: "${context.ocrText.slice(0, 500)}"
 
 Provide a concise analysis:
@@ -123,11 +103,12 @@ Provide a concise analysis:
 3. Any actionable suggestions? (1-2 if applicable)
 
 Be brief and direct. No preamble.`,
-      },
-    ];
+    };
 
     try {
-      return await this.chatWithVisionFallback(content, { max_tokens: 300 });
+      const content = await this.buildContent(imageBase64, textBlock);
+      const response = await this.llm.chat([{ role: 'user', content }], { max_tokens: 300 });
+      return response.content;
     } catch (err) {
       console.error('[Intelligence] General analysis failed:', err instanceof Error ? err.message : err);
       return '';
@@ -144,20 +125,13 @@ Be brief and direct. No preamble.`,
   ): Promise<string> {
     this.lastCloudCallAt = Date.now();
 
-    const imageBlock: ContentBlock = guardImageSize({
-      type: 'image',
-      source: { type: 'base64', media_type: 'image/png', data: imageBase64 },
-    });
-
     const previousInfo = previous
       ? `Previous: "${previous.appName}" — "${previous.windowTitle}"\nPrevious OCR: "${previous.ocrText.slice(0, 300)}"`
       : 'No previous context (first capture).';
 
-    const content: ContentBlock[] = [
-      imageBlock,
-      {
-        type: 'text',
-        text: `The user's screen changed. Analyze the delta.
+    const textBlock: ContentBlock = {
+      type: 'text',
+      text: `The user's screen changed. Analyze the delta.
 
 Current: "${current.appName}" — "${current.windowTitle}"
 Current OCR: "${current.ocrText.slice(0, 300)}"
@@ -170,11 +144,12 @@ What changed and why? Note any:
 - Patterns worth learning (user habits)
 
 Be concise. 2-3 sentences max.`,
-      },
-    ];
+    };
 
     try {
-      return await this.chatWithVisionFallback(content, { max_tokens: 200 });
+      const content = await this.buildContent(imageBase64, textBlock);
+      const response = await this.llm.chat([{ role: 'user', content }], { max_tokens: 200 });
+      return response.content;
     } catch (err) {
       console.error('[Intelligence] Delta analysis failed:', err instanceof Error ? err.message : err);
       return '';
@@ -194,16 +169,12 @@ Be concise. 2-3 sentences max.`,
   ): Promise<string> {
     this.lastCloudCallAt = Date.now();
 
-    const imageBlock: ContentBlock = guardImageSize({
-      type: 'image',
-      source: { type: 'base64', media_type: 'image/png', data: imageBase64 },
-    });
-
-    const prompt = this.buildStrugglePrompt(context, appCategory, signals, ocrPreview);
-    const content: ContentBlock[] = [imageBlock, { type: 'text', text: prompt }];
+    const textBlock: ContentBlock = { type: 'text', text: this.buildStrugglePrompt(context, appCategory, signals, ocrPreview) };
 
     try {
-      return await this.chatWithVisionFallback(content, { max_tokens: 600 });
+      const content = await this.buildContent(imageBase64, textBlock);
+      const response = await this.llm.chat([{ role: 'user', content }], { max_tokens: 600 });
+      return response.content;
     } catch (err) {
       console.error('[Intelligence] Struggle analysis failed:', err instanceof Error ? err.message : err);
       return '';

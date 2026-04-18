@@ -50,6 +50,8 @@ export interface LLMProvider {
   chat(messages: LLMMessage[], options?: LLMOptions): Promise<LLMResponse>;
   stream(messages: LLMMessage[], options?: LLMOptions): AsyncIterable<LLMStreamEvent>;
   listModels(): Promise<string[]>;
+  /** Returns true if the active model accepts image (base64) content blocks. */
+  supportsVision(): Promise<boolean>;
 }
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB base64 limit

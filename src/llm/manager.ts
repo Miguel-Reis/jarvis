@@ -58,6 +58,24 @@ export class LLMManager {
     return [...this.providers.keys()];
   }
 
+  /**
+   * Returns true if the primary provider's active model supports image content blocks.
+   * Result is cached after the first call.
+   */
+  private _visionCache: boolean | null = null;
+  async supportsVision(): Promise<boolean> {
+    if (this._visionCache !== null) return this._visionCache;
+    const primary = this.providers.get(this.primaryProvider);
+    if (!primary) { this._visionCache = false; return false; }
+    this._visionCache = await primary.supportsVision();
+    return this._visionCache;
+  }
+
+  /** Clear cached vision support (call after provider/model change). */
+  clearVisionCache(): void {
+    this._visionCache = null;
+  }
+
   private getProviderSequence(primaryOverride?: string | null): string[] {
     const primary = primaryOverride && this.providers.has(primaryOverride) ? primaryOverride : this.primaryProvider;
     return [primary, ...this.fallbackChain.filter((name) => name !== primary)];

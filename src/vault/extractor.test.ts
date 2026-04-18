@@ -133,6 +133,9 @@ describe('Vault Extractor', () => {
         async listModels() {
           return ['mock-model'];
         },
+        async supportsVision() {
+          return true;
+        },
       };
 
       const result = await extractAndStore(
@@ -177,6 +180,9 @@ describe('Vault Extractor', () => {
         async listModels() {
           return ['mock-model'];
         },
+        async supportsVision() {
+          return true;
+        },
       };
 
       await extractAndStore(
@@ -219,6 +225,9 @@ describe('Vault Extractor', () => {
         },
         async listModels() {
           return ['mock-model'];
+        },
+        async supportsVision() {
+          return true;
         },
       };
 
@@ -263,6 +272,9 @@ describe('Vault Extractor', () => {
         async listModels() {
           return ['mock-model'];
         },
+        async supportsVision() {
+          return true;
+        },
       };
 
       await extractAndStore(
@@ -306,6 +318,9 @@ describe('Vault Extractor', () => {
         async listModels() {
           return ['mock-model'];
         },
+        async supportsVision() {
+          return true;
+        },
       };
 
       // First extraction
@@ -343,6 +358,9 @@ describe('Vault Extractor', () => {
         },
         async listModels() {
           return ['mock-model'];
+        },
+        async supportsVision() {
+          return true;
         },
       };
 

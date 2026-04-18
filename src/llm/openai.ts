@@ -267,6 +267,13 @@ export class OpenAIProvider implements LLMProvider {
     }
   }
 
+  async supportsVision(): Promise<boolean> {
+    // Vision-capable OpenAI model families
+    const m = this.defaultModel.toLowerCase();
+    return m.includes('gpt-4o') || m.includes('gpt-4-turbo') ||
+           m.includes('gpt-4-vision') || m.includes('o1') || m.includes('o3');
+  }
+
   async listModels(): Promise<string[]> {
     try {
       const response = await fetch('https://api.openai.com/v1/models', {
