@@ -181,9 +181,13 @@ async function retrieveContextForMessage(message: string): Promise<{
       let rows: Array<{ content: string; created_at: number; role: string }> = [];
 
       try {
+        const projectJoin = projectFilter
+          ? `JOIN conversations c ON cm.conversation_id = c.id AND c.${projectFilter}`
+          : '';
         rows = db.prepare(`
           SELECT cm.content, cm.created_at, cm.role
           FROM conversation_messages cm
+          ${projectJoin}
           JOIN conv_messages_fts fts ON fts.rowid = cm.rowid
           WHERE conv_messages_fts MATCH ?
             AND cm.role IN ('user', 'assistant')
@@ -192,12 +196,14 @@ async function retrieveContextForMessage(message: string): Promise<{
         `).all(ftsQuery, now) as any[];
       } catch {
         // FTS5 unavailable — LIKE fallback
+        const projectClause = projectFilter ? ` AND cm.conversation_id IN (SELECT id FROM conversations WHERE ${projectFilter})` : '';
         const pattern = `%${terms[0]}%`;
         rows = db.prepare(`
           SELECT content, created_at, role
           FROM conversation_messages
           WHERE content LIKE ?
             AND role IN ('user', 'assistant')
+            ${projectClause}
           ORDER BY created_at DESC
           LIMIT 8
         `).all(pattern) as any[];
@@ -225,19 +231,25 @@ async function retrieveContextForMessage(message: string): Promise<{
     if (svc?.isAvailable()) {
       const queryVec = await svc.embed(message);
       if (queryVec) {
-        const similar = findSimilar(queryVec, 8);
+        const similar = findSimilar(queryVec, 12); // fetch extra to account for project filtering
         for (const { ref_type, ref_id } of similar) {
           if (ref_type === 'entity' && !entityMap.has(ref_id)) {
             const entity = getEntity(ref_id);
-            if (entity) entityMap.set(entity.id, entity);
+            // Skip entities from other projects
+            if (entity && !(activeProject && entity.project_id && entity.project_id !== activeProject)) {
+              entityMap.set(entity.id, entity);
+            }
           } else if (ref_type === 'commitment' && !matchedCommitments.has(ref_id)) {
             const c = getCommitment(ref_id);
-            if (c && c.status !== 'completed' && c.status !== 'failed') {
+            // Skip commitments from other projects
+            if (c && !(activeProject && c.project_id && c.project_id !== activeProject)
+              && c.status !== 'completed' && c.status !== 'failed') {
               matchedCommitments.set(ref_id, c);
             }
           } else if (ref_type === 'goal' && !matchedGoals.has(ref_id)) {
             const g = getGoal(ref_id);
-            if (g && g.status === 'active') {
+            // Skip goals from other projects
+            if (g && !(activeProject && g.project_id && g.project_id !== activeProject)) {
               matchedGoals.set(ref_id, g);
             }
           }
