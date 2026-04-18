@@ -12,11 +12,80 @@ type McpServerStatus = {
   name: string;
   command: string;
   args: string[];
+  env: Record<string, string>;
   connected: boolean;
   toolCount: number;
   error: string | null;
 };
 
+type EnvPair = { key: string; val: string };
+
+const PRESETS = [
+  {
+    label: "Filesystem",
+    name: "filesystem",
+    command: "npx",
+    args: "-y @modelcontextprotocol/server-filesystem /home",
+    env: [] as EnvPair[],
+    note: "Edit the path in Args",
+  },
+  {
+    label: "GitHub",
+    name: "github",
+    command: "npx",
+    args: "-y @modelcontextprotocol/server-github",
+    env: [{ key: "GITHUB_TOKEN", val: "" }],
+    note: "",
+  },
+  {
+    label: "PostgreSQL",
+    name: "postgres",
+    command: "npx",
+    args: "-y @modelcontextprotocol/server-postgres",
+    env: [{ key: "DATABASE_URL", val: "postgresql://..." }],
+    note: "",
+  },
+  {
+    label: "Brave Search",
+    name: "brave-search",
+    command: "npx",
+    args: "-y @modelcontextprotocol/server-brave-search",
+    env: [{ key: "BRAVE_API_KEY", val: "" }],
+    note: "",
+  },
+  {
+    label: "Puppeteer",
+    name: "puppeteer",
+    command: "npx",
+    args: "-y @modelcontextprotocol/server-puppeteer",
+    env: [] as EnvPair[],
+    note: "",
+  },
+  {
+    label: "Slack",
+    name: "slack",
+    command: "npx",
+    args: "-y @modelcontextprotocol/server-slack",
+    env: [{ key: "SLACK_BOT_TOKEN", val: "" }, { key: "SLACK_TEAM_ID", val: "" }],
+    note: "",
+  },
+  {
+    label: "SQLite",
+    name: "sqlite",
+    command: "npx",
+    args: "-y @modelcontextprotocol/server-sqlite /path/to/db.sqlite",
+    env: [] as EnvPair[],
+    note: "Edit the .sqlite path in Args",
+  },
+  {
+    label: "Notion",
+    name: "notion",
+    command: "npx",
+    args: "-y @notionhq/notion-mcp-server",
+    env: [{ key: "NOTION_TOKEN", val: "" }],
+    note: "",
+  },
+];
 
 export function MCPPanel() {
   const { data: servers, refetch } = useApiData<McpServerStatus[]>("/api/mcp/servers", []);
@@ -25,13 +94,23 @@ export function MCPPanel() {
   const [name, setName] = useState("");
   const [command, setCommand] = useState("");
   const [args, setArgs] = useState("");
+  const [envPairs, setEnvPairs] = useState<EnvPair[]>([]);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
+  const [reconnecting, setReconnecting] = useState<string | null>(null);
 
   const flash = (text: string) => {
     setMsg(text);
     setTimeout(() => setMsg(null), 3500);
+  };
+
+  const applyPreset = (p: typeof PRESETS[number]) => {
+    setName(p.name);
+    setCommand(p.command);
+    setArgs(p.args);
+    setEnvPairs(p.env.map(e => ({ ...e })));
+    if (p.note) flash(p.note);
   };
 
   const handleAdd = async () => {
@@ -39,16 +118,21 @@ export function MCPPanel() {
     setSaving(true);
     try {
       const argsArr = args.trim() ? args.trim().split(/\s+/) : [];
+      const env: Record<string, string> = {};
+      for (const { key, val } of envPairs) {
+        if (key.trim()) env[key.trim()] = val;
+      }
       const res = await fetch("/api/mcp/servers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), command: command.trim(), args: argsArr }),
+        body: JSON.stringify({ name: name.trim(), command: command.trim(), args: argsArr, env }),
       });
       const data = await res.json() as { ok?: boolean; message?: string; error?: string };
       if (res.ok && data.ok) {
-        flash(data.message ?? "Server added — restart daemon to connect");
-        setName(""); setCommand(""); setArgs("");
+        flash(data.message ?? "Server added and connecting…");
+        setName(""); setCommand(""); setArgs(""); setEnvPairs([]);
         refetch();
+        setTimeout(() => refetch(), 2500);
       } else {
         flash(data.error ?? "Failed to add server");
       }
@@ -79,12 +163,49 @@ export function MCPPanel() {
     }
   };
 
+  const handleReconnect = async (serverName: string) => {
+    setReconnecting(serverName);
+    try {
+      const res = await fetch(`/api/mcp/servers/${encodeURIComponent(serverName)}/reconnect`, {
+        method: "POST",
+      });
+      const data = await res.json() as { ok?: boolean; message?: string; error?: string };
+      flash(data.message ?? data.error ?? "Reconnect attempted");
+      refetch();
+      setTimeout(() => refetch(), 2500);
+    } catch (e) {
+      flash(String(e));
+    } finally {
+      setReconnecting(null);
+    }
+  };
+
   const list = servers ?? [];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
 
-      {/* Status */}
+      {/* Popular Servers Catalog */}
+      <div className="sp-card">
+        <h3 className="sp-card-title">Popular Servers</h3>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+          {PRESETS.map(p => (
+            <button
+              key={p.name}
+              className="sp-btn-secondary"
+              style={{ padding: "6px 14px", fontSize: "12px" }}
+              onClick={() => applyPreset(p)}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        <div style={{ marginTop: "10px", fontSize: "11px", color: "var(--j-text-dim)" }}>
+          Click a preset to auto-fill the form below. Edit values as needed before adding.
+        </div>
+      </div>
+
+      {/* Connected Servers */}
       <div className="sp-card">
         <h3 className="sp-card-title">Connected MCP Servers</h3>
 
@@ -104,13 +225,10 @@ export function MCPPanel() {
                 border: "1px solid var(--j-border)",
                 borderRadius: "8px",
               }}>
-                {/* Status dot */}
                 <div style={{
                   width: "8px", height: "8px", borderRadius: "50%", flexShrink: 0,
                   background: s.error ? "#ef4444" : s.connected ? "#22c55e" : "#6b7280",
                 }} />
-
-                {/* Info */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--j-text)" }}>
                     {s.name}
@@ -126,27 +244,37 @@ export function MCPPanel() {
                       <span style={{ marginLeft: "8px", color: "#ef4444" }}>{s.error}</span>
                     )}
                     {!s.connected && !s.error && (
-                      <span style={{ marginLeft: "8px", color: "#6b7280" }}>not connected (restart daemon)</span>
+                      <span style={{ marginLeft: "8px", color: "#6b7280" }}>not connected</span>
                     )}
                   </div>
                 </div>
-
-                {/* Remove */}
-                <button
-                  className="sp-btn-danger"
-                  style={{ padding: "5px 12px", fontSize: "12px" }}
-                  disabled={removing === s.name}
-                  onClick={() => handleRemove(s.name)}
-                >
-                  {removing === s.name ? "…" : "Remove"}
-                </button>
+                <div style={{ display: "flex", gap: "6px" }}>
+                  {(s.error || !s.connected) && (
+                    <button
+                      className="sp-btn-secondary"
+                      style={{ padding: "5px 12px", fontSize: "12px" }}
+                      disabled={reconnecting === s.name}
+                      onClick={() => handleReconnect(s.name)}
+                    >
+                      {reconnecting === s.name ? "…" : "Reconnect"}
+                    </button>
+                  )}
+                  <button
+                    className="sp-btn-danger"
+                    style={{ padding: "5px 12px", fontSize: "12px" }}
+                    disabled={removing === s.name}
+                    onClick={() => handleRemove(s.name)}
+                  >
+                    {removing === s.name ? "…" : "Remove"}
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         )}
       </div>
 
-      {/* Add server */}
+      {/* Add Server Form */}
       <div className="sp-card">
         <h3 className="sp-card-title">Add MCP Server</h3>
 
@@ -171,14 +299,54 @@ export function MCPPanel() {
           </div>
         </div>
 
-        <div className="sp-field" style={{ marginBottom: "16px" }}>
+        <div className="sp-field" style={{ marginBottom: "12px" }}>
           <span className="sp-field-label">Arguments (space-separated, optional)</span>
           <input
             className="sp-input"
-            placeholder="e.g. --api-key sk-..."
+            placeholder="e.g. -y --port 3000"
             value={args}
             onChange={e => setArgs(e.target.value)}
           />
+        </div>
+
+        {/* Env vars */}
+        <div className="sp-field" style={{ marginBottom: "16px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+            <span className="sp-field-label" style={{ marginBottom: 0 }}>Environment Variables</span>
+            <button
+              className="sp-btn-secondary"
+              style={{ padding: "2px 10px", fontSize: "11px" }}
+              onClick={() => setEnvPairs(p => [...p, { key: "", val: "" }])}
+            >
+              + Add
+            </button>
+          </div>
+          {envPairs.length === 0 && (
+            <div style={{ fontSize: "11px", color: "var(--j-text-dim)" }}>No env vars — click + Add to set API keys or config</div>
+          )}
+          {envPairs.map((pair, i) => (
+            <div key={i} style={{ display: "flex", gap: "8px", marginBottom: "6px", alignItems: "center" }}>
+              <input
+                className="sp-input"
+                style={{ flex: "0 0 160px", fontFamily: "monospace", fontSize: "12px" }}
+                placeholder="KEY"
+                value={pair.key}
+                onChange={e => setEnvPairs(p => p.map((x, j) => j === i ? { ...x, key: e.target.value } : x))}
+              />
+              <input
+                className="sp-input"
+                style={{ flex: 1, fontFamily: "monospace", fontSize: "12px" }}
+                placeholder="value"
+                value={pair.val}
+                onChange={e => setEnvPairs(p => p.map((x, j) => j === i ? { ...x, val: e.target.value } : x))}
+              />
+              <button
+                className="sp-btn-danger"
+                style={{ padding: "4px 8px", fontSize: "12px", flexShrink: 0 }}
+                onClick={() => setEnvPairs(p => p.filter((_, j) => j !== i))}
+              >×</button>
+            </div>
+          ))}
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -198,8 +366,7 @@ export function MCPPanel() {
           <strong style={{ color: "var(--j-text-muted)" }}>What is MCP?</strong>{" "}
           Model Context Protocol lets JARVIS connect to external tool servers (Notion, GitHub, Postgres, Stripe, etc.)
           without custom code. Tools auto-register as <code style={{ fontSize: "11px" }}>mcp_{"<name>"}_{"<tool>"}</code> in the agent.
-          After adding a server, restart the daemon to connect. See{" "}
-          <span style={{ color: "var(--j-accent)" }}>modelcontextprotocol.io</span> for available servers.
+          See <span style={{ color: "var(--j-accent)" }}>modelcontextprotocol.io</span> for available servers.
         </div>
       </div>
 

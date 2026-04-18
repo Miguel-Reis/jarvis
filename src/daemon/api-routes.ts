@@ -3326,6 +3326,7 @@ export function createApiRoutes(ctx: ApiContext): Record<string, unknown> {
           name: s.name,
           command: s.command,
           args: s.args ?? [],
+          env: s.env ?? {},
           connected: statusMap.get(s.name)?.connected ?? false,
           toolCount: statusMap.get(s.name)?.toolCount ?? 0,
           error: statusMap.get(s.name)?.error ?? null,
@@ -3375,6 +3376,26 @@ export function createApiRoutes(ctx: ApiContext): Record<string, unknown> {
             await ctx.mcpService?.disconnectServer(name);
           } catch { /* already gone */ }
           return json({ ok: true, message: `Server '${name}' removed and disconnected.` });
+        } catch (err) { return error(err instanceof Error ? err.message : String(err)); }
+      },
+    },
+
+    '/api/mcp/servers/:name/reconnect': {
+      POST: async (req: Request) => {
+        try {
+          const parts = new URL(req.url).pathname.split('/');
+          const name = decodeURIComponent(parts[parts.length - 2]!);
+          const { loadConfig } = await import('../config/loader.ts');
+          const fresh = await loadConfig();
+          const cfg = (fresh.mcp_servers ?? []).find(s => s.name === name);
+          if (!cfg) return error(`Server '${name}' not found`, 404);
+          try { await ctx.mcpService?.disconnectServer(name); } catch { /* already gone */ }
+          try {
+            await ctx.mcpService?.connectServer(cfg);
+            return json({ ok: true, message: `Server '${name}' reconnected.` });
+          } catch (connErr) {
+            return json({ ok: false, error: `Failed to reconnect: ${connErr instanceof Error ? connErr.message : connErr}` });
+          }
         } catch (err) { return error(err instanceof Error ? err.message : String(err)); }
       },
     },
