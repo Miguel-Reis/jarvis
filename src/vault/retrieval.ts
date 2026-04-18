@@ -18,6 +18,7 @@ import { USER_PROFILE_VAULT_SOURCE } from './user-profile.ts';
 import { findSimilar } from './vectors.ts';
 import { getEmbeddingService } from '../llm/embeddings.ts';
 import { findGoals, getGoal } from './goals.ts';
+import { getActiveProjectId } from './projects.ts';
 import type { Goal } from '../goals/types.ts';
 import { getCommitment, type Commitment } from './commitments.ts';
 
@@ -75,6 +76,8 @@ async function retrieveContextForMessage(message: string): Promise<{
 }> {
   const terms = extractSearchTerms(message);
   const entityMap = new Map<string, Entity>();
+  const activeProject = getActiveProjectId();
+  const projectFilter = activeProject ? `project_id = '${activeProject.replace(/'/g, "''")}'` : null;
 
   if (looksLikeSelfQuery(message)) {
     try {
@@ -107,9 +110,9 @@ async function retrieveContextForMessage(message: string): Promise<{
 
   const recentConversationSnippets: string[] = [];
 
-  // 1. Search entity names
+  // 1. Search entity names (scoped to active project)
   for (const term of terms) {
-    const matches = searchEntitiesByName(term);
+    const matches = searchEntitiesByName(term, activeProject);
     for (const entity of matches) {
       entityMap.set(entity.id, entity);
     }
@@ -122,12 +125,13 @@ async function retrieveContextForMessage(message: string): Promise<{
       // Try FTS5 first; fall back to LIKE if unavailable
       const ftsQuery = terms.map((t) => `"${t.replace(/"/g, '""')}"*`).join(' OR ');
       try {
+        const projectClause = projectFilter ? ` AND e.${projectFilter}` : '';
         const rows = db.prepare(`
-          SELECT DISTINCT e.id, e.type, e.name, e.properties, e.created_at, e.updated_at, e.source
+          SELECT DISTINCT e.id, e.type, e.name, e.properties, e.project_id, e.created_at, e.updated_at, e.source
           FROM entities e
           JOIN facts f ON e.id = f.subject_id
           JOIN facts_fts fts ON fts.rowid = f.rowid
-          WHERE facts_fts MATCH ?
+          WHERE facts_fts MATCH ?${projectClause}
           ORDER BY rank
           LIMIT 15
         `).all(ftsQuery) as any[];
@@ -141,12 +145,13 @@ async function retrieveContextForMessage(message: string): Promise<{
         }
       } catch {
         // FTS5 not available — fallback to LIKE
+        const projectClause = projectFilter ? ` AND e.${projectFilter}` : '';
         for (const term of terms) {
           const rows = db.prepare(`
-            SELECT DISTINCT e.id, e.type, e.name, e.properties, e.created_at, e.updated_at, e.source
+            SELECT DISTINCT e.id, e.type, e.name, e.properties, e.project_id, e.created_at, e.updated_at, e.source
             FROM entities e
             JOIN facts f ON e.id = f.subject_id
-            WHERE f.object LIKE ? OR f.predicate LIKE ?
+            WHERE (f.object LIKE ? OR f.predicate LIKE ?)${projectClause}
             LIMIT 10
           `).all(`%${term}%`, `%${term}%`) as any[];
           for (const row of rows) {

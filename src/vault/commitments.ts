@@ -20,6 +20,7 @@ export type Commitment = {
   retry_policy: RetryPolicy | null;
   created_from: string | null;
   assigned_to: string | null;
+  project_id: string | null;
   created_at: number;
   completed_at: number | null;
   result: string | null;
@@ -36,6 +37,7 @@ type CommitmentRow = {
   retry_policy: string | null;
   created_from: string | null;
   assigned_to: string | null;
+  project_id: string | null;
   created_at: number;
   completed_at: number | null;
   result: string | null;
@@ -64,6 +66,7 @@ export function createCommitment(
     retry_policy?: RetryPolicy;
     created_from?: string;
     assigned_to?: string;
+    project_id?: string | null;
   }
 ): Commitment {
   const db = getDb();
@@ -72,7 +75,7 @@ export function createCommitment(
   const priority = opts?.priority ?? 'normal';
 
   const stmt = db.prepare(
-    'INSERT INTO commitments (id, what, when_due, context, priority, status, retry_policy, created_from, assigned_to, created_at, completed_at, result) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    'INSERT INTO commitments (id, what, when_due, context, priority, status, retry_policy, created_from, assigned_to, project_id, created_at, completed_at, result) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   );
 
   stmt.run(
@@ -85,6 +88,7 @@ export function createCommitment(
     opts?.retry_policy ? JSON.stringify(opts.retry_policy) : null,
     opts?.created_from ?? null,
     opts?.assigned_to ?? null,
+    opts?.project_id ?? null,
     now,
     null,
     null
@@ -122,6 +126,7 @@ export function findCommitments(query: {
   status?: CommitmentStatus;
   priority?: CommitmentPriority;
   assigned_to?: string;
+  project_id?: string | null;
   overdue?: boolean;
 }): Commitment[] {
   const db = getDb();
@@ -141,6 +146,11 @@ export function findCommitments(query: {
   if (query.assigned_to) {
     conditions.push('assigned_to = ?');
     params.push(query.assigned_to);
+  }
+
+  if (query.project_id !== undefined) {
+    conditions.push('project_id IS ?');
+    params.push(query.project_id);
   }
 
   if (query.overdue) {

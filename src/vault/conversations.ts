@@ -15,6 +15,7 @@ export type Conversation = {
   id: string;
   agent_id: string | null;
   channel: string | null;
+  project_id: string | null;
   started_at: number;
   last_message_at: number;
   message_count: number;
@@ -25,6 +26,7 @@ type ConversationRow = {
   id: string;
   agent_id: string | null;
   channel: string | null;
+  project_id: string | null;
   started_at: number;
   last_message_at: number;
   message_count: number;
@@ -57,16 +59,28 @@ function parseMessage(row: MessageRow): ConversationMessage {
 /**
  * Get or create the active conversation for a channel.
  * Returns the most recent conversation for the channel, or creates a new one.
+ * If project_id is provided, scopes to that project.
  */
-export function getOrCreateConversation(channel: string): Conversation {
+export function getOrCreateConversation(channel: string, project_id?: string | null): Conversation {
   const db = getDb();
   const now = Date.now();
 
   // Look for a recent conversation on this channel (within last 4 hours)
+  // If project_id is provided, also match by project
   const cutoff = now - 4 * 60 * 60 * 1000;
-  const existing = db.prepare(
-    'SELECT * FROM conversations WHERE channel = ? AND last_message_at > ? ORDER BY last_message_at DESC LIMIT 1'
-  ).get(channel, cutoff) as ConversationRow | null;
+  let existing: ConversationRow | null = null;
+
+  if (project_id) {
+    existing = db.prepare(
+      'SELECT * FROM conversations WHERE channel = ? AND project_id = ? AND last_message_at > ? ORDER BY last_message_at DESC LIMIT 1'
+    ).get(channel, project_id, cutoff) as ConversationRow | null;
+  }
+
+  if (!existing) {
+    existing = db.prepare(
+      'SELECT * FROM conversations WHERE channel = ? AND project_id IS NULL AND last_message_at > ? ORDER BY last_message_at DESC LIMIT 1'
+    ).get(channel, cutoff) as ConversationRow | null;
+  }
 
   if (existing) {
     return parseConversation(existing);
@@ -75,13 +89,14 @@ export function getOrCreateConversation(channel: string): Conversation {
   // Create new conversation
   const id = generateId();
   db.prepare(
-    'INSERT INTO conversations (id, channel, started_at, last_message_at, message_count) VALUES (?, ?, ?, ?, 0)'
-  ).run(id, channel, now, now);
+    'INSERT INTO conversations (id, channel, project_id, started_at, last_message_at, message_count) VALUES (?, ?, ?, ?, ?, 0)'
+  ).run(id, channel, project_id ?? null, now, now);
 
   return {
     id,
     agent_id: null,
     channel,
+    project_id: project_id ?? null,
     started_at: now,
     last_message_at: now,
     message_count: 0,

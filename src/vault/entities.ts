@@ -13,6 +13,7 @@ export type Entity = {
   type: EntityType;
   name: string;
   properties: Record<string, unknown> | null;
+  project_id: string | null;
   created_at: number;
   updated_at: number;
   source: string | null;
@@ -23,6 +24,7 @@ type EntityRow = {
   type: EntityType;
   name: string;
   properties: string | null;
+  project_id: string | null;
   created_at: number;
   updated_at: number;
   source: string | null;
@@ -45,14 +47,15 @@ export function createEntity(
   type: EntityType,
   name: string,
   properties?: Record<string, unknown>,
-  source?: string
+  source?: string,
+  project_id?: string | null
 ): Entity {
   const db = getDb();
   const id = generateId();
   const now = Date.now();
 
   const stmt = db.prepare(
-    'INSERT INTO entities (id, type, name, properties, created_at, updated_at, source) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    'INSERT INTO entities (id, type, name, properties, project_id, created_at, updated_at, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
   );
 
   stmt.run(
@@ -60,16 +63,18 @@ export function createEntity(
     type,
     name,
     properties ? JSON.stringify(properties) : null,
+    project_id ?? null,
     now,
     now,
     source ?? null
   );
 
-  const entity = {
+  const entity: Entity = {
     id,
     type,
     name,
     properties: properties ?? null,
+    project_id: project_id ?? null,
     created_at: now,
     updated_at: now,
     source: source ?? null,
@@ -102,6 +107,7 @@ export function findEntities(query: {
   type?: EntityType;
   name?: string;
   nameContains?: string;
+  project_id?: string | null;
 }): Entity[] {
   const db = getDb();
   const conditions: string[] = [];
@@ -122,6 +128,11 @@ export function findEntities(query: {
     params.push(`%${escapeLike(query.nameContains)}%`);
   }
 
+  if (query.project_id !== undefined) {
+    conditions.push('project_id IS ?');
+    params.push(query.project_id);
+  }
+
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
   const stmt = db.prepare(`SELECT * FROM entities ${where} ORDER BY updated_at DESC`);
   const rows = stmt.all(...params as any[]) as EntityRow[];
@@ -134,7 +145,7 @@ export function findEntities(query: {
  */
 export function updateEntity(
   id: string,
-  updates: Partial<Pick<Entity, 'name' | 'properties' | 'type'>>
+  updates: Partial<Pick<Entity, 'name' | 'properties' | 'type' | 'project_id'>>
 ): Entity | null {
   const db = getDb();
   const entity = getEntity(id);
@@ -156,6 +167,11 @@ export function updateEntity(
   if (updates.properties !== undefined) {
     fields.push('properties = ?');
     params.push(JSON.stringify(updates.properties));
+  }
+
+  if (updates.project_id !== undefined) {
+    fields.push('project_id = ?');
+    params.push(updates.project_id);
   }
 
   if (fields.length === 0) return entity;
@@ -182,10 +198,16 @@ export function deleteEntity(id: string): boolean {
 }
 
 /**
- * Search entities by name using LIKE query
+ * Search entities by name using LIKE query.
+ * When project_id is provided, scope to that project.
  */
-export function searchEntitiesByName(query: string): Entity[] {
+export function searchEntitiesByName(query: string, project_id?: string | null): Entity[] {
   const db = getDb();
+  if (project_id) {
+    const stmt = db.prepare("SELECT * FROM entities WHERE name LIKE ? ESCAPE '\\' AND project_id = ? ORDER BY name");
+    const rows = stmt.all(`%${escapeLike(query)}%`, project_id) as EntityRow[];
+    return rows.map(parseEntity);
+  }
   const stmt = db.prepare("SELECT * FROM entities WHERE name LIKE ? ESCAPE '\\' ORDER BY name");
   const rows = stmt.all(`%${escapeLike(query)}%`) as EntityRow[];
   return rows.map(parseEntity);

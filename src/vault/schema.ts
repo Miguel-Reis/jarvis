@@ -107,6 +107,7 @@ function createTables(db: Database): void {
       type TEXT NOT NULL,
       name TEXT NOT NULL,
       properties TEXT,
+      project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL,
       source TEXT,
@@ -121,6 +122,13 @@ function createTables(db: Database): void {
   db.run(`
     CREATE INDEX IF NOT EXISTS idx_entities_name ON entities(name)
   `);
+
+  db.run(`
+    CREATE INDEX IF NOT EXISTS idx_entities_project ON entities(project_id)
+  `);
+
+  // Migration: add project_id to entities for existing databases
+  try { db.run('ALTER TABLE entities ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE SET NULL'); } catch {}
 
   // Facts table: atomic pieces of knowledge with confidence
   db.run(`
@@ -181,15 +189,16 @@ function createTables(db: Database): void {
       retry_policy TEXT,
       created_from TEXT,
       assigned_to TEXT,
+      project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
       created_at INTEGER NOT NULL,
       completed_at INTEGER,
       result TEXT,
       sort_order INTEGER DEFAULT 0
     )
-  `);
+  `);;
 
-  // Migration: add sort_order to existing databases
-  try { db.run('ALTER TABLE commitments ADD COLUMN sort_order INTEGER DEFAULT 0'); } catch {}
+  // Migration: add project_id to commitments for existing databases
+  try { db.run('ALTER TABLE commitments ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE SET NULL'); } catch {}
 
   db.run(`
     CREATE INDEX IF NOT EXISTS idx_commitments_status ON commitments(status)
@@ -201,6 +210,10 @@ function createTables(db: Database): void {
 
   db.run(`
     CREATE INDEX IF NOT EXISTS idx_commitments_sort ON commitments(status, sort_order)
+  `);
+
+  db.run(`
+    CREATE INDEX IF NOT EXISTS idx_commitments_project ON commitments(project_id)
   `);
 
   // Observations table: raw events from the observation layer
@@ -278,6 +291,7 @@ function createTables(db: Database): void {
       id TEXT PRIMARY KEY,
       agent_id TEXT,
       channel TEXT,
+      project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
       started_at INTEGER NOT NULL,
       last_message_at INTEGER NOT NULL,
       message_count INTEGER DEFAULT 0,
@@ -294,8 +308,14 @@ function createTables(db: Database): void {
     CREATE INDEX IF NOT EXISTS idx_conversations_channel ON conversations(channel)
   `);
 
+  db.run(`
+    CREATE INDEX IF NOT EXISTS idx_conversations_project ON conversations(project_id)
+  `);
+
   // Migration: add title column for threaded chat display
   try { db.run('ALTER TABLE conversations ADD COLUMN title TEXT'); } catch { /* column already exists */ }
+  // Migration: add project_id to conversations for existing databases
+  try { db.run('ALTER TABLE conversations ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE SET NULL'); } catch {}
 
   // Conversation messages table: individual chat messages
   db.run(`
@@ -608,6 +628,7 @@ function createTables(db: Database): void {
       title TEXT NOT NULL,
       description TEXT DEFAULT '',
       success_criteria TEXT DEFAULT '',
+      project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
       time_horizon TEXT NOT NULL DEFAULT 'quarterly'
         CHECK(time_horizon IN ('life', 'yearly', 'quarterly', 'monthly', 'weekly', 'daily')),
       score REAL NOT NULL DEFAULT 0.0,
@@ -637,6 +658,10 @@ function createTables(db: Database): void {
   db.run(`CREATE INDEX IF NOT EXISTS idx_goals_level ON goals(level)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_goals_health ON goals(health)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_goals_deadline ON goals(deadline)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_goals_project ON goals(project_id)`);
+
+  // Migration: add project_id to goals for existing databases
+  try { db.run('ALTER TABLE goals ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE SET NULL'); } catch {}
 
   db.run(`
     CREATE TABLE IF NOT EXISTS goal_progress (
