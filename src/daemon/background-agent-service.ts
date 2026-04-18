@@ -313,8 +313,15 @@ export class BackgroundAgentService implements Service, IAgentService {
   }
 
   private buildPromptContext(): PromptContext {
+    const osPlatform = process.platform;
+    const osName = osPlatform === 'win32' ? 'Windows' : osPlatform === 'darwin' ? 'macOS' : 'Linux';
     const context: PromptContext = {
       currentTime: new Date().toISOString(),
+      systemEnvironment: {
+        os: osName,
+        shell: osPlatform === 'win32' ? (process.env.COMSPEC ?? 'powershell.exe') : (process.env.SHELL ?? '/bin/bash'),
+        arch: process.arch,
+      },
     };
 
     // Get due commitments

@@ -16,6 +16,11 @@ export type PromptContext = {
   webappInstructions?: string;
   hasSidecars?: boolean;
   effectiveAuthorityLevel?: number;
+  systemEnvironment?: {
+    os: string;    // "Windows", "macOS", "Linux"
+    shell: string; // e.g. "powershell.exe", "/bin/bash"
+    arch: string;  // e.g. "x64", "arm64"
+  };
 };
 
 /**
@@ -125,8 +130,19 @@ export function buildSystemPrompt(role: RoleDefinition, context?: PromptContext)
     sections.push('');
   }
 
+  // System Environment — critical for correct shell command selection
+  if (context?.systemEnvironment) {
+    const env = context.systemEnvironment;
+    sections.push('# System Environment');
+    sections.push(`OS: ${env.os}`);
+    sections.push(`Shell: ${env.shell}`);
+    sections.push(`Architecture: ${env.arch}`);
+    sections.push('Use the correct commands and syntax for this OS and shell when running commands.');
+    sections.push('');
+  }
+
   // Tool Guide (static reference, sidecar section conditional)
-  sections.push(buildToolGuide(context?.hasSidecars ?? false));
+  sections.push(buildToolGuide(context?.hasSidecars ?? false, context?.systemEnvironment?.os, context?.systemEnvironment?.shell));
   sections.push('');
 
   // Webapp-specific browser instructions (loaded from DB on demand)

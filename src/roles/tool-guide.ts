@@ -9,7 +9,7 @@
  * doesn't waste tokens thinking about remote execution.
  */
 
-export function buildToolGuide(hasSidecars: boolean): string {
+export function buildToolGuide(hasSidecars: boolean, os?: string, shell?: string): string {
   const lines: string[] = [];
 
   lines.push('# Tool Guide');
@@ -38,6 +38,21 @@ export function buildToolGuide(hasSidecars: boolean): string {
   if (hasSidecars) lines.push('- `target`: Sidecar name or ID for remote execution');
   lines.push('- `cwd`: Working directory');
   lines.push('- `timeout`: Timeout in ms (default: 30000)');
+  if (os && shell) {
+    lines.push(`- **Current shell: \`${shell}\` on ${os}**`);
+    if (os === 'Windows') {
+      lines.push('  - Use PowerShell syntax: `Get-ChildItem`, `$env:VAR`, `Select-String`, `Remove-Item`, `Copy-Item`');
+      lines.push('  - Avoid Linux-only commands: `ls`, `grep`, `find`, `cat`, `rm`, `cp`');
+      lines.push('  - Path separator is `\\`, use `$env:USERPROFILE` not `~`');
+    } else {
+      lines.push('  - Use bash/sh syntax: `ls`, `grep`, `find`, `cat`, `rm`, `cp`, `$VAR`');
+      lines.push('  - Avoid Windows-only commands: `dir`, `Get-ChildItem`, `$env:VAR`');
+    }
+  } else {
+    lines.push('- **Cross-platform caution**: Check the OS in System Environment before using OS-specific commands.');
+    lines.push('  - Windows (PowerShell): `dir`, `Get-ChildItem`, `$env:VAR`, `Select-String`');
+    lines.push('  - Linux/macOS (bash): `ls`, `grep`, `find`, `$VAR`');
+  }
   lines.push('');
 
   lines.push('### read_file');

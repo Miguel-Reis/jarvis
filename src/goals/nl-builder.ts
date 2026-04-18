@@ -153,6 +153,7 @@ export class NLGoalBuilder {
         ? Date.now() + proposal.objective.deadline_days * 86400000
         : undefined,
       tags: proposal.objective.tags,
+      status: 'active',
     });
     created.push(objective);
 
@@ -165,6 +166,7 @@ export class NLGoalBuilder {
         deadline: kr.deadline_days
           ? Date.now() + kr.deadline_days * 86400000
           : undefined,
+        status: 'active',
       });
       created.push(keyResult);
 
@@ -178,6 +180,7 @@ export class NLGoalBuilder {
               deadline: ms.deadline_days
                 ? Date.now() + ms.deadline_days * 86400000
                 : undefined,
+              status: 'active',
             });
             created.push(milestone);
           }

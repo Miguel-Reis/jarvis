@@ -117,22 +117,23 @@ export function createManageGoalsTool(deps: GoalToolDeps): ToolDefinition {
               );
 
               const summary = goals.map(g =>
-                `${'  '.repeat(levelDepth(g.level))}${g.level}: ${g.title}`
+                `${'  '.repeat(levelDepth(g.level))}${g.level}: ${g.title} (${g.id})`
               ).join('\n');
 
-              return `Created ${goals.length} goals:\n${summary}`;
+              return `Created ${goals.length} goals (all active):\n${summary}`;
             } catch (err) {
               return `Error creating goal from NL: ${err instanceof Error ? err.message : err}`;
             }
           }
 
           if (title) {
-            // Quick creation
+            // Quick creation — use 'active' so the goal shows immediately in the UI
             const level = (params.level as string) ?? 'task';
             const goal = deps.goalService.createGoal(title, level as any, {
               parent_id: params.parent_id as string | undefined,
+              status: 'active',
             });
-            return `Created ${level}: "${goal.title}" (${goal.id})`;
+            return `Created ${level}: "${goal.title}" (${goal.id}) — status: active`;
           }
 
           return 'Error: Provide either "text" (NL description) or "title" (quick create).';

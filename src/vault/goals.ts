@@ -93,12 +93,15 @@ export function createGoal(
     now, now,
   );
 
-  const goal = getGoal(id)!;
+  const goal = getGoal(id);
+  if (!goal) throw new Error(`Goal ${id} not found after insert — possible DB constraint failure`);
 
-  // Index for semantic search — fire-and-forget
+  // Index for semantic search — fire-and-forget (log failures so they're visible in logs)
   const embeddingText = [title, opts?.description, opts?.success_criteria]
     .filter(Boolean).join(' ');
-  embedAndStore('goal', id, embeddingText).catch(() => {});
+  embedAndStore('goal', id, embeddingText).catch(err =>
+    console.error('[Goals] Embedding failed for goal', id, ':', err)
+  );
 
   return goal;
 }

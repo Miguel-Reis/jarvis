@@ -543,11 +543,18 @@ export class AgentService implements Service, IAgentService {
       if (mgr) hasSidecars = mgr.listSidecars().length > 0;
     } catch { /* ignore */ }
 
+    const osPlatform = process.platform;
+    const osName = osPlatform === 'win32' ? 'Windows' : osPlatform === 'darwin' ? 'macOS' : 'Linux';
     const context: PromptContext = {
       userName: this.config.user?.name || undefined,
       currentTime: new Date().toISOString(),
       availableSpecialists: this.specialistListText || undefined,
       hasSidecars,
+      systemEnvironment: {
+        os: osName,
+        shell: osPlatform === 'win32' ? (process.env.COMSPEC ?? 'powershell.exe') : (process.env.SHELL ?? '/bin/bash'),
+        arch: process.arch,
+      },
     };
 
     try {
