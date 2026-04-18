@@ -1130,7 +1130,14 @@ export function createApiRoutes(ctx: ApiContext): Record<string, unknown> {
             return json({ ok: true, message: 'Already up to date.', updated: false });
           }
 
-          await $`git pull --ff-only origin ${branch}`.quiet();
+          // Try fast-forward pull first; fall back to fetch + hard reset
+          // (handles diverged history, local uncommitted files, etc.)
+          try {
+            await $`git pull --ff-only origin ${branch}`.quiet();
+          } catch {
+            await $`git fetch origin ${branch}`.quiet();
+            await $`git reset --hard origin/${branch}`.quiet();
+          }
           await $`bun install --frozen-lockfile`.quiet().catch(() => $`bun install`.quiet());
 
           // Schedule restart after response is sent

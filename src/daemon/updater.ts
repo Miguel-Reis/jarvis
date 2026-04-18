@@ -84,9 +84,15 @@ export class Updater {
     console.log('[Updater] Pulling update...');
     try {
       await $`git pull --ff-only origin ${this.branch!}`.quiet();
-    } catch (err) {
-      console.error('[Updater] git pull failed (diverged history?) — skipping:', err instanceof Error ? err.message : err);
-      return;
+    } catch {
+      // Diverged or dirty — force-sync to remote
+      try {
+        await $`git fetch origin ${this.branch!}`.quiet();
+        await $`git reset --hard origin/${this.branch!}`.quiet();
+      } catch (err) {
+        console.error('[Updater] Could not sync to remote — skipping:', err instanceof Error ? err.message : err);
+        return;
+      }
     }
 
     // Re-install dependencies in case package.json changed

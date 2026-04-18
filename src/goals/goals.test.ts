@@ -23,7 +23,7 @@ describe('Vault — Goals', () => {
     expect(goal.description).toBe('Launch the product');
     expect(goal.success_criteria).toBe('Product live with 100 users');
     expect(goal.score).toBe(0.0);
-    expect(goal.status).toBe('draft');
+    expect(goal.status).toBe('active');
     expect(goal.health).toBe('on_track');
     expect(goal.tags).toEqual(['product', 'launch']);
     expect(goal.dependencies).toEqual([]);
@@ -167,7 +167,7 @@ describe('Vault — Goals', () => {
   // ── Status ────────────────────────────────────────────────────────
 
   test('updateGoalStatus to active sets started_at', () => {
-    const goal = vault.createGoal('Activating', 'objective');
+    const goal = vault.createGoal('Activating', 'objective', { status: 'draft' });
     expect(goal.started_at).toBeNull();
 
     const active = vault.updateGoalStatus(goal.id, 'active');

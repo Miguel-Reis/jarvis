@@ -255,7 +255,8 @@ export function GoalConstellation({ goals, onSelect, selectedGoalId }: Props) {
   // Pan & zoom state
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
-  const isPanning = useRef(false);
+  const [isPanning, setIsPanning] = useState(false);
+  const isPanningRef = useRef(false);
   const panStart = useRef({ x: 0, y: 0 });
   const panOrigin = useRef({ x: 0, y: 0 });
 
@@ -324,21 +325,23 @@ export function GoalConstellation({ goals, onSelect, selectedGoalId }: Props) {
     if (!isBackground && e.button === 0) return; // left-click on a node — don't pan
 
     e.preventDefault();
-    isPanning.current = true;
+    isPanningRef.current = true;
+    setIsPanning(true);
     panStart.current = { x: e.clientX, y: e.clientY };
     panOrigin.current = { ...pan };
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
   }, [pan]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    if (!isPanning.current) return;
+    if (!isPanningRef.current) return;
     const dx = e.clientX - panStart.current.x;
     const dy = e.clientY - panStart.current.y;
     setPan({ x: panOrigin.current.x + dx, y: panOrigin.current.y + dy });
   }, []);
 
   const handlePointerUp = useCallback(() => {
-    isPanning.current = false;
+    isPanningRef.current = false;
+    setIsPanning(false);
   }, []);
 
   if (goals.length === 0) {
@@ -360,7 +363,7 @@ export function GoalConstellation({ goals, onSelect, selectedGoalId }: Props) {
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerLeave={handlePointerUp}
-      style={{ cursor: isPanning.current ? "grabbing" : "grab" }}
+      style={{ cursor: isPanning ? "grabbing" : "grab" }}
     >
       {/* Pannable + zoomable layer */}
       <div className="goals-canvas-layer" style={transformStyle}>
@@ -388,7 +391,7 @@ export function GoalConstellation({ goals, onSelect, selectedGoalId }: Props) {
                 stroke={style.stroke}
                 strokeWidth={style.strokeWidth}
                 strokeDasharray={style.dashArray}
-                className="goals-dashScroll"
+                className="goals-connection"
               />
             );
           })}

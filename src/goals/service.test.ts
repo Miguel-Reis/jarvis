@@ -117,7 +117,7 @@ describe('GoalService', () => {
 
   test('getMetrics returns aggregated data', () => {
     service.createGoal('Active', 'task', { status: 'active' });
-    service.createGoal('Draft', 'task');
+    service.createGoal('Draft', 'task', { status: 'draft' });
 
     const metrics = service.getMetrics();
     expect(metrics.total).toBe(2);
