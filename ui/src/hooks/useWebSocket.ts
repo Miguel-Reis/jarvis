@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 
 export type MessageRole = "user" | "assistant" | "system";
 
@@ -134,6 +134,21 @@ export type SystemNotice = {
   level: "warning";
 };
 
+export type ApprovalRequest = {
+  id: string;
+  agent_id: string;
+  agent_name: string;
+  tool_name: string;
+  tool_arguments: string;
+  action_category: string;
+  urgency: "urgent" | "normal";
+  reason: string;
+  context: string;
+  status: "pending" | "approved" | "denied";
+  decided_at?: number;
+  decided_by?: string;
+};
+
 type SidecarEventPayload = {
   source?: string;
   event?: {
@@ -241,6 +256,7 @@ export function useWebSocket() {
   const [goalEvents, setGoalEvents] = useState<GoalEvent[]>([]);
   const [siteEvents, setSiteEvents] = useState<SiteEvent[]>([]);
   const [notices, setNotices] = useState<SystemNotice[]>([]);
+  const [pendingApprovals, setPendingApprovals] = useState<ApprovalRequest[]>([]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const streamBufferRef = useRef<string>("");
@@ -498,6 +514,7 @@ export function useWebSocket() {
         item?: ContentEvent["item"];
         event?: any;
         text?: string;
+        request?: ApprovalRequest;
       };
       if (payload.source === "task_update" && payload.task && payload.action) {
         const event: TaskEvent = {
@@ -527,6 +544,17 @@ export function useWebSocket() {
           setNotices((prev) => [noticeMessage.notice!, ...prev.filter((item) => item.text !== noticeMessage.notice!.text)].slice(0, 3));
         }
         setMessages((prev) => [...prev, noticeMessage]);
+      } else if (payload.source === "approval_request" && payload.request) {
+        const req = payload.request as ApprovalRequest;
+        if (req.status === "pending") {
+          setPendingApprovals((prev) => {
+            const exists = prev.some((r) => r.id === req.id);
+            return exists ? prev : [...prev, req];
+          });
+        } else {
+          // Remove resolved approvals
+          setPendingApprovals((prev) => prev.filter((r) => r.id !== req.id));
+        }
       } else if (payload.source === "assistant_message" && payload.text) {
         setMessages((prev) => [
           ...prev,
@@ -685,8 +713,13 @@ export function useWebSocket() {
     setNotices((prev) => prev.filter((notice) => notice.id !== noticeId));
   }, []);
 
+  const resolveApproval = useCallback((id: string) => {
+    setPendingApprovals((prev) => prev.filter((r) => r.id !== id));
+  }, []);
+
   return {
     messages, isConnected, sendMessage, taskEvents, contentEvents, agentActivity, workflowEvents, goalEvents, siteEvents, notices, dismissNotice,
+    pendingApprovals, resolveApproval,
     activeThreadId, selectThread, startNewThread,
     wsRef,
     voiceCallbacksRef,

@@ -1,6 +1,13 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useCallback } from "react";
 import type { ChatMessage } from "../../hooks/useWebSocket";
 import { MessageBubble } from "./MessageBubble";
+
+// System messages go to the SystemPanel, not the main chat
+const SYSTEM_SOURCES = new Set(["heartbeat", "proactive", "workflow", "error"]);
+
+export function isSystemMessage(msg: ChatMessage): boolean {
+  return msg.role === "system" && !!msg.source && SYSTEM_SOURCES.has(msg.source);
+}
 
 type Props = {
   messages: ChatMessage[];
@@ -30,12 +37,40 @@ function shouldShowTimeDivider(current: ChatMessage, previous: ChatMessage | und
 export function MessageList({ messages }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const userScrolledUpRef = useRef(false);
+  const lastMessageCountRef = useRef(0);
+
+  // Filter out system messages (they go to SystemPanel)
+  const chatMessages = messages.filter((m) => !isSystemMessage(m));
+
+  // Detect when user scrolls away from bottom
+  const handleScroll = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    userScrolledUpRef.current = distanceFromBottom > 100;
+  }, []);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    const el = containerRef.current;
+    if (!el) return;
+    el.addEventListener("scroll", handleScroll, { passive: true });
+    return () => el.removeEventListener("scroll", handleScroll);
+  }, [handleScroll]);
 
-  if (messages.length === 0) {
+  useEffect(() => {
+    if (userScrolledUpRef.current) return; // User scrolled up — don't jump
+
+    const isNewMessage = chatMessages.length > lastMessageCountRef.current;
+    lastMessageCountRef.current = chatMessages.length;
+
+    // Check if last message is streaming (use instant to avoid jump during streaming)
+    const lastMsg = chatMessages[chatMessages.length - 1];
+    const behavior: ScrollBehavior = isNewMessage && !lastMsg?.isStreaming ? "smooth" : "instant";
+    bottomRef.current?.scrollIntoView({ behavior });
+  }, [chatMessages]);
+
+  if (chatMessages.length === 0) {
     return (
       <div className="chat-empty">
         <div className="chat-empty-orb" />
@@ -50,9 +85,9 @@ export function MessageList({ messages }: Props) {
   return (
     <div ref={containerRef} className="chat-messages-scroll">
       <div className="chat-messages-center">
-        {messages.map((msg, i) => (
+        {chatMessages.map((msg, i) => (
           <React.Fragment key={msg.id}>
-            {shouldShowTimeDivider(msg, messages[i - 1]) && (
+            {shouldShowTimeDivider(msg, chatMessages[i - 1]) && (
               <div className="chat-time-divider">
                 <span className="chat-time-label">{formatTimeDivider(msg.timestamp)}</span>
               </div>

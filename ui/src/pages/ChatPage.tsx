@@ -1,10 +1,15 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import type { ChatMessage } from "../hooks/useWebSocket";
+import type { ApprovalRequest } from "../hooks/useWebSocket";
 import type { UseVoiceReturn } from "../hooks/useVoice";
-import { MessageList } from "../components/chat/MessageList";
+import { MessageList, isSystemMessage } from "../components/chat/MessageList";
 import { ChatInput } from "../components/chat/ChatInput";
 import { ThreadSidebar } from "../components/chat/ThreadSidebar";
+import { SystemPanel } from "../components/chat/SystemPanel";
+import { ApprovalBanner } from "../components/chat/ApprovalBanner";
 import "../styles/chat.css";
+
+const SYS_PANEL_KEY = "jarvis-sys-panel-collapsed";
 
 type ChatPageProps = {
   messages: ChatMessage[];
@@ -14,6 +19,8 @@ type ChatPageProps = {
   activeThreadId: string | null;
   onSelectThread: (threadId: string) => void;
   onNewThread: () => void;
+  pendingApprovals: ApprovalRequest[];
+  onResolveApproval: (id: string) => void;
 };
 
 export default function ChatPage({
@@ -24,8 +31,14 @@ export default function ChatPage({
   activeThreadId,
   onSelectThread,
   onNewThread,
+  pendingApprovals,
+  onResolveApproval,
 }: ChatPageProps) {
   const [disableImages, setDisableImages] = useState(false);
+  const [sysPanelCollapsed, setSysPanelCollapsed] = useState<boolean>(() => {
+    try { return localStorage.getItem(SYS_PANEL_KEY) === "1"; } catch { return false; }
+  });
+  const [sysPanelSeenCount, setSysPanelSeenCount] = useState(0);
 
   useEffect(() => {
     fetch('/api/config/llm')
@@ -35,6 +48,31 @@ export default function ChatPage({
       })
       .catch(() => {});
   }, []);
+
+  const systemMessageCount = useMemo(
+    () => messages.filter(isSystemMessage).length,
+    [messages]
+  );
+
+  // Track unseen system messages when panel is collapsed
+  const unseenCount = sysPanelCollapsed ? systemMessageCount - sysPanelSeenCount : 0;
+
+  const handleToggleSysPanel = useCallback(() => {
+    setSysPanelCollapsed((prev) => {
+      const next = !prev;
+      try { localStorage.setItem(SYS_PANEL_KEY, next ? "1" : "0"); } catch {}
+      if (!next) {
+        // Opening — mark all as seen
+        setSysPanelSeenCount(systemMessageCount);
+      }
+      return next;
+    });
+  }, [systemMessageCount]);
+
+  // When panel is open, keep seen count in sync
+  useEffect(() => {
+    if (!sysPanelCollapsed) setSysPanelSeenCount(systemMessageCount);
+  }, [systemMessageCount, sysPanelCollapsed]);
 
   const voiceStatus = voice
     ? voice.voiceState === "speaking" || voice.ttsAudioPlaying
@@ -57,26 +95,20 @@ export default function ChatPage({
 
       {/* Main chat area */}
       <div className="chat-page">
-        {/* Atmosphere — Three-layer living background */}
+        {/* Atmosphere */}
         <div className="chat-atmos">
-          {/* Layer 1: Aurora gradients */}
           <div className="chat-atmos-aurora" />
-
-          {/* Layer 2: Constellation dots + SVG connectors */}
           <div className="chat-atmos-constellation">
             <div className="chat-const-node drift" style={{ width: 3, height: 3, background: "rgba(139,92,246,0.15)", top: "12%", left: "18%", "--dur": "12s", "--delay": "0s" } as React.CSSProperties} />
             <div className="chat-const-node drift" style={{ width: 2, height: 2, background: "rgba(96,165,250,0.12)", top: "28%", left: "72%", "--dur": "15s", "--delay": "2s" } as React.CSSProperties} />
             <div className="chat-const-node drift" style={{ width: 2, height: 2, background: "rgba(52,211,153,0.10)", top: "65%", left: "35%", "--dur": "18s", "--delay": "4s" } as React.CSSProperties} />
             <div className="chat-const-node drift" style={{ width: 3, height: 3, background: "rgba(139,92,246,0.12)", top: "80%", left: "82%", "--dur": "14s", "--delay": "1s" } as React.CSSProperties} />
             <div className="chat-const-node" style={{ width: 2, height: 2, background: "rgba(96,165,250,0.08)", top: "45%", left: "55%" }} />
-
             <svg className="chat-const-svg">
               <line x1="18%" y1="12%" x2="72%" y2="28%" stroke="rgba(139,92,246,0.03)" strokeWidth="1" strokeDasharray="4 8" style={{ animation: "chat-flowPulse 4s linear infinite" }} />
               <line x1="35%" y1="65%" x2="82%" y2="80%" stroke="rgba(52,211,153,0.02)" strokeWidth="1" strokeDasharray="4 8" style={{ animation: "chat-flowPulse 5s linear infinite" }} />
             </svg>
           </div>
-
-          {/* Layer 3: Data stream particles */}
           <div className="chat-stream-channel" style={{ left: "22%" }}>
             <div className="chat-stream-particle" style={{ background: "rgba(139,92,246,0.18)", "--dur": "8s", "--delay": "0s" } as React.CSSProperties} />
             <div className="chat-stream-particle" style={{ background: "rgba(139,92,246,0.12)", "--dur": "12s", "--delay": "3s" } as React.CSSProperties} />
@@ -106,6 +138,9 @@ export default function ChatPage({
           </div>
         )}
 
+        {/* Approval banner — inline above messages */}
+        <ApprovalBanner approvals={pendingApprovals} onResolved={onResolveApproval} />
+
         {/* Messages */}
         <MessageList messages={messages} />
 
@@ -125,6 +160,14 @@ export default function ChatPage({
           } : undefined}
         />
       </div>
+
+      {/* System panel — collapsible right sidebar */}
+      <SystemPanel
+        messages={messages}
+        collapsed={sysPanelCollapsed}
+        onToggle={handleToggleSysPanel}
+        unseenCount={Math.max(0, unseenCount)}
+      />
     </div>
   );
 }

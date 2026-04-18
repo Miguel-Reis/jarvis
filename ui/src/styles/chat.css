@@ -1135,3 +1135,317 @@
 .thread-delete-btn:hover {
   color: #FB7185;
 }
+
+/* ================================================================
+   SYSTEM PANEL — Collapsible right sidebar for system messages
+   ================================================================ */
+
+.sys-panel {
+  display: flex;
+  flex-direction: column;
+  width: 240px;
+  flex-shrink: 0;
+  background: rgba(8,8,14,0.6);
+  border-left: 1px solid rgba(255,255,255,0.05);
+  transition: width 180ms ease;
+  overflow: hidden;
+  position: relative;
+}
+
+.sys-panel--collapsed {
+  width: 36px;
+}
+
+.sys-panel-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 10px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.35);
+  cursor: pointer;
+  font-size: 11px;
+  white-space: nowrap;
+  width: 100%;
+  transition: color 150ms;
+}
+
+.sys-panel-toggle:hover { color: rgba(255,255,255,0.65); }
+
+.sys-panel-toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.sys-panel-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: rgba(167,139,250,0.25);
+  color: #A78BFA;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.sys-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.sys-panel-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.35);
+  flex: 1;
+}
+
+.sys-panel-count {
+  font-size: 10px;
+  color: rgba(255,255,255,0.25);
+  background: rgba(255,255,255,0.06);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+.sys-panel-body {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.08) transparent;
+  padding: 8px 0;
+}
+
+.sys-panel-empty {
+  padding: 16px 12px;
+  font-size: 11px;
+  color: rgba(255,255,255,0.20);
+  text-align: center;
+}
+
+.sys-msg {
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  transition: background 120ms;
+}
+
+.sys-msg:hover { background: rgba(255,255,255,0.02); }
+
+.sys-msg--error { background: rgba(251,113,133,0.04); }
+
+.sys-msg-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.sys-msg-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.sys-msg-time {
+  font-size: 9px;
+  color: rgba(255,255,255,0.20);
+  margin-left: auto;
+}
+
+.sys-msg-body {
+  font-size: 11px;
+  color: rgba(255,255,255,0.55);
+  line-height: 1.45;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+/* ================================================================
+   APPROVAL BANNER — Inline approval requests above chat messages
+   ================================================================ */
+
+.approval-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 8px 16px 4px;
+  padding: 10px 12px;
+  background: rgba(251,191,36,0.06);
+  border: 1px solid rgba(251,191,36,0.2);
+  border-radius: 10px;
+  animation: approval-slideIn 200ms ease-out;
+}
+
+.approval-banner--urgent {
+  background: rgba(251,113,133,0.06);
+  border-color: rgba(251,113,133,0.25);
+}
+
+@keyframes approval-slideIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.approval-banner-icon {
+  margin-top: 1px;
+  color: #FBBF24;
+  flex-shrink: 0;
+}
+
+.approval-banner--urgent .approval-banner-icon { color: #FB7185; }
+
+.approval-banner-body { flex: 1; min-width: 0; }
+
+.approval-banner-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.85);
+  margin-bottom: 4px;
+}
+
+.approval-banner-counter {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 400;
+  color: rgba(255,255,255,0.35);
+  margin-left: auto;
+}
+
+.approval-counter-btn {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.35);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+}
+.approval-counter-btn:hover:not(:disabled) { color: rgba(255,255,255,0.7); }
+.approval-counter-btn:disabled { opacity: 0.3; cursor: default; }
+
+.approval-banner-tool {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 3px;
+}
+
+.approval-banner-code {
+  font-size: 11px;
+  font-family: monospace;
+  color: #FBBF24;
+  background: rgba(251,191,36,0.10);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.approval-banner--urgent .approval-banner-code {
+  color: #FB7185;
+  background: rgba(251,113,133,0.10);
+}
+
+.approval-banner-args {
+  font-size: 10px;
+  color: rgba(255,255,255,0.40);
+  word-break: break-all;
+}
+
+.approval-banner-reason {
+  font-size: 11px;
+  color: rgba(255,255,255,0.55);
+  margin-bottom: 4px;
+}
+
+.approval-banner-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.approval-banner-tag {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.35);
+}
+
+.approval-banner-tag--urgent {
+  background: rgba(251,113,133,0.15);
+  color: #FB7185;
+}
+
+.approval-banner-agent {
+  font-size: 10px;
+  color: rgba(255,255,255,0.25);
+  margin-left: auto;
+}
+
+.approval-banner-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.approval-btn {
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid;
+  transition: opacity 120ms;
+  min-width: 60px;
+  text-align: center;
+}
+
+.approval-btn:disabled { opacity: 0.4; cursor: default; }
+
+.approval-btn--deny {
+  background: rgba(251,113,133,0.10);
+  border-color: rgba(251,113,133,0.25);
+  color: #FB7185;
+}
+
+.approval-btn--deny:hover:not(:disabled) {
+  background: rgba(251,113,133,0.20);
+}
+
+.approval-btn--approve {
+  background: rgba(52,211,153,0.12);
+  border-color: rgba(52,211,153,0.25);
+  color: #34D399;
+}
+
+.approval-btn--approve:hover:not(:disabled) {
+  background: rgba(52,211,153,0.22);
+}
