@@ -54,7 +54,7 @@ export function translateCommand(unixCmd: string, ...args: string[]): string {
   if (os === 'windows') {
     switch (cmd) {
       case 'cat':    return `type ${rest}`;
-      case 'ls':     return `dir ${rest || '.}`;
+      case 'ls':     return `dir ${rest || '.'}`;
       case 'll':     return `dir /a ${rest || '.'}`;
       case 'la':     return `dir /a ${rest || '.'}`;
       case 'rm':     return `del /f /q ${rest}`;

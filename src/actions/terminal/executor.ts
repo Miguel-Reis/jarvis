@@ -1,4 +1,5 @@
 import { spawn } from 'bun';
+import { detectOS, translateCommand } from '../platform.ts';
 
 export type CommandResult = {
   stdout: string;
@@ -35,9 +36,20 @@ export class TerminalExecutor {
     const startTime = Date.now();
     const timeout = opts?.timeout ?? this.defaultTimeout;
 
+    // Auto-translate Unix commands to Windows equivalents when running on Windows PowerShell/CMD
+    let finalCommand = command;
+    const os = detectOS();
+    const isWindowsShell = this.shell.toLowerCase().includes('powershell') || this.shell.toLowerCase().includes('cmd');
+    if (os === 'windows' && isWindowsShell) {
+      finalCommand = translateCommand(command);
+      if (finalCommand !== command) {
+        console.log(`[Terminal] Auto-translated on Windows: "${command}" → "${finalCommand}"`);
+      }
+    }
+
     try {
       const proc = spawn({
-        cmd: this.buildCmd(command),
+        cmd: this.buildCmd(finalCommand),
         cwd: opts?.cwd,
         env: { ...process.env, ...opts?.env },
         stdout: 'pipe',
@@ -68,7 +80,7 @@ export class TerminalExecutor {
       const duration = Date.now() - startTime;
 
       if (duration >= timeout) {
-        throw new Error(`Command timed out after ${timeout}ms: ${command}`);
+        throw new Error(`Command timed out after ${timeout}ms: ${finalCommand}`);
       }
 
       throw new Error(`Command execution failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -76,8 +88,16 @@ export class TerminalExecutor {
   }
 
   async *stream(command: string, opts?: { cwd?: string; env?: Record<string, string> }): AsyncIterable<string> {
+    // Auto-translate Unix commands on Windows
+    let finalCommand = command;
+    const os = detectOS();
+    const isWindowsShell = this.shell.toLowerCase().includes('powershell') || this.shell.toLowerCase().includes('cmd');
+    if (os === 'windows' && isWindowsShell) {
+      finalCommand = translateCommand(command);
+    }
+
     const proc = spawn({
-      cmd: this.buildCmd(command),
+      cmd: this.buildCmd(finalCommand),
       cwd: opts?.cwd,
       env: { ...process.env, ...opts?.env },
       stdout: 'pipe',
