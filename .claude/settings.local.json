@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bun test *)",
+      "Bash(cat .husky/pre-commit)",
+      "Bash(cat .git/hooks/pre-commit)",
+      "Bash(git commit *)",
+      "Bash(git add *)",
+      "Bash(git restore *)",
+      "Bash(bunx tsc *)"
+    ]
+  }
+}
