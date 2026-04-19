@@ -245,19 +245,11 @@ export class CommitmentExecutor {
     }
   }
 
-  private async executeCommitment(state: ExecutionState): Promise<void> {
-    console.log(`[Executor] Executing: "${state.what}"`);
-
-    // Mark as active
-    try {
-      updateCommitmentStatus(state.commitmentId, 'active');
-    } catch { /* ignore */ }
-
-    // Build a mandatory execution prompt
-    const prompt = [
+  private buildExecutionPrompt(what: string): string {
+    return [
       '[COMMITMENT EXECUTION — MANDATORY]',
       '',
-      `You previously committed to: "${state.what}"`,
+      `You previously committed to: "${what}"`,
       'This commitment is now due. Execute it NOW using your tools.',
       '',
       'Instructions:',
@@ -268,8 +260,49 @@ export class CommitmentExecutor {
       '',
       'BEGIN EXECUTION.',
     ].join('\n');
+  }
 
-    const response = await this.agentService!.handleMessage(prompt, 'system');
+  private async executeCommitmentWithRetry(state: ExecutionState, policy: RetryPolicy): Promise<string | null> {
+    let lastErr: Error | null = null;
+    for (let attempt = 0; attempt <= policy.max_retries; attempt++) {
+      if (attempt > 0) {
+        const delay = policy.interval_ms * attempt;
+        console.warn(`[Executor] "${state.what}" failed (attempt ${attempt}), retrying in ${delay}ms`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+      try {
+        const response = await this.agentService!.handleMessage(this.buildExecutionPrompt(state.what), 'system');
+        return response;
+      } catch (err) {
+        lastErr = err instanceof Error ? err : new Error(String(err));
+        console.error(`[Executor] attempt ${attempt} failed for commitment "${state.what}":`, lastErr.message);
+      }
+    }
+    throw lastErr ?? new Error('Commitment execution failed');
+  }
+
+  private async executeCommitment(state: ExecutionState): Promise<void> {
+    console.log(`[Executor] Executing: "${state.what}"`);
+
+    try {
+      updateCommitmentStatus(state.commitmentId, 'active');
+    } catch (err) {
+      console.warn('[Executor] failed to set commitment active:', err);
+    }
+
+    const policy: RetryPolicy = { max_retries: 2, interval_ms: 5000, escalate_after: 3 };
+    let response: string | null = null;
+    try {
+      response = await this.executeCommitmentWithRetry(state, policy);
+    } catch (err) {
+      console.error(`[Executor] all retries exhausted for commitment "${state.what}":`, err);
+      try {
+        updateCommitmentStatus(state.commitmentId, 'failed', String(err));
+      } catch (e) {
+        console.warn('[Executor] failed to mark commitment as failed:', e);
+      }
+      return;
+    }
 
     // Broadcast the execution result
     this.broadcast?.({
@@ -295,10 +328,11 @@ export class CommitmentExecutor {
 
     // Desktop notification — let user know the task finished
     try {
-      const label = state.what.length > 80 ? state.what.slice(0, 77) + '...' : state.what;
-      sendDesktopNotification('JARVIS: Task completed', label);
-    } catch { /* non-critical */ }
+      sendDesktopNotification('Commitment executed', state.what);
+    } catch (err) {
+      console.warn('[Executor] Desktop notification failed:', err);
+    }
 
-    console.log(`[Executor] Completed: "${state.what}"`);
+    state.executed = true;
+    this.pending.delete(state.commitmentId);
   }
-}

@@ -25,6 +25,7 @@ export interface ToolExecutorDeps {
   auditTrail: AuditTrail | null;
   approvalManager: ApprovalManager | null;
   getPrimary: () => AgentInstance | undefined;
+  getTemporaryGrants: () => Map<string, ActionCategory[]>;
   onApprovalNeeded?: (request: ApprovalRequest) => void;
 }
 
@@ -40,7 +41,7 @@ export class ToolExecutor {
    * Returns a string for text-only results, or ContentBlock[] for multi-modal results.
    */
   async executeTool(toolCall: LLMToolCall): Promise<string | ContentBlock[]> {
-    const { toolRegistry, emergencyController, authorityEngine, auditTrail, approvalManager, getPrimary, onApprovalNeeded } = this.deps;
+    const { toolRegistry, emergencyController, authorityEngine, auditTrail, approvalManager, getPrimary, getTemporaryGrants, onApprovalNeeded } = this.deps;
 
     if (!toolRegistry) {
       return `Error: No tool registry configured`;
@@ -67,7 +68,7 @@ export class ToolExecutor {
         toolName: toolCall.name,
         toolCategory: tool?.category ?? 'unknown',
         actionCategory,
-        temporaryGrants: new Map(),
+        temporaryGrants: getTemporaryGrants(),
       });
 
       // Determine decision type for audit

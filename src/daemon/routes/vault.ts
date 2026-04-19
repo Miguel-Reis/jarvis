@@ -207,13 +207,9 @@ export function registerRoutes(_ctx: ApiContext) {
           const channels = ['websocket', 'telegram', 'discord'];
           const results: Record<string, unknown> = {};
           for (const ch of channels) {
-            const result = (require('../api-routes.ts') && require('../api-routes.ts').getRecentConversation)
-              || (require('../../vault/conversations.ts').getRecentConversation)
-              || (() => null)();
-            // Import lazily to avoid circular
             const { getRecentConversation } = require('../../vault/conversations.ts');
-            const result2 = getRecentConversation(ch);
-            if (result2) results[ch] = result2;
+            const result = getRecentConversation(ch);
+            if (result) results[ch] = result;
           }
           return json(results);
         }
