@@ -47,7 +47,11 @@ export function updateProject(id: string, fields: Partial<Pick<Project, 'name' |
 
 export function deleteProject(id: string): boolean {
   const changes = getDb().prepare('DELETE FROM projects WHERE id = ?').run(id) as { changes: number };
-  return changes.changes > 0;
+  if (changes.changes > 0) {
+    if (getActiveProjectId() === id) setActiveProjectId(null);
+    return true;
+  }
+  return false;
 }
 
 export function getActiveProjectId(): string | null {

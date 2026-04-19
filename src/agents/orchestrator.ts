@@ -609,10 +609,11 @@ export class AgentOrchestrator {
         result = result.slice(0, MAX_TOOL_RESULT_CHARS) + `\n... (truncated, was ${result.length} chars)`;
       }
 
-      // Surface tool-level errors clearly so the LLM doesn't treat them as success.
-      // Tools that fail but don't throw return strings starting with "Failed" or "Error".
-      if (/^(Error|Failed|Error executing)\b/i.test(result)) {
-        return `[TOOL_ERROR] ${toolCall.name} reported a failure:\n${result}\n\nDo NOT assume the action succeeded. Tell the user what went wrong and ask how to proceed.`;
+      // Surface operational failures so the LLM doesn't treat them as success.
+      // Only match "Error <verb>" or "Failed to" — not "Error: X is required" (validation)
+      // or "Error: X not found" (legitimate empty result), which the LLM handles fine.
+      if (/^Failed to /i.test(result) || /^Error (?!:)\S/i.test(result)) {
+        return `[TOOL_ERROR] ${toolCall.name} reported a failure:\n${result}\n\nDo not assume the action succeeded. Retry if the error is recoverable, otherwise report the issue to the user.`;
       }
 
       return result;
