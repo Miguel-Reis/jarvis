@@ -10,6 +10,7 @@ import { mkdirSync, existsSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { initDatabase, closeDb } from "../vault/schema.ts";
+import { runMigrations } from "../vault/migrations.ts";
 import { ServiceRegistry } from "./services.ts";
 import { HealthMonitor } from "./health.ts";
 import { loadConfig } from "../config/loader.ts";
@@ -272,6 +273,7 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
     // 2. Initialize database
     logWithTimestamp(`Initializing database at ${config.dbPath}`);
     initDatabase(config.dbPath);
+    await runMigrations();
     logWithTimestamp('Database initialized successfully');
 
     // 2a. Seed webapp templates (upserts, safe to run every startup)

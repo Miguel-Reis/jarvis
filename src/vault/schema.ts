@@ -127,8 +127,8 @@ function createTables(db: Database): void {
     CREATE INDEX IF NOT EXISTS idx_entities_project ON entities(project_id)
   `);
 
-  // Migration: add project_id to entities for existing databases
-  try { db.run('ALTER TABLE entities ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE SET NULL'); } catch {}
+  // Idempotent migration: add project_id column if not already present (SQLite 3.35+)
+  try { db.run('ALTER TABLE entities ADD COLUMN IF NOT EXISTS project_id TEXT'); } catch {}
 
   // Facts table: atomic pieces of knowledge with confidence
   db.run(`
@@ -197,8 +197,8 @@ function createTables(db: Database): void {
     )
   `);;
 
-  // Migration: add project_id to commitments for existing databases
-  try { db.run('ALTER TABLE commitments ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE SET NULL'); } catch {}
+  // Idempotent migration: add project_id column if not already present (SQLite 3.35+)
+  try { db.run('ALTER TABLE commitments ADD COLUMN IF NOT EXISTS project_id TEXT'); } catch {}
 
   db.run(`
     CREATE INDEX IF NOT EXISTS idx_commitments_status ON commitments(status)
@@ -314,8 +314,8 @@ function createTables(db: Database): void {
 
   // Migration: add title column for threaded chat display
   try { db.run('ALTER TABLE conversations ADD COLUMN title TEXT'); } catch { /* column already exists */ }
-  // Migration: add project_id to conversations for existing databases
-  try { db.run('ALTER TABLE conversations ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE SET NULL'); } catch {}
+  // Idempotent migration: add project_id column if not already present (SQLite 3.35+)
+  try { db.run('ALTER TABLE conversations ADD COLUMN IF NOT EXISTS project_id TEXT'); } catch {}
 
   // Conversation messages table: individual chat messages
   db.run(`
@@ -660,8 +660,8 @@ function createTables(db: Database): void {
   db.run(`CREATE INDEX IF NOT EXISTS idx_goals_deadline ON goals(deadline)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_goals_project ON goals(project_id)`);
 
-  // Migration: add project_id to goals for existing databases
-  try { db.run('ALTER TABLE goals ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE SET NULL'); } catch {}
+  // Idempotent migration: add project_id column if not already present (SQLite 3.35+)
+  try { db.run('ALTER TABLE goals ADD COLUMN IF NOT EXISTS project_id TEXT'); } catch {}
 
   db.run(`
     CREATE TABLE IF NOT EXISTS goal_progress (

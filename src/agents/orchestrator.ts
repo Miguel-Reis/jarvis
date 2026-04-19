@@ -12,6 +12,7 @@ import type { ApprovalManager, ApprovalRequest } from '../authority/approval.ts'
 import type { AuditTrail } from '../authority/audit.ts';
 import type { EmergencyController } from '../authority/emergency.ts';
 import { getActionForTool } from '../authority/tool-action-map.ts';
+import { ToolExecutor } from '../daemon/tool-executor.ts';
 
 const MAX_TOOL_ITERATIONS = 40;
 const MAX_TOOL_RESULT_CHARS = 6000; // Cap individual tool results to control context size
@@ -21,6 +22,7 @@ export class AgentOrchestrator {
   private hierarchy: AgentHierarchy;
   private llmManager: LLMManager | null;
   private toolRegistry: ToolRegistry | null;
+  private toolExecutor: ToolExecutor | null = null;
 
   // Authority engine components
   private authorityEngine: AuthorityEngine | null = null;
@@ -46,6 +48,15 @@ export class AgentOrchestrator {
 
   setToolRegistry(registry: ToolRegistry): void {
     this.toolRegistry = registry;
+    this.toolExecutor = new ToolExecutor({
+      toolRegistry: registry,
+      emergencyController: this.emergencyController,
+      authorityEngine: this.authorityEngine,
+      auditTrail: this.auditTrail,
+      approvalManager: this.approvalManager,
+      getPrimary: () => this.getPrimary(),
+      onApprovalNeeded: this.onApprovalNeeded ?? undefined,
+    });
   }
 
   getToolRegistry(): ToolRegistry | null {
@@ -68,10 +79,32 @@ export class AgentOrchestrator {
 
   setEmergencyController(controller: EmergencyController): void {
     this.emergencyController = controller;
+    if (this.toolExecutor) {
+      this.toolExecutor = new ToolExecutor({
+        toolRegistry: this.toolRegistry!,
+        emergencyController: controller,
+        authorityEngine: this.authorityEngine,
+        auditTrail: this.auditTrail,
+        approvalManager: this.approvalManager,
+        getPrimary: () => this.getPrimary(),
+        onApprovalNeeded: this.onApprovalNeeded ?? undefined,
+      });
+    }
   }
 
   setApprovalCallback(cb: (request: ApprovalRequest) => void): void {
     this.onApprovalNeeded = cb;
+    if (this.toolExecutor) {
+      this.toolExecutor = new ToolExecutor({
+        toolRegistry: this.toolRegistry!,
+        emergencyController: this.emergencyController,
+        authorityEngine: this.authorityEngine,
+        auditTrail: this.auditTrail,
+        approvalManager: this.approvalManager,
+        getPrimary: () => this.getPrimary(),
+        onApprovalNeeded: cb,
+      });
+    }
   }
 
   /**
@@ -254,7 +287,8 @@ export class AgentOrchestrator {
 
         // Execute each tool and add results
         for (const tc of llmResponse.tool_calls) {
-          const result = await this.executeTool(tc);
+          if (!this.toolExecutor) throw new Error('ToolExecutor not initialized');
+          const result = await this.toolExecutor.executeTool(tc);
           messages.push({
             role: 'tool',
             content: result,
@@ -434,7 +468,8 @@ export class AgentOrchestrator {
 
       // Execute each tool and add results
       for (const tc of toolCalls) {
-        const result = await this.executeTool(tc);
+        if (!this.toolExecutor) throw new Error('ToolExecutor not initialized');
+        const result = await this.toolExecutor.executeTool(tc);
         messages.push({
           role: 'tool',
           content: result,
