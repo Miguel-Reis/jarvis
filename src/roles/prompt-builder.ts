@@ -1,4 +1,5 @@
 import type { RoleDefinition } from './types.ts';
+import { detectOS, getPlatformDescription, getCommandAliases, translateCommand } from '../actions/platform.ts';
 import { buildToolGuide } from './tool-guide.ts';
 
 export type PromptContext = {
@@ -37,6 +38,23 @@ export function buildSystemPrompt(role: RoleDefinition, context?: PromptContext)
   // Identity
   sections.push('# Identity');
   sections.push(`You are ${role.name}. ${role.description}`);
+  sections.push('');
+
+  // Platform awareness
+  const os = detectOS();
+  sections.push('# Platform');
+  sections.push(`You are running on **${getPlatformDescription()}**.`);
+  if (os === 'windows') {
+    sections.push('Use Windows commands — NOT Unix commands.');
+    sections.push('Key equivalents: `cat` → `type`, `ls` → `dir`, `rm` → `del`, `grep` → `findstr`, `cp` → `copy`, `mv` → `move`, `mkdir` → `mkdir`, `pwd` → `cd`, `which` → `where`.');
+    sections.push('For multi-line commands use `&` to chain (e.g. `dir & type foo.txt`).');
+    sections.push('Paths use backslashes (e.g. `C:\Users\Miguel\Documents`).');
+    sections.push('For PowerShell commands, prepend `powershell -command "..."`.');
+  } else if (os === 'darwin') {
+    sections.push('You are on macOS. Standard Unix commands apply (ls, cat, grep, etc.).');
+  } else {
+    sections.push('You are on Linux. Standard Unix commands apply (ls, cat, grep, etc.).');
+  }
   sections.push('');
 
   // Responsibilities

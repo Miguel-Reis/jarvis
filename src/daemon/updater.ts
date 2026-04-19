@@ -101,7 +101,7 @@ export class Updater {
       await $`bun install --frozen-lockfile`.quiet();
     } catch {
       // Non-fatal — maybe lockfile changed, continue anyway
-      try { await $`bun install`.quiet(); } catch {}
+      try { await $`bun install`.quiet(); } catch (err) { console.warn('[Updater] bun install failed:', err instanceof Error ? err.message : String(err)); }
     }
 
     console.log(`[Updater] Update applied (${newSha.slice(0, 8)}). Restarting...`);
