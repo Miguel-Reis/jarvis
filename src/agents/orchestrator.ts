@@ -1,5 +1,6 @@
 import type { RoleDefinition } from '../roles/types.ts';
 import type { LLMMessage, LLMResponse, LLMStreamEvent, LLMToolCall, LLMTool, ContentBlock } from '../llm/provider.ts';
+import { pruneMessages } from '../vault/conversations.ts';
 import { LLMManager } from '../llm/manager.ts';
 import { AgentInstance } from './agent.ts';
 import { AgentHierarchy } from './hierarchy.ts';
@@ -481,6 +482,14 @@ export class AgentOrchestrator {
       finalText += '
 
 _Got it done. Let me know if you need anything else._';
+    }
+
+    // Safety prune: keep conversation bounded (fire-and-forget)
+    const convId = primary.conversationId;
+    if (convId) {
+      pruneMessages(convId).catch((err) =>
+        console.warn('[Orchestrator] prune error:', err instanceof Error ? err.message : err)
+      );
     }
 
     return finalText;

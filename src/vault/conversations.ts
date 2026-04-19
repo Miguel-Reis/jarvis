@@ -110,6 +110,9 @@ export function getOrCreateConversation(channel: string, project_id?: string | n
  * Add a message to a conversation.
  * Updates conversation metadata (last_message_at, message_count).
  */
+/** Default maximum messages to retain per conversation (older ones are pruned). */
+const DEFAULT_MAX_MESSAGES = 200;
+
 export function addMessage(
   conversationId: string,
   msg: { role: MessageRole; content: string; tool_calls?: unknown[] }
@@ -190,3 +193,36 @@ export function getRecentConversation(channel: string): {
 
   return { conversation, messages };
 }
+
+/**
+ * Prune old messages from a conversation, keeping the most recent `keep` messages.
+ * This is a safety guard against unbounded context growth.
+ *
+ * Call this periodically or when a conversation gets too long.
+ * Returns the number of messages deleted.
+ */
+export function pruneMessages(conversationId: string, keep: number = DEFAULT_MAX_MESSAGES): number {
+  const db = getDb();
+
+  // Count total messages
+  const total = (db.prepare(
+    'SELECT COUNT(*) as count FROM conversation_messages WHERE conversation_id = ?'
+  ).get(conversationId) as { count: number } | undefined)?.count ?? 0;
+
+  if (total <= keep) return 0;
+
+  // Find the cutoff timestamp — the Nth oldest message we want to keep
+  const cutoffRow = db.prepare(
+    'SELECT created_at FROM conversation_messages WHERE conversation_id = ? ORDER BY created_at ASC LIMIT 1 OFFSET ?'
+  ).get(conversationId, keep - 1) as { created_at: number } | undefined;
+
+  if (!cutoffRow) return 0;
+
+  const deleted = db.prepare(
+    'DELETE FROM conversation_messages WHERE conversation_id = ? AND created_at < ?'
+  ).run(conversationId, cutoffRow.created_at);
+
+  console.log(`[Vault] Pruned ${deleted.changes} old messages from conversation ${conversationId} (kept ${keep} recent)`);
+  return deleted.changes;
+}
+
