@@ -90,15 +90,22 @@ export class LiteLLMProvider implements LLMProvider {
   private baseUrl: string;
   private defaultModel: string;
   private apiKey: string | undefined;
+  private rateLimitConfig: {
+    maxRetries: number;
+    initialDelayMs: number;
+    maxDelayMs: number;
+  };
 
   constructor(
     baseUrl = 'http://localhost:4000',
     defaultModel = 'gpt-4o',
     apiKey?: string,
+    rateLimitConfig = { maxRetries: 3, initialDelayMs: 1000, maxDelayMs: 16000 },
   ) {
     this.baseUrl = baseUrl.replace(/\/$/, '');
     this.defaultModel = defaultModel;
     this.apiKey = apiKey || undefined;
+    this.rateLimitConfig = rateLimitConfig;
   }
 
   private get authHeaders(): Record<string, string> {
@@ -123,22 +130,40 @@ export class LiteLLMProvider implements LLMProvider {
       body.tool_choice = tool_choice || 'auto';
     }
 
-    const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...this.authHeaders,
-      },
-      body: JSON.stringify(body),
-    });
+    let lastErr: Error | null = null;
+    for (let attempt = 0; attempt <= this.rateLimitConfig.maxRetries; attempt++) {
+      if (attempt > 0) {
+        const delay = Math.min(
+          this.rateLimitConfig.initialDelayMs * 2 ** (attempt - 1),
+          this.rateLimitConfig.maxDelayMs,
+        );
+        console.warn(`[litellm] rate limit hit, retrying in ${delay}ms (attempt ${attempt}/${this.rateLimitConfig.maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
 
-    if (!response.ok) {
+      const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...this.authHeaders,
+        },
+        body: JSON.stringify(body),
+      });
+      if (response.ok) {
+        const data = await response.json() as LiteLLMResponse;
+        return this.convertResponse(data);
+      }
+
+      if (response.status === 429) {
+        lastErr = new Error(`LiteLLM rate limited (429)`);
+        continue;
+      }
+
       const errorText = await response.text();
       throw new Error(`LiteLLM API error (${response.status}): ${errorText}`);
     }
 
-    const data = await response.json() as LiteLLMResponse;
-    return this.convertResponse(data);
+    throw lastErr ?? new Error('LiteLLM rate limit: max retries exceeded');
   }
 
   async *stream(messages: LLMMessage[], options: LLMOptions = {}): AsyncIterable<LLMStreamEvent> {
@@ -160,20 +185,35 @@ export class LiteLLMProvider implements LLMProvider {
       body.tool_choice = tool_choice || 'auto';
     }
 
-    const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...this.authHeaders,
-      },
-      body: JSON.stringify(body),
-    });
+    let lastErr: Error | null = null;
+    for (let attempt = 0; attempt <= this.rateLimitConfig.maxRetries; attempt++) {
+      if (attempt > 0) {
+        const delay = Math.min(
+          this.rateLimitConfig.initialDelayMs * 2 ** (attempt - 1),
+          this.rateLimitConfig.maxDelayMs,
+        );
+        console.warn(`[litellm] stream rate limit hit, retrying in ${delay}ms (attempt ${attempt}/${this.rateLimitConfig.maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      yield { type: 'error', error: `LiteLLM API error (${response.status}): ${errorText}` };
-      return;
-    }
+      const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...this.authHeaders,
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        if (response.status === 429) {
+          lastErr = new Error(`LiteLLM rate limited (429)`);
+          continue;
+        }
+        const errorText = await response.text();
+        yield { type: 'error', error: `LiteLLM API error (${response.status}): ${errorText}` };
+        return;
+      }
 
     if (!response.body) {
       yield { type: 'error', error: 'No response body' };
