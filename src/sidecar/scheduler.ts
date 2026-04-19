@@ -96,10 +96,11 @@ export class EventScheduler {
 
         if (!queue || queue.length === 0) continue;
 
-        const item = queue.shift()!;
+        const item = queue[0]!;
         this.roundRobinIndex = (idx + 1) % count;
 
         await this.dispatch(item);
+        queue.shift(); // remove only after successful dispatch
 
         // Process one event per drain tick to stay non-blocking
         break;

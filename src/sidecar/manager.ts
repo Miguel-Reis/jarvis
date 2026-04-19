@@ -288,6 +288,7 @@ export class SidecarManager implements Service {
       .setSubject(`sidecar:${id}`)
       .setJti(tokenId)
       .setIssuedAt()
+      .setExpirationTime('90d')
       .sign(this.privateKey);
 
     // Store in database
@@ -323,7 +324,7 @@ export class SidecarManager implements Service {
     const db = getDb();
     const result = db.run('DELETE FROM sidecars WHERE id = ? AND status = ?', [id, 'enrolled']);
     if (result.changes > 0) {
-      this.connected.delete(id);
+      this.handleSidecarDisconnect(id);
       console.log(`[SidecarManager] Revoked and removed sidecar ${id}`);
       return true;
     }
@@ -408,11 +409,14 @@ export class SidecarManager implements Service {
 
       // Check sidecar is still enrolled
       if (!claims.sid || !this.isEnrolled(claims.sid)) {
+        console.warn(`[SidecarManager] Token rejected: sidecar ${claims.sid ?? 'unknown'} not enrolled or revoked`);
         return null;
       }
 
       return claims;
-    } catch {
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      console.warn(`[SidecarManager] Token validation failed: ${reason}`);
       return null;
     }
   }

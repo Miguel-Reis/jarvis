@@ -10,8 +10,8 @@ import type { RPCRequest, SidecarEvent } from './protocol.ts';
 import type { EventScheduler } from './scheduler.ts';
 import { validateEvent, validateBinaryFrame, MAX_JSON_SIZE } from './validator.ts';
 
-const HEARTBEAT_INTERVAL_MS = 30_000;
-const MAX_MISSED_PONGS = 3;
+const HEARTBEAT_INTERVAL_MS = 15_000;
+const MAX_MISSED_PONGS = 2;
 const BINARY_WAIT_TIMEOUT_MS = 5_000;
 
 interface PendingBinary {
@@ -28,6 +28,7 @@ export class SidecarConnection {
   private heartbeatTimer: Timer | null = null;
   private missedPongs = 0;
   private alive = true;
+  private closed = false;
   private onDisconnect: () => void;
 
   constructor(
@@ -53,6 +54,7 @@ export class SidecarConnection {
 
   /** Handle an inbound text (JSON) message */
   async handleMessage(raw: string): Promise<void> {
+    if (this.closed) return;
     if (raw.length > MAX_JSON_SIZE) {
       console.warn(`[SidecarConnection:${this.sidecarId}] Message too large: ${raw.length} bytes`);
       return;
@@ -150,6 +152,7 @@ export class SidecarConnection {
 
   /** Close connection and clean up */
   close(): void {
+    this.closed = true;
     this.stopHeartbeat();
 
     // Reject all pending binary waits
