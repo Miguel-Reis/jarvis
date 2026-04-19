@@ -58,6 +58,15 @@ type McpCallResult = {
   isError?: boolean;
 };
 
+/** Auto-reconnect configuration for MCP clients */
+const MCP_RECONNECT = {
+  maxRetries: 5,
+  baseDelayMs: 1_000,
+  maxDelayMs: 30_000,
+  /** Whether to keep trying forever after maxRetries (best-effort recovery) */
+  persist: false,
+};
+
 type PendingRpc = {
   resolve: (v: unknown) => void;
   reject: (e: Error) => void;
@@ -385,6 +394,51 @@ export class McpClient {
       .join('\n');
     if (result.isError) throw new Error(text || `MCP tool '${name}' returned error`);
     return text;
+  }
+
+  /**
+   * Continuously reconnect with exponential backoff until successfully connected.
+   * Runs in a loop, logs each attempt, and gives up after MCP_RECONNECT.maxRetries.
+   * Use this for MCP servers that should stay connected permanently.
+   *
+   * Fire-and-forget: call in a background task.
+   * Call reconnect() to manually force a reconnection.
+   */
+  autoReconnect(): void {
+    let attempt = 0;
+    const loop = async () => {
+      while (true) {
+        try {
+          await this.connect();
+          console.log(`[MCP:${this.serverName}] Connected successfully`);
+          attempt = 0;
+          // Poll every 5s to detect silent disconnections
+          while (this.transport.isReady()) {
+            await new Promise(r => setTimeout(r, 5_000));
+          }
+          console.warn(`[MCP:${this.serverName}] Connection lost, reconnecting...`);
+        } catch (err) {
+          attempt++;
+          const delay = Math.min(MCP_RECONNECT.baseDelayMs * Math.pow(2, Math.min(attempt - 1, 6)), MCP_RECONNECT.maxDelayMs);
+          console.warn(`[MCP:${this.serverName}] Connection failed (attempt ${attempt}): ${err instanceof Error ? err.message : String(err)}. Retrying in ${delay}ms...`);
+          if (attempt >= MCP_RECONNECT.maxRetries) {
+            console.error(`[MCP:${this.serverName}] Max reconnection attempts (${MCP_RECONNECT.maxRetries}) reached. Stopping auto-reconnect.`);
+            return;
+          }
+          await new Promise(r => setTimeout(r, delay));
+        }
+      }
+    };
+    loop().catch(err => {
+      console.error(`[MCP:${this.serverName}] AutoReconnect loop exited unexpectedly:`, err);
+    });
+  }
+
+  /** Manually trigger a reconnection (disconnect and reconnect once). */
+  async reconnect(): Promise<void> {
+    console.log(`[MCP:${this.serverName}] Manual reconnect...`);
+    this.disconnect();
+    await this.connect();
   }
 }
 
