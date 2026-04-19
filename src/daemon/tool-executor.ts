@@ -171,4 +171,38 @@ export class ToolExecutor {
     if (actionCategory === 'make_payment') return 'urgent';
     return 'normal';
   }
+
+  /**
+   * Verify that a tool action actually succeeded by checking the filesystem.
+   * Returns an error message string if verification fails, null if everything is fine.
+   * Returns null for tools where verification isn't applicable.
+   */
+  verifyToolEffect(toolName: string, args: Record<string, unknown>, result: unknown): string | null {
+    if (toolName === 'write_file') {
+      const filePath = args.path as string;
+      if (!filePath) return null;
+      try {
+        const { existsSync } = require('fs');
+        if (!existsSync(filePath)) {
+          return `[VERIFICATION FAILED] I claimed the file was written successfully, but it does not exist at "${filePath}". The write operation may have failed silently.`;
+        }
+      } catch {
+        return null;
+      }
+    }
+    if (toolName === 'create_directory' || toolName === 'mkdir') {
+      const dirPath = args.path as string;
+      if (!dirPath) return null;
+      try {
+        const { existsSync } = require('fs');
+        if (!existsSync(dirPath)) {
+          return `[VERIFICATION FAILED] I claimed the directory was created, but it does not exist at "${dirPath}".`;
+        }
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
 }
+

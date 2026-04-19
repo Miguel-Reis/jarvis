@@ -320,7 +320,8 @@ export class AgentOrchestrator {
           tool_calls: llmResponse.tool_calls,
         });
 
-        // Execute each tool and add results
+                // Execute each tool and add results
+        let verificationFailed = false;
         for (const tc of llmResponse.tool_calls) {
           if (!this.toolExecutor) throw new Error('ToolExecutor not initialized');
           const result = await this.toolExecutor.executeTool(tc);
@@ -332,17 +333,36 @@ export class AgentOrchestrator {
           const logStr = typeof result === 'string' ? result.slice(0, 100) : `[${result.length} content blocks]`;
           console.log(`[Orchestrator] Tool ${tc.name} → ${logStr}...`);
 
+          // Post-tool verification: check filesystem to confirm the action actually happened
+          if (this.toolExecutor.verifyToolEffect && typeof result === 'string' && !result.startsWith('[TOOL_ERROR]') && !result.startsWith('[AUTHORITY')) {
+            const verification = this.toolExecutor.verifyToolEffect(tc.name, tc.arguments, result);
+            if (verification) {
+              messages.push({ role: 'tool', content: verification, tool_call_id: tc.id });
+              console.warn(`[Orchestrator] Verification failed for ${tc.name}: ${verification}`);
+              verificationFailed = true;
+            }
+          }
+
           // Capture document markers so they appear in the final response
           if (typeof result === 'string') {
             const docMarker = result.match(/<!-- jarvis:document id="[^"]+" title="[^"]+" format="[^"]+" size="[^"]+" -->/);
             if (docMarker) {
-              finalText += '\n' + docMarker[0] + '\n';
+              finalText += '
+' + docMarker[0] + '
+';
             }
           }
         }
 
+        // If any tool failed verification, re-call LLM so it knows to correct
+        if (verificationFailed) {
+          messages.push({ role: 'user', content: 'IMPORTANT: A tool I executed failed verification — the filesystem shows the action did not actually complete. Revise my previous response and inform the user honestly about what went wrong.' });
+          continue;
+        }
+
         // Continue loop to re-call LLM with tool results
         continue;
+
       }
 
       // No tool calls — this is the final response
@@ -502,6 +522,7 @@ export class AgentOrchestrator {
       });
 
       // Execute each tool and add results
+      let streamVerificationFailed = false;
       for (const tc of toolCalls) {
         if (!this.toolExecutor) throw new Error('ToolExecutor not initialized');
         const result = await this.toolExecutor.executeTool(tc);
@@ -513,6 +534,16 @@ export class AgentOrchestrator {
         const logStr = typeof result === 'string' ? result.slice(0, 100) : `[${result.length} content blocks]`;
         console.log(`[Orchestrator] Tool ${tc.name} → ${logStr}...`);
 
+        // Post-tool verification: check filesystem to confirm the action actually happened
+        if (this.toolExecutor.verifyToolEffect && typeof result === 'string' && !result.startsWith('[TOOL_ERROR]') && !result.startsWith('[AUTHORITY')) {
+          const verification = this.toolExecutor.verifyToolEffect(tc.name, tc.arguments, result);
+          if (verification) {
+            messages.push({ role: 'tool', content: verification, tool_call_id: tc.id });
+            console.warn(`[Orchestrator] Verification failed for ${tc.name}: ${verification}`);
+            streamVerificationFailed = true;
+          }
+        }
+
         // Inject document markers into the stream so the UI can render download cards
         if (typeof result === 'string') {
           const docMarker = result.match(/<!-- jarvis:document id="[^"]+" title="[^"]+" format="[^"]+" size="[^"]+" -->/);
@@ -520,6 +551,12 @@ export class AgentOrchestrator {
             yield { type: 'text' as const, text: '\n' + docMarker[0] + '\n' };
           }
         }
+      }
+
+      // If any tool failed verification, re-call LLM so it corrects the response
+      if (streamVerificationFailed) {
+        messages.push({ role: 'user', content: 'IMPORTANT: A tool I executed failed verification — the filesystem shows the action did not actually complete. Revise my previous response and inform the user honestly about what went wrong.' });
+        continue;
       }
 
       // Continue loop — will stream next LLM response
