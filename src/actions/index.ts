@@ -1,3 +1,7 @@
+// Platform utilities
+export { detectOS, isWindows, isLinux, isMacOS, isWSL, translateCommand, getPlatformDescription, getCommandAliases } from './platform.ts';
+export type { OS } from './platform.ts';
+
 // App Control exports
 export { getAppController } from './app-control/interface.ts';
 export type { AppController, WindowInfo, UIElement } from './app-control/interface.ts';
