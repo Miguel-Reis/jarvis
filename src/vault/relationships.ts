@@ -123,13 +123,15 @@ export function getEntityRelationships(
       e1.created_at as from_entity_created_at,
       e1.updated_at as from_entity_updated_at,
       e1.source as from_entity_source,
+      e1.project_id as from_entity_project_id,
       e2.id as to_entity_id,
       e2.type as to_entity_type,
       e2.name as to_entity_name,
       e2.properties as to_entity_properties,
       e2.created_at as to_entity_created_at,
       e2.updated_at as to_entity_updated_at,
-      e2.source as to_entity_source
+      e2.source as to_entity_source,
+      e2.project_id as to_entity_project_id
     FROM relationships r
     JOIN entities e1 ON r.from_id = e1.id
     JOIN entities e2 ON r.to_id = e2.id
@@ -154,6 +156,7 @@ export function getEntityRelationships(
       created_at: row.from_entity_created_at,
       updated_at: row.from_entity_updated_at,
       source: row.from_entity_source,
+      project_id: row.from_entity_project_id ?? null,
     },
     to_entity: {
       id: row.to_entity_id,
@@ -163,6 +166,7 @@ export function getEntityRelationships(
       created_at: row.to_entity_created_at,
       updated_at: row.to_entity_updated_at,
       source: row.to_entity_source,
+      project_id: row.to_entity_project_id ?? null,
     },
   }));
 }

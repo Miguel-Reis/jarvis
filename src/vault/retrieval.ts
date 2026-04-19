@@ -92,6 +92,7 @@ async function retrieveContextForMessage(message: string): Promise<{
         created_at: number;
         updated_at: number;
         source: string | null;
+        project_id: string | null;
       } | null;
 
       if (row) {
@@ -100,8 +101,9 @@ async function retrieveContextForMessage(message: string): Promise<{
           properties: row.properties ? JSON.parse(row.properties) : null,
         });
       }
-    } catch {
+    } catch (err) {
       // DB not available — skip self-profile bootstrap
+      console.warn('[retrieval] self-profile bootstrap failed:', err);
     }
   }
 
@@ -143,8 +145,9 @@ async function retrieveContextForMessage(message: string): Promise<{
             });
           }
         }
-      } catch {
+      } catch (err) {
         // FTS5 not available — fallback to LIKE
+        console.warn('[retrieval] FTS5 unavailable, using LIKE fallback:', err);
         const projectClause = projectFilter ? ` AND e.${projectFilter}` : '';
         for (const term of terms) {
           const rows = db.prepare(`
@@ -165,8 +168,9 @@ async function retrieveContextForMessage(message: string): Promise<{
         }
       }
     }
-  } catch {
+  } catch (err) {
     // DB not available — return what we have from entity search
+    console.warn('[retrieval] entity search failed:', err);
   }
 
   // 2b. Conversation messages FTS5 (BM25) — find recent snippets matching the query
@@ -194,8 +198,9 @@ async function retrieveContextForMessage(message: string): Promise<{
           ORDER BY rank * (1.0 / (1.0 + (? - cm.created_at) / 86400000.0))
           LIMIT 8
         `).all(ftsQuery, now) as any[];
-      } catch {
+      } catch (err) {
         // FTS5 unavailable — LIKE fallback
+        console.warn('[retrieval] conv_messages FTS5 unavailable, using LIKE fallback:', err);
         const projectClause = projectFilter ? ` AND cm.conversation_id IN (SELECT id FROM conversations WHERE ${projectFilter})` : '';
         const pattern = `%${terms[0]}%`;
         rows = db.prepare(`
@@ -259,8 +264,9 @@ async function retrieveContextForMessage(message: string): Promise<{
         }
       }
     }
-  } catch {
+  } catch (err) {
     // Vector search is best-effort — never block keyword results
+    console.warn('[retrieval] vector search failed:', err);
   }
 
   // 4. Build full profiles for matched entities (cap at 10)

@@ -2312,7 +2312,9 @@ export function createApiRoutes(ctx: ApiContext): Record<string, unknown> {
           const parts = url.pathname.split('/');
           const id = parts[parts.length - 2];
           let triggerData: Record<string, unknown> = {};
-          try { triggerData = await req.json() as any; } catch {}
+          try { triggerData = await req.json() as any; } catch (err) {
+            console.warn('[api] failed to parse trigger data JSON:', err);
+          }
           const execution = await ctx.workflowEngine.execute(id!, 'manual', triggerData);
           return json(execution, 201);
         } catch (err) { return error(`${err}`); }

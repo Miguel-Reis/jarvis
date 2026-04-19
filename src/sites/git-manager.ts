@@ -30,12 +30,17 @@ export class GitManager {
       const proc = Bun.spawn(['git', 'config', '--global', 'user.name'], { stdout: 'pipe', stderr: 'pipe' });
       const out = await new Response(proc.stdout).text();
       if ((await proc.exited) === 0) name = out.trim() || null;
-    } catch {}
+    } catch (err) {
+      // Git config not available — skip (user may not have git configured)
+      if (err) console.warn('[git-manager] getAuthor: failed to read git config:', err);
+    }
     try {
       const proc = Bun.spawn(['git', 'config', '--global', 'user.email'], { stdout: 'pipe', stderr: 'pipe' });
       const out = await new Response(proc.stdout).text();
       if ((await proc.exited) === 0) email = out.trim() || null;
-    } catch {}
+    } catch (err) {
+      if (err) console.warn('[git-manager] getAuthor: failed to read git email:', err);
+    }
     return { name, email };
   }
 
