@@ -50,6 +50,11 @@ export class WebSocketService implements Service {
   /** Per-client rate limit: max 10 chat messages per 10-second window */
   private rateLimitMap = new Map<ServerWebSocket<unknown>, { count: number; windowStart: number }>();
 
+  /** Periodic ping interval to keep connections alive and detect dead clients */
+  private pingTimer: Timer | null = null;
+  private static PING_INTERVAL_MS = 25_000; // 25 seconds
+  private static CLIENT_TIMEOUT_MS = 90_000; // 90 seconds without pong → close
+
   constructor(port: number, agentService: AgentService) {
     this.port = port;
     this.agentService = agentService;
@@ -165,6 +170,12 @@ export class WebSocketService implements Service {
 
       // Start the server
       this.wsServer.start();
+
+      // Start proactive ping timer to keep connections alive
+      this.pingTimer = setInterval(() => {
+        this.pingAllClients();
+      }, WebSocketService.PING_INTERVAL_MS);
+
       this._status = 'running';
       console.log(`[WSService] Started on port ${this.port}`);
     } catch (error) {
@@ -175,6 +186,10 @@ export class WebSocketService implements Service {
 
   async stop(): Promise<void> {
     this._status = 'stopping';
+    if (this.pingTimer) {
+      clearInterval(this.pingTimer);
+      this.pingTimer = null;
+    }
     this.wsServer.stop();
     this._status = 'stopped';
     console.log('[WSService] Stopped');
@@ -182,6 +197,26 @@ export class WebSocketService implements Service {
 
   status(): ServiceStatus {
     return this._status;
+  }
+
+
+  /**
+   * Send a ping to all connected clients and track which respond.
+   * Clients that don't respond within CLIENT_TIMEOUT_MS are terminated.
+   */
+  private pingAllClients(): void {
+    if (!this.wsServer) return;
+    const clients = this.wsServer.clients;
+    if (clients.size === 0) return;
+
+    console.log(`[WSService] Ping to ${clients.size} client(s)`);
+    for (const ws of clients) {
+      try {
+        ws.send(JSON.stringify({ type: 'ping', timestamp: Date.now() }));
+      } catch (err) {
+        console.warn('[WSService] Failed to ping client:', err);
+      }
+    }
   }
 
   /**
