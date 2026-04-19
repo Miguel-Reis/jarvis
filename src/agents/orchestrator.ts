@@ -479,9 +479,7 @@ export class AgentOrchestrator {
     // Lightweight follow-up: check if this was a multi-step task that might need closure
     const hasToolCalls = messages.some(m => m.role === 'tool' && typeof m.content === 'string' && !m.content.startsWith('[TOOL_ERROR]'));
     if (hasToolCalls) {
-      finalText += '
-
-_Got it done. Let me know if you need anything else._';
+      finalText += '\n\n_Got it done. Let me know if you need anything else._';
     }
 
     // Safety prune: keep conversation bounded (fire-and-forget)
