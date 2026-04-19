@@ -23,6 +23,23 @@ const MAX_TOOL_RESULT_CHARS = 6000;
 /** Maximum tool-call loop iterations before aborting */
 const MAX_EXECUTE_ATTEMPTS = 3;
 
+/** Tool execution metrics for performance monitoring */
+export interface ToolMetrics {
+  totalCalls: number;
+  totalErrors: number;
+  totalRetries: number;
+  avgExecutionMs: number;
+  slowestTool: string;
+  mostUsedTool: string;
+}
+
+const _metrics = {
+  calls: new Map<string, number>(),
+  errors: new Map<string, number>(),
+  retries: new Map<string, number>(),
+  times: new Map<string, number[]>(),
+};
+
 /** Base delay for exponential backoff on transient errors (ms) */
 const RETRY_BASE_MS = 500;
 
@@ -183,10 +200,17 @@ export class ToolExecutor {
           return `[TOOL_ERROR] ${toolCall.name} reported a failure:\n${result}\n\nDo NOT assume the action succeeded. Tell the user what went wrong and ask how to proceed.`;
         }
 
+        // Record execution metrics
+        const toolTimes = _metrics.times.get(toolCall.name) ?? [];
+        toolTimes.push(executionTimeMs);
+        _metrics.times.set(toolCall.name, toolTimes);
+        _metrics.calls.set(toolCall.name, (_metrics.calls.get(toolCall.name) ?? 0) + 1);
+
         return result;
 
       } catch (err) {
         lastError = err instanceof Error ? err.message : String(err);
+        _metrics.errors.set(toolCall.name, (_metrics.errors.get(toolCall.name) ?? 0) + 1);
 
         // Attempt auto-recovery before surfacing the error
         const [recovered, recoveredResult] = await this.tryAutoRecover(toolCall.name, toolCall.arguments, lastError);
@@ -197,7 +221,8 @@ export class ToolExecutor {
         // Retry on transient errors
         if (isTransient(lastError) && attempt < MAX_EXECUTE_ATTEMPTS) {
           const delay = Math.min(RETRY_BASE_MS * Math.pow(2, attempt - 1), RETRY_MAX_MS);
-          console.warn(`[ToolExecutor] ${toolCall.name} threw transient error "${lastError}" (attempt ${attempt}), retrying in ${delay}ms...`);
+          _metrics.retries.set(toolCall.name, (_metrics.retries.get(toolCall.name) ?? 0) + 1);
+        console.warn(`[ToolExecutor] ${toolCall.name} threw transient error "${lastError}" (attempt ${attempt}), retrying in ${delay}ms...`);
           await sleep(delay);
           continue;
         }
@@ -338,6 +363,50 @@ Do NOT assume the action succeeded. Tell the user what went wrong and ask how to
     }
 
     return null;
+  }
+
+
+  /**
+   * Returns aggregated tool execution metrics for monitoring and debugging.
+   * Useful for identifying slow or frequently-failing tools.
+   */
+  static getMetrics(): ToolMetrics {
+    const toolNames = new Set([..._metrics.calls.keys(), ..._metrics.times.keys()]);
+    let mostUsedTool = '';
+    let mostUsedCount = 0;
+    let slowestTool = '';
+    let slowestAvg = 0;
+    let totalCalls = 0;
+    let totalErrors = 0;
+    let totalRetries = 0;
+
+    for (const name of toolNames) {
+      const calls = _metrics.calls.get(name) ?? 0;
+      totalCalls += calls;
+      if (calls > mostUsedCount) { mostUsedCount = calls; mostUsedTool = name; }
+
+      const errors = _metrics.errors.get(name) ?? 0;
+      totalErrors += errors;
+
+      const retries = _metrics.retries.get(name) ?? 0;
+      totalRetries += retries;
+
+      const times = _metrics.times.get(name) ?? [];
+      if (times.length > 0) {
+        const avg = times.reduce((a, b) => a + b, 0) / times.length;
+        if (avg > slowestAvg) { slowestAvg = avg; slowestTool = name; }
+      }
+    }
+
+    return { totalCalls, totalErrors, totalRetries, avgExecutionMs: slowestAvg, slowestTool, mostUsedTool };
+  }
+
+  /** Reset all metrics (e.g. on session restart) */
+  static resetMetrics(): void {
+    _metrics.calls.clear();
+    _metrics.errors.clear();
+    _metrics.retries.clear();
+    _metrics.times.clear();
   }
 
   /**
