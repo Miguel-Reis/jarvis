@@ -395,18 +395,9 @@ export async function getKnowledgeForMessage(message: string): Promise<string> {
  */
 export function getActiveGoalsSummary(): string {
   try {
-    const activeGoals = findGoals({ status: 'active' }) as Array<{
-      id: string;
-      parent_id: string | null;
-      level: string;
-      title: string;
-      score: number;
-      health: string;
-      deadline: number | null;
-    }>;
+    const activeGoals = findGoals({ status: 'active' });
 
     if (activeGoals.length === 0) return '';
-
     const levelOrder: Record<string, number> = {
       objective: 0,
       key_result: 1,
@@ -415,17 +406,13 @@ export function getActiveGoalsSummary(): string {
       daily_action: 4,
     };
 
-    // Sort by level then title
     activeGoals.sort((a, b) => {
       const la = levelOrder[a.level] ?? 5;
       const lb = levelOrder[b.level] ?? 5;
       if (la !== lb) return la - lb;
       return a.title.localeCompare(b.title);
     });
-
-    // Cap at 15 most important goals (objectives + key results + top milestones)
     const topGoals = activeGoals.slice(0, 15);
-
     const lines: string[] = [];
     for (const goal of topGoals) {
       const indent = '  '.repeat(levelOrder[goal.level] ?? 0);
@@ -443,7 +430,8 @@ export function getActiveGoalsSummary(): string {
     }
 
     return lines.join('\n');
-  } catch {
+  } catch (err) {
+    console.warn('[retrieval] getActiveGoalsSummary failed:', err);
     return '';
   }
 }
