@@ -16,6 +16,7 @@ import type { EmergencyController } from '../authority/emergency.ts';
 import { getActionForTool } from '../authority/tool-action-map.ts';
 import type { AgentInstance } from '../agents/agent.ts';
 import { detectOS, type OS } from '../actions/platform.ts';
+import { ToolRateLimiter } from './tool-rate-limiter.ts';
 
 const MAX_TOOL_RESULT_CHARS = 6000;
 
@@ -48,6 +49,7 @@ export interface ToolExecutorDeps {
   getPrimary: () => AgentInstance | undefined;
   getTemporaryGrants: () => Map<string, ActionCategory[]>;
   onApprovalNeeded?: (request: ApprovalRequest) => void;
+  toolRateLimiter?: ToolRateLimiter;
 }
 
 export class ToolExecutor {
@@ -136,6 +138,16 @@ export class ToolExecutor {
                `Reason: ${decision.reason}. ` +
                `The user will be notified and can approve or deny this action.`;
       }
+    }
+
+    // --- Rate limit check ---
+    if (this.deps.toolRateLimiter) {
+      const limit = this.deps.toolRateLimiter.check(toolCall.name);
+      if (!limit.allowed) {
+        const waitSec = limit.retryAfterMs ? Math.ceil(limit.retryAfterMs / 1000) : 60;
+        return `[RATE_LIMITED] Too many calls to "${toolCall.name}" (limit reached). Wait ${waitSec}s before retry.`;
+      }
+      this.deps.toolRateLimiter.record(toolCall.name);
     }
 
     // --- Normal execution with transient-error retry ---

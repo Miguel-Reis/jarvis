@@ -11,6 +11,7 @@ import type { ApprovalManager, ApprovalRequest } from '../authority/approval.ts'
 import type { AuditTrail } from '../authority/audit.ts';
 import type { EmergencyController } from '../authority/emergency.ts';
 import { ToolExecutor } from '../daemon/tool-executor.ts';
+import { ToolRateLimiter } from '../daemon/tool-rate-limiter.ts';
 const MAX_TOOL_RESULT_CHARS = 6000; // Cap individual tool results to control context size
 
 const DESTRUCTIVE_TOOLS = ['delete_file', 'delete_directory', 'run_command', 'drop_collection', 'format_disk'];
@@ -70,6 +71,7 @@ export class AgentOrchestrator {
   private llmManager: LLMManager | null;
   private toolRegistry: ToolRegistry | null;
   private toolExecutor: ToolExecutor | null = null;
+  private rateLimiter: ToolRateLimiter = new ToolRateLimiter();
 
   // Authority engine components
   private authorityEngine: AuthorityEngine | null = null;
@@ -104,6 +106,7 @@ export class AgentOrchestrator {
       getPrimary: () => this.getPrimary(),
       getTemporaryGrants: () => this.temporaryGrants,
       onApprovalNeeded: this.onApprovalNeeded ?? undefined,
+      toolRateLimiter: this.rateLimiter,
     });
   }
 
@@ -125,6 +128,7 @@ export class AgentOrchestrator {
         getPrimary: () => this.getPrimary(),
         getTemporaryGrants: () => this.temporaryGrants,
         onApprovalNeeded: this.onApprovalNeeded ?? undefined,
+        toolRateLimiter: this.rateLimiter,
       });
     }
   }
@@ -141,6 +145,7 @@ export class AgentOrchestrator {
         getPrimary: () => this.getPrimary(),
         getTemporaryGrants: () => this.temporaryGrants,
         onApprovalNeeded: this.onApprovalNeeded ?? undefined,
+        toolRateLimiter: this.rateLimiter,
       });
     }
   }
@@ -157,6 +162,7 @@ export class AgentOrchestrator {
         getPrimary: () => this.getPrimary(),
         getTemporaryGrants: () => this.temporaryGrants,
         onApprovalNeeded: this.onApprovalNeeded ?? undefined,
+        toolRateLimiter: this.rateLimiter,
       });
     }
   }
@@ -173,6 +179,7 @@ export class AgentOrchestrator {
         getPrimary: () => this.getPrimary(),
         getTemporaryGrants: () => this.temporaryGrants,
         onApprovalNeeded: this.onApprovalNeeded ?? undefined,
+        toolRateLimiter: this.rateLimiter,
       });
     }
   }
@@ -189,6 +196,7 @@ export class AgentOrchestrator {
         getPrimary: () => this.getPrimary(),
         getTemporaryGrants: () => this.temporaryGrants,
         onApprovalNeeded: cb,
+        toolRateLimiter: this.rateLimiter,
       });
     }
   }
