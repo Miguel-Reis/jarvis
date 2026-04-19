@@ -143,7 +143,16 @@ export class ToolExecutor {
 
       return result;
     } catch (err) {
-      return `[TOOL_ERROR] ${toolCall.name} threw an exception:\n${err instanceof Error ? err.message : String(err)}\n\nDo NOT assume the action succeeded. Tell the user what went wrong and ask how to proceed.`;
+      // Attempt auto-recovery before surfacing the error
+      const errMsg = err instanceof Error ? err.message : String(err);
+      const [recovered, recoveredResult] = await this.tryAutoRecover(toolCall.name, toolCall.arguments, errMsg);
+      if (recovered) {
+        return recoveredResult;
+      }
+      return `[TOOL_ERROR] ${toolCall.name} threw an exception:
+${errMsg}
+
+Do NOT assume the action succeeded. Tell the user what went wrong and ask how to proceed.`;
     }
   }
 
@@ -203,6 +212,34 @@ export class ToolExecutor {
       }
     }
     return null;
+  }
+
+  /**
+   * Attempt to auto-correct a failed tool by trying an alternate approach.
+   * Returns [success: boolean, result: string] tuple.
+   */
+  private tryAutoRecover(toolName: string, args: Record<string, unknown>, errorResult: string): Promise<[boolean, string]> {
+    // write_file with ENOENT → create parent dirs and retry
+    if (toolName === 'write_file' && /ENOENT|no such file or directory/i.test(errorResult)) {
+      const filePath = args.path as string;
+      if (filePath) {
+        try {
+          const { dirname } = require('path');
+          const dir = dirname(filePath);
+          const { mkdirSync, existsSync } = require('fs');
+          if (!existsSync(dir)) {
+            mkdirSync(dir, { recursive: true });
+            // Re-attempt the write
+            const { writeFileSync } = require('fs');
+            writeFileSync(filePath, args.content as string, 'utf-8');
+            return [true, `File written successfully: ${filePath} (auto-created parent directory)`];
+          }
+        } catch {
+          // recovery failed, keep original error
+        }
+      }
+    }
+    return [false, errorResult];
   }
 }
 

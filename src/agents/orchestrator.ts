@@ -12,6 +12,14 @@ import type { AuditTrail } from '../authority/audit.ts';
 import type { EmergencyController } from '../authority/emergency.ts';
 import { ToolExecutor } from '../daemon/tool-executor.ts';
 const MAX_TOOL_RESULT_CHARS = 6000; // Cap individual tool results to control context size
+
+const DESTRUCTIVE_TOOLS = ['delete_file', 'delete_directory', 'run_command', 'drop_collection', 'format_disk'];
+const CONFIRM_PREFIX = '[CONFIRM]';
+
+function toolIsDestructive(name: string): boolean {
+  return DESTRUCTIVE_TOOLS.includes(name);
+}
+
 const STALL_WINDOW = 3; // Identical consecutive iteration signatures → stall
 
 export class AgentOrchestrator {
@@ -324,14 +332,33 @@ export class AgentOrchestrator {
         let verificationFailed = false;
         for (const tc of llmResponse.tool_calls) {
           if (!this.toolExecutor) throw new Error('ToolExecutor not initialized');
-          const result = await this.toolExecutor.executeTool(tc);
+
+          // Confirm destructive actions before executing
+          if (toolIsDestructive(tc.name)) {
+            messages.push({
+              role: 'user',
+              content: `[SYSTEM] Before executing ${tc.name}(${JSON.stringify(tc.arguments)}), confirm: this is a destructive operation. Reply YES to proceed or NO to cancel.`,
+            });
+            // Re-call LLM to get confirmation
+            const confirmResponse = await this.llmManager.chat(messages, { tools: this.getLLMTools() });
+            const confirmed = /\byes?\b/i.test(confirmResponse.content);
+            messages.pop(); // remove system prompt
+            if (!confirmed) {
+              messages.push({ role: 'tool', content: `[CANCELLED] ${tc.name} was cancelled by the user.`, tool_call_id: tc.id });
+              continue;
+            }
+            messages.pop(); // remove user confirmation request
+            messages.push({ role: 'user', content: `YES` }); // re-inject the confirmation
+          }
+
+          console.log(`[Activity] Running tool: ${tc.name}`);
           messages.push({
             role: 'tool',
             content: result,
             tool_call_id: tc.id,
           });
           const logStr = typeof result === 'string' ? result.slice(0, 100) : `[${result.length} content blocks]`;
-          console.log(`[Orchestrator] Tool ${tc.name} → ${logStr}...`);
+          console.log(`[Activity] Tool ${tc.name} completed → ${logStr}...`);
 
           // Post-tool verification: check filesystem to confirm the action actually happened
           if (this.toolExecutor.verifyToolEffect && typeof result === 'string' && !result.startsWith('[TOOL_ERROR]') && !result.startsWith('[AUTHORITY')) {
@@ -378,6 +405,15 @@ export class AgentOrchestrator {
 
     // Add final response to persistent history
     primary.addMessage('assistant', finalText);
+
+    // Lightweight follow-up: check if this was a multi-step task that might need closure
+    const hasToolCalls = messages.some(m => m.role === 'tool' && typeof m.content === 'string' && !m.content.startsWith('[TOOL_ERROR]'));
+    if (hasToolCalls) {
+      finalText += '
+
+_Got it done. Let me know if you need anything else._';
+    }
+
     return finalText;
   }
 
@@ -544,9 +580,9 @@ export class AgentOrchestrator {
           }
         }
 
+        console.log(`[Activity] Tool ${tc.name} completed → ${typeof result === 'string' ? result.slice(0, 100) : `[${result.length} content blocks]`}...`);
+
         // Inject document markers into the stream so the UI can render download cards
-        if (typeof result === 'string') {
-          const docMarker = result.match(/<!-- jarvis:document id="[^"]+" title="[^"]+" format="[^"]+" size="[^"]+" -->/);
           if (docMarker) {
             yield { type: 'text' as const, text: '\n' + docMarker[0] + '\n' };
           }
