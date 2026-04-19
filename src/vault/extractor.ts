@@ -127,10 +127,14 @@ function parseDate(dateStr?: string): number | null {
 }
 
 /**
- * Validate entity type
+ * Validate entity type — map goal-specific types (milestone, task, objective, key_result)
+ * to 'concept' so they're stored rather than silently discarded.
  */
-function isValidEntityType(type: string): type is 'person' | 'project' | 'tool' | 'place' | 'concept' | 'event' {
-  return ['person', 'project', 'tool', 'place', 'concept', 'event'].includes(type);
+function normalizeEntityType(type: string): 'person' | 'project' | 'tool' | 'place' | 'concept' | 'event' {
+  const VALID = new Set(['person', 'project', 'tool', 'place', 'concept', 'event']);
+  if (VALID.has(type)) return type as 'person' | 'project' | 'tool' | 'place' | 'concept' | 'event';
+  // Goal hierarchy types and other unknown types fall back to concept
+  return 'concept';
 }
 
 /**
@@ -175,12 +179,8 @@ export async function extractAndStore(
 
       // Store entities
       for (const entityData of extraction.entities) {
-        const { name, type, properties } = entityData;
-
-        if (!isValidEntityType(type)) {
-          console.warn(`[Extractor] Invalid entity type: ${type}, skipping entity "${name}"`);
-          continue;
-        }
+        const { name, properties } = entityData;
+        const type = normalizeEntityType(entityData.type);
 
         const existing = findEntities({ name, type });
         if (existing.length > 0) {

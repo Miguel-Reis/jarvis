@@ -54,7 +54,7 @@ export class NLGoalBuilder {
       { role: 'system' as const, content: this.buildSystemPrompt() },
       {
         role: 'user' as const,
-        content: `Convert this into an OKR goal hierarchy:\n\n"${text}"${existingContext}\n\nRespond with ONLY valid JSON matching the GoalProposal schema. No explanation.`,
+        content: `Convert this into an OKR goal hierarchy:\n\n"${text}"${existingContext}\n\nRespond with ONLY valid JSON matching the GoalProposal schema. Do NOT add clarifying_questions — always produce the best OKR breakdown from what's given. No explanation, no markdown, only JSON.`,
       },
     ];
 

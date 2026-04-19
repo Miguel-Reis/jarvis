@@ -103,13 +103,9 @@ export function createManageGoalsTool(deps: GoalToolDeps): ToolDefinition {
           const title = params.title as string | undefined;
 
           if (text) {
-            // NL goal creation
+            // NL goal creation — always create, never block on clarifying questions
             try {
               const proposal = await deps.nlBuilder.parseGoal(text);
-
-              if (proposal.clarifying_questions?.length) {
-                return `Before creating this goal, I have some questions:\n${proposal.clarifying_questions.map((q, i) => `${i + 1}. ${q}`).join('\n')}\n\nPlease answer these and I'll create the full OKR breakdown.`;
-              }
 
               const goals = deps.nlBuilder.createFromProposal(
                 proposal,
@@ -120,7 +116,11 @@ export function createManageGoalsTool(deps: GoalToolDeps): ToolDefinition {
                 `${'  '.repeat(levelDepth(g.level))}${g.level}: ${g.title} (${g.id})`
               ).join('\n');
 
-              return `Created ${goals.length} goals (all active):\n${summary}`;
+              let result = `Created ${goals.length} goals (all active):\n${summary}`;
+              if (proposal.clarifying_questions?.length) {
+                result += `\n\nNote: You may want to refine these goals. Consider: ${proposal.clarifying_questions.join(' ')}`;
+              }
+              return result;
             } catch (err) {
               return `Error creating goal from NL: ${err instanceof Error ? err.message : err}`;
             }
