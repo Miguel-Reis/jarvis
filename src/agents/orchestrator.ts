@@ -352,6 +352,7 @@ export class AgentOrchestrator {
           }
 
           console.log(`[Activity] Running tool: ${tc.name}`);
+          const result = await this.toolExecutor.executeTool(tc);
           messages.push({
             role: 'tool',
             content: result,
@@ -567,9 +568,6 @@ _Got it done. Let me know if you need anything else._';
           content: result,
           tool_call_id: tc.id,
         });
-        const logStr = typeof result === 'string' ? result.slice(0, 100) : `[${result.length} content blocks]`;
-        console.log(`[Orchestrator] Tool ${tc.name} → ${logStr}...`);
-
         // Post-tool verification: check filesystem to confirm the action actually happened
         if (this.toolExecutor.verifyToolEffect && typeof result === 'string' && !result.startsWith('[TOOL_ERROR]') && !result.startsWith('[AUTHORITY')) {
           const verification = this.toolExecutor.verifyToolEffect(tc.name, tc.arguments, result);
@@ -580,9 +578,9 @@ _Got it done. Let me know if you need anything else._';
           }
         }
 
-        console.log(`[Activity] Tool ${tc.name} completed → ${typeof result === 'string' ? result.slice(0, 100) : `[${result.length} content blocks]`}...`);
-
         // Inject document markers into the stream so the UI can render download cards
+        if (typeof result === 'string') {
+          const docMarker = result.match(/<!-- jarvis:document id="[^"]+" title="[^"]+" format="[^"]+" size="[^"]+" -->/);
           if (docMarker) {
             yield { type: 'text' as const, text: '\n' + docMarker[0] + '\n' };
           }
