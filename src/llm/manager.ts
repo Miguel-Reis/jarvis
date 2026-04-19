@@ -15,6 +15,65 @@ export class LLMManager {
   private static readonly STREAM_CHUNK_TIMEOUT_MS = 60_000; // 60s between stream chunks
   private static readonly isDebugging = process.env.JARVIS_LOG_LEVEL === 'debug' || process.env.DEBUG_LLM === 'true';
 
+  /** Session-level token usage tracking */
+  private sessionTokenCount = 0;
+  private sessionTokenWarned80 = false;
+  private sessionTokenWarned95 = false;
+  private static readonly BUDGET_WARN_80 = 0.80;
+  private static readonly BUDGET_WARN_95 = 0.95;
+
+  /**
+   * Estimate token count from text using a simple word/char approximation.
+   * 1 token ≈ 4 chars in English, 2 chars in CJK. Conservative: use 3.
+   */
+  static estimateTokens(text: string): number {
+    if (!text) return 0;
+    return Math.ceil(text.length / 3);
+  }
+
+  /**
+   * Track tokens used in this session and emit warnings at 80% and 95% of
+   * the estimated context window for the current model.
+   * Call this after each LLM response.
+   */
+  trackUsage(inputTokens: number, outputTokens: number): void {
+    const total = inputTokens + outputTokens;
+    this.sessionTokenCount += total;
+
+    // Get current model context window
+    const primary = this.providers.get(this.primaryProvider);
+    if (!primary) return;
+
+    const modelName = (primary as unknown as { model?: string }).model ?? 'unknown';
+    const modelMeta = this._modelMetadata?.get(modelName);
+    const contextWindow = modelMeta?.contextWindow ?? 128_000;
+
+    const usage = this.sessionTokenCount / contextWindow;
+
+    if (usage >= 0.95 && !this.sessionTokenWarned95) {
+      this.sessionTokenWarned95 = true;
+      console.warn(`[LLMManager] ⚠️ Session token budget at 95% (${this.sessionTokenCount.toLocaleString()} tokens, ~${contextWindow.toLocaleString()} window). Consider summarising or clearing context.`);
+    } else if (usage >= 0.80 && !this.sessionTokenWarned80) {
+      this.sessionTokenWarned80 = true;
+      console.warn(`[LLMManager] ℹ️ Session token budget at 80% (${this.sessionTokenCount.toLocaleString()} tokens, ~${contextWindow.toLocaleString()} window). Consider trimming context if response quality degrades.`);
+    }
+  }
+
+  private _modelMetadata: Map<string, { contextWindow: number }> | null = null;
+  setModelMetadata(meta: Map<string, { contextWindow: number }>): void {
+    this._modelMetadata = meta;
+  }
+
+  getSessionTokenCount(): number {
+    return this.sessionTokenCount;
+  }
+
+  resetSessionBudget(): void {
+    this.sessionTokenCount = 0;
+    this.sessionTokenWarned80 = false;
+    this.sessionTokenWarned95 = false;
+  }
+
   /** Providers known to reject image content — images stripped on every call. */
   private noVisionProviders = new Set<string>();
 
@@ -253,7 +312,11 @@ export class LLMManager {
   }
 
   async chat(messages: LLMMessage[], options?: LLMOptions): Promise<LLMResponse> {
-    return this.chatWithOverride(messages, null, options);
+    const result = await this.chatWithOverride(messages, null, options);
+    const inputTokens = LLMManager.estimateTokens(messages.map(m => typeof m.content === 'string' ? m.content : JSON.stringify(m.content ?? '')).join(''));
+    const outputTokens = LLMManager.estimateTokens(result.content);
+    this.trackUsage(inputTokens, outputTokens);
+    return result;
   }
 
   async *stream(messages: LLMMessage[], options?: LLMOptions): AsyncIterable<LLMStreamEvent> {
