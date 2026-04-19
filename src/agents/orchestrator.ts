@@ -22,6 +22,49 @@ function toolIsDestructive(name: string): boolean {
 
 const STALL_WINDOW = 3; // Identical consecutive iteration signatures → stall
 
+/**
+ * Deduplicate tool calls by (name, args) key. If the same call appears
+ * multiple times, execute once and replicate the result for all duplicates.
+ */
+function dedupeToolCalls(toolCalls: LLMToolCall[]): {
+  unique: LLMToolCall[];
+  groups: Map<string, number[]>;
+} {
+  const groups = new Map<string, number[]>();
+  const unique: LLMToolCall[] = [];
+
+  for (let i = 0; i < toolCalls.length; i++) {
+    const tc = toolCalls[i];
+    const key = `${tc.name}::${JSON.stringify(tc.arguments)}`;
+    if (!groups.has(key)) {
+      groups.set(key, [i]);
+      unique.push(tc);
+    } else {
+      groups.get(key)!.push(i);
+    }
+  }
+
+  return { unique, groups };
+}
+
+/**
+ * Replicate deduplicated results back to the original call array shape.
+ */
+function expandToolResults(results: string[], groups: Map<string, number[]>): string[] {
+  // groups: key → [original_indices]
+  // results[i] corresponds to groups.keys()[i]
+  const expanded = new Array<string>(results.length);
+  let ri = 0;
+  for (const key of groups.keys()) {
+    const indices = groups.get(key)!;
+    for (const idx of indices) {
+      expanded[idx] = results[ri];
+    }
+    ri++;
+  }
+  return expanded;
+}
+
 export class AgentOrchestrator {
   private hierarchy: AgentHierarchy;
   private llmManager: LLMManager | null;
@@ -327,59 +370,76 @@ export class AgentOrchestrator {
           content: llmResponse.content,
           tool_calls: llmResponse.tool_calls,
         });
+                // Deduplicate tool calls: same (name, args) → execute once, replicate result
+                const { unique: uniqueCalls, groups } = dedupeToolCalls(llmResponse.tool_calls);
+                const deduplicated = uniqueCalls.length < llmResponse.tool_calls.length;
+                if (deduplicated) {
+                  console.log(`[Orchestrator] Deduplicated ${llmResponse.tool_calls.length} tool calls → ${uniqueCalls.length} unique`);
+                }
 
-                // Execute each tool and add results
-        let verificationFailed = false;
-        for (const tc of llmResponse.tool_calls) {
-          if (!this.toolExecutor) throw new Error('ToolExecutor not initialized');
+                let verificationFailed = false;
+                for (const tc of uniqueCalls) {
+                  if (!this.toolExecutor) throw new Error('ToolExecutor not initialized');
 
-          // Confirm destructive actions before executing
-          if (toolIsDestructive(tc.name)) {
-            messages.push({
-              role: 'user',
-              content: `[SYSTEM] Before executing ${tc.name}(${JSON.stringify(tc.arguments)}), confirm: this is a destructive operation. Reply YES to proceed or NO to cancel.`,
-            });
-            // Re-call LLM to get confirmation
-            const confirmResponse = await this.llmManager.chat(messages, { tools: this.getLLMTools() });
-            const confirmed = /\byes?\b/i.test(confirmResponse.content);
-            messages.pop(); // remove system prompt
-            if (!confirmed) {
-              messages.push({ role: 'tool', content: `[CANCELLED] ${tc.name} was cancelled by the user.`, tool_call_id: tc.id });
-              continue;
-            }
-            messages.pop(); // remove user confirmation request
-            messages.push({ role: 'user', content: `YES` }); // re-inject the confirmation
-          }
+                  // Confirm destructive actions before executing
+                  if (toolIsDestructive(tc.name)) {
+                    messages.push({
+                      role: 'user',
+                      content: `[SYSTEM] Before executing ${tc.name}(${JSON.stringify(tc.arguments)}), confirm: this is a destructive operation. Reply YES to proceed or NO to cancel.`,
+                    });
+                    const confirmResponse = await this.llmManager.chat(messages, { tools: this.getLLMTools() });
+                    const confirmed = /\byes?\b/i.test(confirmResponse.content);
+                    messages.pop(); // remove system prompt
+                    if (!confirmed) {
+                      const cancelMsg = `[CANCELLED] ${tc.name} was cancelled by the user.`;
+                      const expanded = expandToolResults([cancelMsg], groups);
+                      for (let i = 0; i < llmResponse.tool_calls.length; i++) {
+                        if (expanded[i]) {
+                          messages.push({ role: 'tool', content: expanded[i], tool_call_id: llmResponse.tool_calls[i].id });
+                        }
+                      }
+                      continue;
+                    }
+                    messages.pop();
+                    messages.push({ role: 'user', content: `YES` });
+                  }
 
-          console.log(`[Activity] Running tool: ${tc.name}`);
-          const result = await this.toolExecutor.executeTool(tc);
-          messages.push({
-            role: 'tool',
-            content: result,
-            tool_call_id: tc.id,
-          });
-          const logStr = typeof result === 'string' ? result.slice(0, 100) : `[${result.length} content blocks]`;
-          console.log(`[Activity] Tool ${tc.name} completed → ${logStr}...`);
+                  console.log(`[Activity] Running tool: ${tc.name}`);
+                  const result = await this.toolExecutor.executeTool(tc);
+                  const logStr = typeof result === 'string' ? result.slice(0, 100) : `[${result.length} content blocks]`;
+                  console.log(`[Activity] Tool ${tc.name} completed → ${logStr}...`);
 
-          // Post-tool verification: check filesystem to confirm the action actually happened
-          if (this.toolExecutor.verifyToolEffect && typeof result === 'string' && !result.startsWith('[TOOL_ERROR]') && !result.startsWith('[AUTHORITY')) {
-            const verification = this.toolExecutor.verifyToolEffect(tc.name, tc.arguments, result);
-            if (verification) {
-              messages.push({ role: 'tool', content: verification, tool_call_id: tc.id });
-              console.warn(`[Orchestrator] Verification failed for ${tc.name}: ${verification}`);
-              verificationFailed = true;
-            }
-          }
+                  // Expand result back to all original duplicate indices
+                  const expandedResult = expandToolResults([result], groups);
 
-          // Capture document markers so they appear in the final response
-          if (typeof result === 'string') {
-            const docMarker = result.match(/<!-- jarvis:document id="[^"]+" title="[^"]+" format="[^"]+" size="[^"]+" -->/);
-            if (docMarker) {
-              finalText += '
-' + docMarker[0] + '
-';
-            }
-          }
+                  // Post-tool verification
+                  if (this.toolExecutor.verifyToolEffect && typeof result === 'string' && !result.startsWith('[TOOL_ERROR]') && !result.startsWith('[AUTHORITY')) {
+                    const verification = this.toolExecutor.verifyToolEffect(tc.name, tc.arguments, result);
+                    if (verification) {
+                      const expandedVerify = expandToolResults([verification], groups);
+                      for (let i = 0; i < llmResponse.tool_calls.length; i++) {
+                        if (expandedVerify[i]) {
+                          messages.push({ role: 'tool', content: expandedVerify[i], tool_call_id: llmResponse.tool_calls[i].id });
+                        }
+                      }
+                      console.warn(`[Orchestrator] Verification failed for ${tc.name}: ${verification}`);
+                      verificationFailed = true;
+                    }
+                  }
+
+                  // Push results to the correct original tool_call ids
+                  for (let i = 0; i < llmResponse.tool_calls.length; i++) {
+                    if (expandedResult[i]) {
+                      messages.push({ role: 'tool', content: expandedResult[i], tool_call_id: llmResponse.tool_calls[i].id });
+                      if (typeof expandedResult[i] === 'string') {
+                        const docMarker = expandedResult[i].match(/<!-- jarvis:document id="[^"]+" title="[^"]+" format="[^"]+" size="[^"]+" -->/);
+                        if (docMarker) {
+                          finalText += '\n' + docMarker[0] + '\n';
+                        }
+                      }
+                    }
+                  }
+                }
         }
 
         // If any tool failed verification, re-call LLM so it knows to correct
@@ -557,32 +617,71 @@ _Got it done. Let me know if you need anything else._';
         content: accumulatedText,
         tool_calls: toolCalls,
       });
+      // Deduplicate tool calls: same (name, args) → execute once, replicate result
+      const { unique: uniqueStreamCalls, groups: streamGroups } = dedupeToolCalls(toolCalls);
+      if (uniqueStreamCalls.length < toolCalls.length) {
+        console.log(`[Orchestrator] Deduplicated ${toolCalls.length} tool calls → ${uniqueStreamCalls.length} unique`);
+      }
 
-      // Execute each tool and add results
       let streamVerificationFailed = false;
-      for (const tc of toolCalls) {
+      for (const tc of uniqueStreamCalls) {
         if (!this.toolExecutor) throw new Error('ToolExecutor not initialized');
+
+        // Confirm destructive actions before executing
+        if (toolIsDestructive(tc.name)) {
+          messages.push({
+            role: 'user',
+            content: `[SYSTEM] Before executing ${tc.name}(${JSON.stringify(tc.arguments)}), confirm: this is a destructive operation. Reply YES to proceed or NO to cancel.`,
+          });
+          const confirmResponse = await this.llmManager.chat(messages, { tools: this.getLLMTools() });
+          const confirmed = /\byes?\b/i.test(confirmResponse.content);
+          messages.pop();
+          if (!confirmed) {
+            const cancelMsg = `[CANCELLED] ${tc.name} was cancelled by the user.`;
+            const expanded = expandToolResults([cancelMsg], streamGroups);
+            for (let i = 0; i < toolCalls.length; i++) {
+              if (expanded[i]) {
+                messages.push({ role: 'tool', content: expanded[i], tool_call_id: toolCalls[i].id });
+              }
+            }
+            continue;
+          }
+          messages.pop();
+          messages.push({ role: 'user', content: `YES` });
+        }
+
+        console.log(`[Activity] Running tool: ${tc.name}`);
         const result = await this.toolExecutor.executeTool(tc);
-        messages.push({
-          role: 'tool',
-          content: result,
-          tool_call_id: tc.id,
-        });
-        // Post-tool verification: check filesystem to confirm the action actually happened
+        console.log(`[Activity] Tool ${tc.name} completed → ${typeof result === 'string' ? result.slice(0, 100) : `[${result.length} content blocks]`}...`);
+
+        // Expand result back to all original duplicate indices
+        const expandedResult = expandToolResults([result], streamGroups);
+
+        // Post-tool verification
         if (this.toolExecutor.verifyToolEffect && typeof result === 'string' && !result.startsWith('[TOOL_ERROR]') && !result.startsWith('[AUTHORITY')) {
           const verification = this.toolExecutor.verifyToolEffect(tc.name, tc.arguments, result);
           if (verification) {
-            messages.push({ role: 'tool', content: verification, tool_call_id: tc.id });
+            const expandedVerify = expandToolResults([verification], streamGroups);
+            for (let i = 0; i < toolCalls.length; i++) {
+              if (expandedVerify[i]) {
+                messages.push({ role: 'tool', content: expandedVerify[i], tool_call_id: toolCalls[i].id });
+              }
+            }
             console.warn(`[Orchestrator] Verification failed for ${tc.name}: ${verification}`);
             streamVerificationFailed = true;
           }
         }
 
-        // Inject document markers into the stream so the UI can render download cards
-        if (typeof result === 'string') {
-          const docMarker = result.match(/<!-- jarvis:document id="[^"]+" title="[^"]+" format="[^"]+" size="[^"]+" -->/);
-          if (docMarker) {
-            yield { type: 'text' as const, text: '\n' + docMarker[0] + '\n' };
+        // Push tool results and inject document markers into the stream
+        for (let i = 0; i < toolCalls.length; i++) {
+          if (expandedResult[i]) {
+            messages.push({ role: 'tool', content: expandedResult[i], tool_call_id: toolCalls[i].id });
+            if (typeof expandedResult[i] === 'string') {
+              const docMarker = expandedResult[i].match(/<!-- jarvis:document id="[^"]+" title="[^"]+" format="[^"]+" size="[^"]+" -->/);
+              if (docMarker) {
+                yield { type: 'text' as const, text: '\n' + docMarker[0] + '\n' };
+              }
+            }
           }
         }
       }
