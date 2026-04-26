@@ -64,7 +64,8 @@
       "Bash(grep -rn \"children.*icon\\\\|icon.*children\\\\|{...icon}\\\\|icon\\\\.\\\\.\\\\.\" src/ --include=\"*.tsx\")",
       "Bash(git stash *)",
       "Bash(grep -v \"^ ui$\")",
-      "Bash(grep -iv \"^[+-]\\\\s*$\")"
+      "Bash(grep -iv \"^[+-]\\\\s*$\")",
+      "Bash(git config *)"
     ]
   }
 }
