@@ -6,6 +6,9 @@
  */
 
 import type { OCRResult } from './types.ts';
+import { homedir } from 'node:os';
+import { mkdirSync } from 'node:fs';
+import path from 'node:path';
 
 export class OCREngine {
   private worker: any = null;
@@ -20,15 +23,29 @@ export class OCREngine {
     if (this.ready || this.initializing) return;
     this.initializing = true;
 
+    // Local cache dir — avoids repeated CDN fetches and prevents 403 crashes
+    const langPath = path.join(homedir(), '.jarvis', 'tessdata');
+    try { mkdirSync(langPath, { recursive: true }); } catch { /* exists */ }
+
     try {
       const Tesseract = await import('tesseract.js');
-      this.worker = await Tesseract.createWorker('eng');
+      this.worker = await Tesseract.createWorker('eng', 1, {
+        langPath,
+        cachePath: langPath,
+        // Prevent worker-thread errors from becoming uncaught exceptions
+        errorHandler: (err: unknown) => {
+          console.error('[OCREngine] Worker error:', err instanceof Error ? err.message : String(err));
+          this.ready = false;
+          this.initializing = false;
+          this.worker = null;
+        },
+      });
       this.ready = true;
       console.log('[OCREngine] Tesseract worker initialized (eng)');
     } catch (err) {
       this.initializing = false;
-      console.error('[OCREngine] Failed to initialize:', err instanceof Error ? err.message : err);
-      throw err;
+      console.warn('[OCREngine] Failed to initialize (OCR disabled):', err instanceof Error ? err.message : err);
+      // Do not rethrow — OCR is non-critical; awareness continues without it
     }
   }
 

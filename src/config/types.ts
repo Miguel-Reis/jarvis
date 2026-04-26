@@ -210,6 +210,10 @@ export type JarvisConfig = {
   heartbeat: HeartbeatConfig;
   active_role: string;  // role file name
   mcp_servers?: McpServerConfig[];
+  observers?: {
+    /** Directories to watch for file changes. Default: [] (no watching). */
+    file_watch_paths?: string[];
+  };
 };
 
 export const DEFAULT_CONFIG: JarvisConfig = {

@@ -15,7 +15,6 @@ import type { EventReactor } from './event-reactor.ts';
 import type { EventCoalescer } from './event-coalescer.ts';
 import type { GoogleAuth } from '../integrations/google-auth.ts';
 
-import { homedir } from 'node:os';
 import {
   ObserverManager,
   FileWatcher,
@@ -68,20 +67,24 @@ export class ObserverService implements Service {
   private reactor: EventReactor | null;
   private coalescer: EventCoalescer | null;
   private googleAuth: GoogleAuth | null;
+  private fileWatchPaths: string[];
 
-  constructor(reactor?: EventReactor, coalescer?: EventCoalescer, googleAuth?: GoogleAuth) {
+  constructor(reactor?: EventReactor, coalescer?: EventCoalescer, googleAuth?: GoogleAuth, fileWatchPaths: string[] = []) {
     this.manager = new ObserverManager();
     this.reactor = reactor ?? null;
     this.coalescer = coalescer ?? null;
     this.googleAuth = googleAuth ?? null;
+    this.fileWatchPaths = fileWatchPaths;
   }
 
   async start(): Promise<void> {
     this._status = 'starting';
 
     try {
-      // Register core observers
-      this.manager.register(new FileWatcher([homedir()]));
+      // Register file watcher only if paths are configured
+      if (this.fileWatchPaths.length > 0) {
+        this.manager.register(new FileWatcher(this.fileWatchPaths));
+      }
       this.manager.register(new ClipboardMonitor());
       this.manager.register(new ProcessMonitor());
 
