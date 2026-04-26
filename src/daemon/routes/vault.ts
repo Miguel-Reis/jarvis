@@ -10,7 +10,10 @@ import { findFacts, createFact, deleteFact } from '../../vault/facts.ts';
 import { findRelationships, getEntityRelationships } from '../../vault/relationships.ts';
 import { getDb } from '../../vault/schema.ts';
 import type { EntityType } from '../../vault/entities.ts';
-import { escapeLike } from 'node:path';
+
+function escapeLike(s: string): string {
+  return s.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+}
 
 export function registerRoutes(_ctx: ApiContext) {
   return {

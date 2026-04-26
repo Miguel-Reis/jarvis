@@ -14,7 +14,6 @@ import { getDueCommitments, getUpcoming, updateCommitmentStatus } from '../vault
 import type { Commitment } from '../vault/commitments.ts';
 import type { IAgentService } from './agent-service-interface.ts';
 import type { WSMessage } from '../comms/websocket.ts';
-import { sendDesktopNotification } from '../comms/desktop-notify.ts';
 
 export type Aggressiveness = 'passive' | 'moderate' | 'aggressive';
 
@@ -245,11 +244,19 @@ export class CommitmentExecutor {
     }
   }
 
-  private buildExecutionPrompt(what: string): string {
-    return [
+  private async executeCommitment(state: ExecutionState): Promise<void> {
+    console.log(`[Executor] Executing: "${state.what}"`);
+
+    // Mark as active
+    try {
+      updateCommitmentStatus(state.commitmentId, 'active');
+    } catch { /* ignore */ }
+
+    // Build a mandatory execution prompt
+    const prompt = [
       '[COMMITMENT EXECUTION — MANDATORY]',
       '',
-      `You previously committed to: "${what}"`,
+      `You previously committed to: "${state.what}"`,
       'This commitment is now due. Execute it NOW using your tools.',
       '',
       'Instructions:',
@@ -260,49 +267,8 @@ export class CommitmentExecutor {
       '',
       'BEGIN EXECUTION.',
     ].join('\n');
-  }
 
-  private async executeCommitmentWithRetry(state: ExecutionState, policy: RetryPolicy): Promise<string | null> {
-    let lastErr: Error | null = null;
-    for (let attempt = 0; attempt <= policy.max_retries; attempt++) {
-      if (attempt > 0) {
-        const delay = policy.interval_ms * attempt;
-        console.warn(`[Executor] "${state.what}" failed (attempt ${attempt}), retrying in ${delay}ms`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-      try {
-        const response = await this.agentService!.handleMessage(this.buildExecutionPrompt(state.what), 'system');
-        return response;
-      } catch (err) {
-        lastErr = err instanceof Error ? err : new Error(String(err));
-        console.error(`[Executor] attempt ${attempt} failed for commitment "${state.what}":`, lastErr.message);
-      }
-    }
-    throw lastErr ?? new Error('Commitment execution failed');
-  }
-
-  private async executeCommitment(state: ExecutionState): Promise<void> {
-    console.log(`[Executor] Executing: "${state.what}"`);
-
-    try {
-      updateCommitmentStatus(state.commitmentId, 'active');
-    } catch (err) {
-      console.warn('[Executor] failed to set commitment active:', err);
-    }
-
-    const policy: RetryPolicy = { max_retries: 2, interval_ms: 5000, escalate_after: 3 };
-    let response: string | null = null;
-    try {
-      response = await this.executeCommitmentWithRetry(state, policy);
-    } catch (err) {
-      console.error(`[Executor] all retries exhausted for commitment "${state.what}":`, err);
-      try {
-        updateCommitmentStatus(state.commitmentId, 'failed', String(err));
-      } catch (e) {
-        console.warn('[Executor] failed to mark commitment as failed:', e);
-      }
-      return;
-    }
+    const response = await this.agentService!.handleMessage(prompt, 'system');
 
     // Broadcast the execution result
     this.broadcast?.({
@@ -326,13 +292,6 @@ export class CommitmentExecutor {
       console.error('[Executor] Failed to update commitment status:', err);
     }
 
-    // Desktop notification — let user know the task finished
-    try {
-      sendDesktopNotification('Commitment executed', state.what);
-    } catch (err) {
-      console.warn('[Executor] Desktop notification failed:', err);
-    }
-
-    state.executed = true;
-    this.pending.delete(state.commitmentId);
+    console.log(`[Executor] Completed: "${state.what}"`);
   }
+}

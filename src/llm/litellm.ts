@@ -308,6 +308,7 @@ export class LiteLLMProvider implements LLMProvider {
       yield { type: 'error', error: `Stream error: ${err}` };
     }
   }
+}
 
   async supportsVision(): Promise<boolean> {
     // LiteLLM is a proxy — it passes images through to the underlying model.
