@@ -161,6 +161,10 @@ export class BackgroundAgentService implements Service, IAgentService {
    * Handle a reactive event message (from EventReactor / CommitmentExecutor).
    */
   async handleMessage(text: string, channel: string = 'system'): Promise<string> {
+    if (!this.role) {
+      throw new Error('Background agent not initialized — call start() first');
+    }
+
     // Wait if busy — event reactor already has its own queue, so this is a safety net
     const waitStart = Date.now();
     while (this.busy && Date.now() - waitStart < 60_000) {

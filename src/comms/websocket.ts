@@ -442,6 +442,15 @@ export class WebSocketServer {
                 await self.handler.onBinaryMessage(message, ws);
               } catch (error) {
                 console.error('[WebSocketServer] Error processing binary message:', error);
+                const errorMsg: WSMessage = {
+                  type: 'error',
+                  payload: {
+                    message: error instanceof Error ? error.message : 'Voice processing failed',
+                    source: 'websocket_server',
+                  },
+                  timestamp: Date.now(),
+                };
+                ws.send(JSON.stringify(errorMsg));
               }
             }
             return;

@@ -33,13 +33,24 @@ type ReactionRecord = {
   timestamp: number;
 };
 
+// Simple LRU cache for deduplication with TTL
+type HashEntry = {
+  timestamp: number;
+  previous: string | null;
+  next: string | null;
+};
+
 export type ReactionCallback = (text: string, priority: 'urgent' | 'normal') => void;
 
 export class EventReactor {
   private agentService: IAgentService | null = null;
   private config: ReactorConfig;
   private reactionLog: ReactionRecord[] = [];
-  private seenHashes = new Set<string>();
+  // LRU-style doubly linked list for efficient O(1) access and pruning
+  private seenHashes = new Map<string, HashEntry>();
+  private seenHashHead: string | null = null;  // Most recently used
+  private seenHashTail: string | null = null;  // Least recently used
+  private maxHashes = 500;  // Max entries before pruning
   private onReaction: ReactionCallback | null = null;
   private queue: ClassifiedEvent[] = [];
   private processing = false;
@@ -175,6 +186,36 @@ export class EventReactor {
     return hash.toString(36);
   }
 
+  // LRU cache helpers for seenHashes
+  private addHashEntry(hash: string): void {
+    const now = Date.now();
+    const entry: HashEntry = { timestamp: now, previous: this.seenHashHead, next: null };
+
+    if (this.seenHashHead) {
+      const headEntry = this.seenHashes.get(this.seenHashHead)!;
+      headEntry.next = hash;
+    }
+
+    this.seenHashes.set(hash, entry);
+    this.seenHashHead = hash;
+
+    if (!this.seenHashTail) {
+      this.seenHashTail = hash;
+    }
+
+    // Prune if over limit
+    while (this.seenHashes.size > this.maxHashes && this.seenHashTail) {
+      const tailHash = this.seenHashTail;
+      const tailEntry = this.seenHashes.get(tailHash)!;
+      this.seenHashes.delete(tailHash);
+      this.seenHashTail = tailEntry.previous;
+      if (this.seenHashTail) {
+        const newTailEntry = this.seenHashes.get(this.seenHashTail)!;
+        newTailEntry.next = null;
+      }
+    }
+  }
+
   private canReactForType(eventType: string): boolean {
     const now = Date.now();
     const cutoff = now - this.config.typeCooldownMs;
@@ -199,16 +240,10 @@ export class EventReactor {
     const now = Date.now();
 
     this.reactionLog.push({ eventHash: hash, eventType, timestamp: now });
-    this.seenHashes.add(hash);
+    this.addHashEntry(hash);
 
     // Prune old records (keep last hour)
     const oneHourAgo = now - 60 * 60_000;
     this.reactionLog = this.reactionLog.filter(r => r.timestamp > oneHourAgo);
-
-    // Prune seen hashes (keep max 1000)
-    if (this.seenHashes.size > 1000) {
-      const arr = Array.from(this.seenHashes);
-      this.seenHashes = new Set(arr.slice(arr.length - 500));
-    }
   }
 }

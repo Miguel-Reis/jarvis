@@ -272,14 +272,28 @@ export class AgentService implements Service, IAgentService {
 
     const onComplete = async (fullText: string): Promise<void> => {
       // Note: orchestrator already adds assistant response to history
-      // Run extraction and learning in parallel, wait for both to settle
-      await Promise.allSettled([
-        this.extractKnowledge(text, fullText).catch((err) =>
-          console.error('[AgentService] Extraction error:', err instanceof Error ? err.message : err)
-        ),
-        this.learnFromInteraction(text, fullText, channel).catch((err) =>
-          console.error('[AgentService] Learning error:', err instanceof Error ? err.message : err)
-        ),
+      // Run extraction and learning in parallel with retry logic
+      const maxRetries = 2;
+      const runWithRetry = async (fn: () => Promise<void>, name: string): Promise<void> => {
+        let lastErr: Error | null = null;
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+          try {
+            await fn();
+            return;
+          } catch (err) {
+            lastErr = err instanceof Error ? err : new Error(String(err));
+            if (attempt < maxRetries) {
+              console.warn(`[AgentService] ${name} failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying...`, lastErr.message);
+              await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+            }
+          }
+        }
+        console.error(`[AgentService] ${name} failed after ${maxRetries + 1} attempts:`, lastErr?.message);
+      };
+
+      await Promise.all([
+        runWithRetry(() => this.extractKnowledge(text, fullText), 'Knowledge extraction'),
+        runWithRetry(() => this.learnFromInteraction(text, fullText, channel), 'Learning'),
       ]);
     };
 
@@ -295,14 +309,28 @@ export class AgentService implements Service, IAgentService {
 
     const response = await this.orchestrator.processMessage(systemPrompt, text);
 
-    // Run extraction and learning in parallel (non-blocking but tracked)
-    Promise.allSettled([
-      this.extractKnowledge(text, response).catch((err) =>
-        console.error('[AgentService] Extraction error:', err instanceof Error ? err.message : err)
-      ),
-      this.learnFromInteraction(text, response, channel).catch((err) =>
-        console.error('[AgentService] Learning error:', err instanceof Error ? err.message : err)
-      ),
+    // Run extraction and learning in parallel with retry logic (non-blocking but tracked)
+    const maxRetries = 2;
+    const runWithRetry = async (fn: () => Promise<void>, name: string): Promise<void> => {
+      let lastErr: Error | null = null;
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          await fn();
+          return;
+        } catch (err) {
+          lastErr = err instanceof Error ? err : new Error(String(err));
+          if (attempt < maxRetries) {
+            console.warn(`[AgentService] ${name} failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying...`, lastErr.message);
+            await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+          }
+        }
+      }
+      console.error(`[AgentService] ${name} failed after ${maxRetries + 1} attempts:`, lastErr?.message);
+    };
+
+    Promise.all([
+      runWithRetry(() => this.extractKnowledge(text, response), 'Knowledge extraction'),
+      runWithRetry(() => this.learnFromInteraction(text, response, channel), 'Learning'),
     ]);
 
     return response;

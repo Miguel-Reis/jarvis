@@ -60,11 +60,12 @@ export class AnthropicProvider implements LLMProvider {
   name = 'anthropic';
   private apiKey: string;
   private defaultModel: string;
-  private apiUrl = 'https://api.anthropic.com/v1/messages';
+  private apiUrl: string;
 
-  constructor(apiKey: string, defaultModel = 'claude-sonnet-4-5-20250929') {
+  constructor(apiKey: string, defaultModel = 'claude-sonnet-4-5-20250929', apiUrl?: string) {
     this.apiKey = apiKey;
     this.defaultModel = defaultModel;
+    this.apiUrl = apiUrl ?? 'https://api.anthropic.com/v1/messages';
   }
 
   /**

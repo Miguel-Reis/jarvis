@@ -77,7 +77,8 @@ async function retrieveContextForMessage(message: string): Promise<{
   const terms = extractSearchTerms(message);
   const entityMap = new Map<string, Entity>();
   const activeProject = getActiveProjectId();
-  const projectFilter = activeProject ? `project_id = '${activeProject.replace(/'/g, "''")}'` : null;
+  // Use parameterized query - project_id is passed as parameter, not interpolated
+  const projectFilter = activeProject ? 'project_id = ?' : null;
 
   if (looksLikeSelfQuery(message)) {
     try {
@@ -127,7 +128,7 @@ async function retrieveContextForMessage(message: string): Promise<{
       // Try FTS5 first; fall back to LIKE if unavailable
       const ftsQuery = terms.map((t) => `"${t.replace(/"/g, '""')}"*`).join(' OR ');
       try {
-        const projectClause = projectFilter ? ` AND e.${projectFilter}` : '';
+        const projectClause = projectFilter ? ' AND e.project_id = ?' : '';
         const rows = db.prepare(`
           SELECT DISTINCT e.id, e.type, e.name, e.properties, e.project_id, e.created_at, e.updated_at, e.source
           FROM entities e
@@ -136,7 +137,7 @@ async function retrieveContextForMessage(message: string): Promise<{
           WHERE facts_fts MATCH ?${projectClause}
           ORDER BY rank
           LIMIT 15
-        `).all(ftsQuery) as any[];
+        `).all(ftsQuery, ...(projectFilter ? [activeProject] : [])) as any[];
         for (const row of rows) {
           if (!entityMap.has(row.id)) {
             entityMap.set(row.id, {
@@ -148,7 +149,7 @@ async function retrieveContextForMessage(message: string): Promise<{
       } catch (err) {
         // FTS5 not available — fallback to LIKE
         console.warn('[retrieval] FTS5 unavailable, using LIKE fallback:', err);
-        const projectClause = projectFilter ? ` AND e.${projectFilter}` : '';
+        const projectClause = projectFilter ? ' AND e.project_id = ?' : '';
         for (const term of terms) {
           const rows = db.prepare(`
             SELECT DISTINCT e.id, e.type, e.name, e.properties, e.project_id, e.created_at, e.updated_at, e.source
@@ -156,7 +157,7 @@ async function retrieveContextForMessage(message: string): Promise<{
             JOIN facts f ON e.id = f.subject_id
             WHERE (f.object LIKE ? OR f.predicate LIKE ?)${projectClause}
             LIMIT 10
-          `).all(`%${term}%`, `%${term}%`) as any[];
+          `).all(`%${term}%`, `%${term}%`, ...(projectFilter ? [activeProject] : [])) as any[];
           for (const row of rows) {
             if (!entityMap.has(row.id)) {
               entityMap.set(row.id, {
@@ -186,7 +187,7 @@ async function retrieveContextForMessage(message: string): Promise<{
 
       try {
         const projectJoin = projectFilter
-          ? `JOIN conversations c ON cm.conversation_id = c.id AND c.${projectFilter}`
+          ? 'JOIN conversations c ON cm.conversation_id = c.id AND c.project_id = ?'
           : '';
         rows = db.prepare(`
           SELECT cm.content, cm.created_at, cm.role
@@ -197,11 +198,11 @@ async function retrieveContextForMessage(message: string): Promise<{
             AND cm.role IN ('user', 'assistant')
           ORDER BY rank * (1.0 / (1.0 + (? - cm.created_at) / 86400000.0))
           LIMIT 8
-        `).all(ftsQuery, now) as any[];
+        `).all(ftsQuery, ...(projectFilter ? [activeProject, now] : [now])) as any[];
       } catch (err) {
         // FTS5 unavailable — LIKE fallback
         console.warn('[retrieval] conv_messages FTS5 unavailable, using LIKE fallback:', err);
-        const projectClause = projectFilter ? ` AND cm.conversation_id IN (SELECT id FROM conversations WHERE ${projectFilter})` : '';
+        const projectClause = projectFilter ? ' AND cm.conversation_id IN (SELECT id FROM conversations WHERE project_id = ?)' : '';
         const pattern = `%${terms[0]}%`;
         rows = db.prepare(`
           SELECT content, created_at, role
@@ -211,7 +212,7 @@ async function retrieveContextForMessage(message: string): Promise<{
             ${projectClause}
           ORDER BY created_at DESC
           LIMIT 8
-        `).all(pattern) as any[];
+        `).all(pattern, ...(projectFilter ? [activeProject] : [])) as any[];
       }
 
       for (const row of rows) {

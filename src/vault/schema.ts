@@ -60,6 +60,9 @@ export function initDatabase(dbPath: string = ":memory:"): Database {
     // Enable foreign key constraints
     dbInstance.exec("PRAGMA foreign_keys=ON");
 
+    // Set busy timeout to 5 seconds for concurrent write scenarios
+    dbInstance.exec("PRAGMA busy_timeout=5000");
+
     // Create all tables
     createTables(dbInstance);
 

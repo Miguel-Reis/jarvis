@@ -23,12 +23,22 @@ export class LLMManager {
   private static readonly BUDGET_WARN_95 = 0.95;
 
   /**
-   * Estimate token count from text using a simple word/char approximation.
-   * 1 token ≈ 4 chars in English, 2 chars in CJK. Conservative: use 3.
+   * Estimate token count from text.
+   * Uses model-aware approximation: 1 token ≈ 4 chars for English,
+   * but adjusts for code and mixed content. Conservative baseline: 3 chars/token.
+   * For precise counts, rely on actual token usage from API responses.
    */
-  static estimateTokens(text: string): number {
+  static estimateTokens(text: string, model?: string): number {
     if (!text) return 0;
-    return Math.ceil(text.length / 3);
+
+    // Claude models use ~3 chars/token average, GPT-4 uses ~4
+    const charsPerToken = model?.includes('claude') ? 3 : 4;
+
+    // Adjust for code-heavy content (more tokens per char due to syntax)
+    const hasCodeMarkers = text.includes('```') || text.includes('<code>');
+    const adjustment = hasCodeMarkers ? 0.85 : 1;
+
+    return Math.ceil((text.length / charsPerToken) * adjustment);
   }
 
   /**

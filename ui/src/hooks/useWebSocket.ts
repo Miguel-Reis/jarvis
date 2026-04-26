@@ -265,6 +265,7 @@ export function useWebSocket() {
   const subAgentEventsRef = useRef<SubAgentEvent[]>([]);
   const voiceCallbacksRef = useRef<VoiceCallbacks | null>(null);
   const activeThreadIdRef = useRef<string | null>(null);
+  const reconnectAttemptsRef = useRef(1);
 
   const connect = useCallback(() => {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -273,6 +274,7 @@ export function useWebSocket() {
 
     ws.onopen = async () => {
       setIsConnected(true);
+      reconnectAttemptsRef.current = 1;  // Reset reconnect counter
       console.log("[WS] Connected");
       // Load chat history from backend on connect
       try {
@@ -312,8 +314,13 @@ export function useWebSocket() {
 
     ws.onclose = () => {
       setIsConnected(false);
-      console.log("[WS] Disconnected, reconnecting in 2s...");
-      setTimeout(connect, 2000);
+      // Exponential backoff: start at 2s, double each retry, max 30s
+      const delay = Math.min(reconnectAttemptsRef.current * 2000, 30000);
+      reconnectAttemptsRef.current += 1;
+      console.log(`[WS] Disconnected, reconnecting in ${delay / 1000}s... (attempt ${reconnectAttemptsRef.current})`);
+      setTimeout(connect, delay);
+    };
+      // ... rest of onopen handler
     };
 
     ws.onerror = () => {

@@ -212,16 +212,29 @@ export class CommitmentExecutor {
 
     const now = Date.now();
 
+    // Collect IDs to execute first to avoid modifying Map during iteration
+    const toExecute: Array<[string, ExecutionState]> = [];
+    const toRemove: string[] = [];
+
     for (const [id, state] of this.pending) {
       if (state.cancelled || state.executed) {
-        this.pending.delete(id);
+        toRemove.push(id);
         continue;
       }
 
       // Check if cancel window has expired
-      if (now < state.cancelDeadline) continue;
+      if (now >= state.cancelDeadline) {
+        toExecute.push([id, state]);
+      }
+    }
 
-      // Execute!
+    // Clean up cancelled/executed states
+    for (const id of toRemove) {
+      this.pending.delete(id);
+    }
+
+    // Execute commitments outside the iteration
+    for (const [id, state] of toExecute) {
       state.executed = true;
       this.pending.delete(id);
       this.executedIds.add(id);

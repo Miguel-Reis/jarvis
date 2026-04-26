@@ -130,12 +130,30 @@ export async function routeToSidecarOrDefault(
  * @param params - RPC parameters
  * @param requiredCapability - The sidecar must advertise this capability
  */
+
+// Allowlist of valid sidecar RPC methods — prevents arbitrary method calls
+const ALLOWED_SIDECAR_METHODS = new Set([
+  'run_command',
+  'read_file',
+  'write_file',
+  'list_directory',
+  'file_exists',
+  'get_system_info',
+  'check_process_running',
+  'get_environment_variable',
+]);
+
 export async function routeToSidecar(
   target: string,
   method: string,
   params: Record<string, unknown>,
   requiredCapability: SidecarCapability,
 ): Promise<string> {
+  // Validate method against allowlist
+  if (!ALLOWED_SIDECAR_METHODS.has(method)) {
+    return `Error: Invalid method "${method}". Allowed methods: ${Array.from(ALLOWED_SIDECAR_METHODS).join(', ')}`;
+  }
+
   if (!sidecarManager) {
     return 'Error: Sidecar system not initialized.';
   }

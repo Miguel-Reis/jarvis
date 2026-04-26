@@ -74,28 +74,32 @@ export function createCommitment(
   const now = Date.now();
   const priority = opts?.priority ?? 'normal';
 
-  const stmt = db.prepare(
-    'INSERT INTO commitments (id, what, when_due, context, priority, status, retry_policy, created_from, assigned_to, project_id, created_at, completed_at, result) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  );
+  // Use transaction to ensure atomic INSERT and SELECT
+  const commitment = db.transaction(() => {
+    const stmt = db.prepare(
+      'INSERT INTO commitments (id, what, when_due, context, priority, status, retry_policy, created_from, assigned_to, project_id, created_at, completed_at, result) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    );
 
-  stmt.run(
-    id,
-    what,
-    opts?.when_due ?? null,
-    opts?.context ?? null,
-    priority,
-    'pending',
-    opts?.retry_policy ? JSON.stringify(opts.retry_policy) : null,
-    opts?.created_from ?? null,
-    opts?.assigned_to ?? null,
-    opts?.project_id ?? null,
-    now,
-    null,
-    null
-  );
+    stmt.run(
+      id,
+      what,
+      opts?.when_due ?? null,
+      opts?.context ?? null,
+      priority,
+      'pending',
+      opts?.retry_policy ? JSON.stringify(opts.retry_policy) : null,
+      opts?.created_from ?? null,
+      opts?.assigned_to ?? null,
+      opts?.project_id ?? null,
+      now,
+      null,
+      null
+    );
 
-  const commitment = getCommitment(id);
-  if (!commitment) throw new Error(`Failed to persist commitment '${what}' — database did not return the inserted row`);
+    const result = getCommitment(id);
+    if (!result) throw new Error(`Failed to persist commitment '${what}' — database did not return the inserted row`);
+    return result;
+  })();
 
   // Index for semantic search — fire-and-forget
   const embeddingText = [what, opts?.context].filter(Boolean).join(' ');
