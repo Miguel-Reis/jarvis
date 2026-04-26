@@ -320,8 +320,6 @@ export function useWebSocket() {
       console.log(`[WS] Disconnected, reconnecting in ${delay / 1000}s... (attempt ${reconnectAttemptsRef.current})`);
       setTimeout(connect, delay);
     };
-      // ... rest of onopen handler
-    };
 
     ws.onerror = () => {
       setIsConnected(false);
