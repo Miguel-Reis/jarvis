@@ -234,6 +234,7 @@ Do NOT assume the action succeeded. Tell the user what went wrong and ask how to
       }
     }
     return `[TOOL_ERROR] ${toolCall.name} failed after ${MAX_EXECUTE_ATTEMPTS} attempts: ${lastError}`;
+  }
 
   /**
    * Format a tool result for logging.
@@ -319,9 +320,10 @@ Do NOT assume the action succeeded. Tell the user what went wrong and ask how to
     }
 
     if (toolName === 'run_command') {
-      const command = (args.command as string || '').toLowerCase().trim();
-      const exitCodeMatch = strResult.match(/\[exit code: (-?\d+)\]/);
-      const exitCode = exitCodeMatch ? parseInt(exitCodeMatch[1], 10) : null;
+      const commandArg = args.command;
+      const command = commandArg != null ? String(commandArg).toLowerCase().trim() : '';
+      const exitCodeMatch = strResult?.match(/\[exit code: (-?\d+)\]/);
+      const exitCode = exitCodeMatch ? parseInt(exitCodeMatch[1] ?? '0', 10) : null;
 
       // Non-zero exit code = real failure
       if (exitCode !== null && exitCode !== 0) {
@@ -332,7 +334,11 @@ Do NOT assume the action succeeded. Tell the user what went wrong and ask how to
           diff: [1],    // diff 1 = files differ
           ls:   [2],    // ls 2 = permission error (real error)
         };
-        const baseCmd = command.split(/\s+/)[0].replace(/^(git|sudo|doas)\s+/, '');
+        // Safe normalization: command is already validated above
+        const normalizedCommand = typeof command === 'string' ? command : String(command ?? '');
+        const cmdParts = normalizedCommand.split(/\s+/);
+        const firstPart = cmdParts[0] != null ? cmdParts[0] : '';
+        const baseCmd = firstPart.replace(/^(git|sudo|doas)\s+/, '');
         const okExitCodes = Object.entries(okCodes).flatMap(([cmd, codes]) =>
           baseCmd.includes(cmd) ? codes : []
         );
@@ -427,14 +433,14 @@ Do NOT assume the action succeeded. Tell the user what went wrong and ask how to
             // Re-attempt the write
             const { writeFileSync } = require('fs');
             writeFileSync(filePath, args.content as string, 'utf-8');
-            return [true, `File written successfully: ${filePath} (auto-created parent directory)`];
+            return Promise.resolve([true, `File written successfully: ${filePath} (auto-created parent directory)`] as [boolean, string]);
           }
         } catch {
           // recovery failed, keep original error
         }
       }
     }
-    return [false, errorResult];
+    return Promise.resolve([false, errorResult] as [boolean, string]);
   }
 }
 

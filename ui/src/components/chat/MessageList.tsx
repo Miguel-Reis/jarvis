@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useCallback } from "react";
 import type { ChatMessage } from "../../hooks/useWebSocket";
 import { MessageBubble } from "./MessageBubble";
+import "../../styles/chat.css";
 
 // System messages go to the SystemPanel, not the main chat
 const SYSTEM_SOURCES = new Set(["heartbeat", "proactive", "workflow", "error"]);

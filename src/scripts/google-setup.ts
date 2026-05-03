@@ -131,8 +131,8 @@ async function main() {
         try {
           const tokens = await auth.exchangeCode(code);
           console.log('Authorization successful!');
-          console.log(`Access token: ${tokens.access_token.slice(0, 20)}...`);
-          console.log(`Refresh token: ${tokens.refresh_token.slice(0, 20)}...`);
+          console.log(`Access token: [REDACTED] (expires in ${tokens.expires_in}s)`);
+          console.log(`Refresh token: [REDACTED]`);
           console.log(`Tokens saved to ~/.jarvis/google-tokens.json`);
 
           setTimeout(() => {

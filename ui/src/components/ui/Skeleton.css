@@ -1,0 +1,63 @@
+/**
+ * Skeleton Styles
+ */
+
+.j-skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(148, 163, 184, 0.1) 0%,
+    rgba(148, 163, 184, 0.2) 50%,
+    rgba(148, 163, 184, 0.1) 100%
+  );
+  background-size: 200% 100%;
+  border-radius: 0.25rem;
+}
+
+/* Variants */
+.j-skeleton--text {
+  height: 1rem;
+  border-radius: 0.125rem;
+}
+
+.j-skeleton--circular {
+  border-radius: 50%;
+}
+
+.j-skeleton--rectangular {
+  border-radius: 0;
+}
+
+.j-skeleton--rounded {
+  border-radius: 0.5rem;
+}
+
+/* Animations */
+.j-skeleton--pulse {
+  animation: j-skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes j-skeleton-pulse {
+  0%, 100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.j-skeleton--wave {
+  animation: j-skeleton-wave 1.5s ease-in-out infinite;
+}
+
+@keyframes j-skeleton-wave {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.j-skeleton--none {
+  animation: none;
+}

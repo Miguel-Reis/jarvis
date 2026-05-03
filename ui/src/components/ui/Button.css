@@ -1,0 +1,138 @@
+/**
+ * Button Styles
+ */
+
+.j-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: none;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.j-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Sizes */
+.j-button--sm {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
+  height: 2rem;
+}
+
+.j-button--md {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  height: 2.5rem;
+}
+
+.j-button--lg {
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  height: 3rem;
+}
+
+/* Variants */
+.j-button--primary {
+  background: var(--j-accent, #8B5CF6);
+  color: #000;
+}
+
+.j-button--primary:hover:not(:disabled) {
+  background: var(--j-accent-hover, #A78BFA);
+}
+
+.j-button--secondary {
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--j-text);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.j-button--secondary:hover:not(:disabled) {
+  background: rgba(148, 163, 184, 0.15);
+  border-color: rgba(148, 163, 184, 0.3);
+}
+
+.j-button--ghost {
+  background: transparent;
+  color: var(--j-text);
+}
+
+.j-button--ghost:hover:not(:disabled) {
+  background: rgba(148, 163, 184, 0.1);
+}
+
+.j-button--danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: #F87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.j-button--danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.25);
+}
+
+.j-button--icon {
+  background: transparent;
+  color: var(--j-text-dim);
+  padding: 0.5rem;
+  height: 2.5rem;
+  width: 2.5rem;
+}
+
+.j-button--icon:hover:not(:disabled) {
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--j-text);
+}
+
+/* Full width */
+.j-button--full-width {
+  width: 100%;
+}
+
+/* Loading state */
+.j-button--loading {
+  pointer-events: none;
+}
+
+.j-button__spinner {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: j-button-spin 0.6s linear infinite;
+}
+
+@keyframes j-button-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Icons */
+.j-button__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.j-button__icon--left {
+  margin-right: 0.25rem;
+}
+
+.j-button__icon--right {
+  margin-left: 0.25rem;
+}
+
+.j-button__content {
+  display: inline-flex;
+  align-items: center;
+}

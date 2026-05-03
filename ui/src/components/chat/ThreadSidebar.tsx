@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import type { Thread } from "../../hooks/useWebSocket";
+import "../../styles/chat.css";
 
 type Props = {
   activeThreadId: string | null;
@@ -72,6 +73,7 @@ export function ThreadSidebar({ activeThreadId, onSelectThread, onNewThread }: P
       <div className="thread-sidebar-header">
         <span className="thread-sidebar-title">Chats</span>
         <button
+          data-new-chat
           className="thread-new-btn"
           onClick={onNewThread}
           title="Start a new chat"

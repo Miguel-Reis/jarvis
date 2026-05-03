@@ -1,9 +1,7 @@
 /**
  * GoalService — Core service for M16 Autonomous Goal Pursuit
- *
- * Manages goal lifecycle, daily rhythm (morning plan + evening review),
- * accountability checks, health recalculation, and escalation.
- * Implements the Service interface for daemon integration.
+ * GoalService — Core service for goal CRUD and execution state management.
+ * GoalService — Super Jarvis integration: Directives API for the Autonomous Loop.
  */
 
 import type { Service, ServiceStatus } from '../daemon/services.ts';
@@ -12,6 +10,21 @@ import type { GoalConfig } from '../config/types.ts';
 import type { Goal, GoalLevel, GoalStatus, GoalHealth } from './types.ts';
 import type { DailyRhythm } from './rhythm.ts';
 import * as vault from '../vault/goals.ts';
+
+export interface SubTask {
+  id: string;
+  description: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  completion_criteria: string;
+  attempts: number;
+}
+
+export interface GoalDirective {
+  goal: Goal;
+  current_task: SubTask | null;
+  next_tasks: SubTask[];
+  needs_decomposition: boolean;
+}
 
 export class GoalService implements Service {
   name = 'goals';
@@ -279,7 +292,7 @@ export class GoalService implements Service {
     }
   }
 
-  // ── Accountability ────────────────────────────────────────────────
+  // ── Accountability ─────────────────────────────────────────────────
 
   /**
    * Check active goals for escalation needs.
@@ -342,7 +355,7 @@ export class GoalService implements Service {
     }
   }
 
-  // ── Health Recalculation ──────────────────────────────────────────
+  // ── Health Recalculation ─────────────────────────────────────────
 
   /**
    * Recalculate health for all active goals based on score and deadline.
@@ -399,7 +412,136 @@ export class GoalService implements Service {
     return 'critical';                      // way behind
   }
 
-  // ── Metrics ───────────────────────────────────────────────────────
+  // ── Super Jarvis: Directives API ───────────────────────────────────
+
+  /**
+   * Get the most critical active goal and its current execution state.
+   * This is the bridge between the Goal system and the Autonomous Loop.
+   */
+  getActiveDirectives(): GoalDirective | null {
+    // 1. Find the most critical active goal (prioritize by health, then deadline)
+    const activeGoals = vault.findGoals({ status: 'active' })
+      .filter(g => g.level === 'objective' || g.level === 'key_result');
+
+    if (activeGoals.length === 0) return null;
+
+    // Sort by health (critical first) and then by deadline
+    const healthOrder = { 'critical': 0, 'behind': 1, 'at_risk': 2, 'on_track': 3 };
+    activeGoals.sort((a, b) => {
+      const healthDiff = healthOrder[a.health] - healthOrder[b.health];
+      if (healthDiff !== 0) return healthDiff;
+      // If same health, prioritize by deadline (earliest first)
+      if (a.deadline && b.deadline) return a.deadline - b.deadline;
+      return 0;
+    });
+
+    const goal = activeGoals[0];
+    const execState = (goal as any).execution_state || { current_step_index: 0, sub_tasks: [], last_pivot_reason: null };
+
+    // Extract current and next tasks
+    const currentTask = execState.sub_tasks[execState.current_step_index] || null;
+    const nextTasks = execState.sub_tasks.slice(execState.current_step_index + 1);
+
+    // Check if goal needs decomposition
+    const needsDecomposition = !execState.sub_tasks || execState.sub_tasks.length === 0;
+
+    if (!goal) return null;
+    return {
+      goal,
+      current_task: currentTask,
+      next_tasks: nextTasks,
+      needs_decomposition: needsDecomposition,
+    };
+  }
+
+  /**
+   * Update the execution state of a goal (mark tasks as complete/failed).
+   */
+  updateSubTaskProgress(goalId: string, subtaskId: string, newStatus: 'pending' | 'in_progress' | 'completed' | 'failed'): Goal | null {
+    const goal = vault.getGoal(goalId);
+    if (!goal) return null;
+
+    const execState = (goal as any).execution_state || { current_step_index: 0, sub_tasks: [], last_pivot_reason: null };
+    const subtaskIndex = execState.sub_tasks.findIndex((t: SubTask) => t.id === subtaskId);
+
+    if (subtaskIndex === -1) {
+      console.warn(`[GoalService] Subtask ${subtaskId} not found in goal ${goalId}`);
+      return goal;
+    }
+
+    // Update the subtask status
+    execState.sub_tasks[subtaskIndex].status = newStatus;
+
+    // If completed, move to next task
+    if (newStatus === 'completed') {
+      execState.current_step_index = subtaskIndex + 1;
+    } else if (newStatus === 'failed') {
+      execState.sub_tasks[subtaskIndex].attempts += 1;
+      // If too many attempts, record pivot
+      if (execState.sub_tasks[subtaskIndex].attempts >= 3) {
+        execState.last_pivot_reason = `Subtask ${subtaskId} failed after 3 attempts`;
+      }
+    }
+
+    // Save to DB
+    return vault.updateGoal(goalId, { execution_state: execState as any });
+  }
+
+  /**
+   * Decompose a high-level goal into actionable sub-tasks using the LLM.
+   * This requires integration with the LLM manager.
+   */
+  async decomposeGoal(goalId: string, llmManager?: any): Promise<SubTask[]> {
+    const goal = vault.getGoal(goalId);
+    if (!goal) return [];
+
+    // Simple decomposition logic (placeholder for LLM integration)
+    // In a full implementation, this would call the LLM to break down the goal
+    const defaultTasks: SubTask[] = [
+      {
+        id: crypto.randomUUID(),
+        description: `Analyze and understand: ${goal.title}`,
+        status: 'pending',
+        completion_criteria: 'Clear understanding of the goal requirements',
+        attempts: 0,
+      },
+      {
+        id: crypto.randomUUID(),
+        description: `Plan execution strategy for: ${goal.title}`,
+        status: 'pending',
+        completion_criteria: 'Detailed plan created',
+        attempts: 0,
+      },
+      {
+        id: crypto.randomUUID(),
+        description: `Execute primary action: ${goal.title}`,
+        status: 'pending',
+        completion_criteria: 'Main task completed successfully',
+        attempts: 0,
+      },
+      {
+        id: crypto.randomUUID(),
+        description: `Verify results and iterate: ${goal.title}`,
+        status: 'pending',
+        completion_criteria: 'Results verified and any issues fixed',
+        attempts: 0,
+      },
+    ];
+
+    // Update the goal's execution state
+    const execState = {
+      current_step_index: 0,
+      sub_tasks: defaultTasks,
+      last_pivot_reason: null,
+    };
+
+    vault.updateGoal(goalId, { execution_state: execState as any });
+
+    console.log(`[GoalService] Decomposed goal ${goalId} into ${defaultTasks.length} subtasks`);
+    return defaultTasks;
+  }
+
+  // ── Metrics ─────────────────────────────────────────────────────
 
   getMetrics() {
     return vault.getGoalMetrics();

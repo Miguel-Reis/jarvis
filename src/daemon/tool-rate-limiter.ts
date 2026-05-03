@@ -31,7 +31,7 @@ export class ToolRateLimiter {
   constructor(customLimits?: Partial<Record<string, RateLimitConfig>>) {
     if (customLimits) {
       for (const [name, cfg] of Object.entries(customLimits)) {
-        this.customLimits.set(name, cfg);
+        if (cfg) this.customLimits.set(name, cfg);
       }
     }
   }
@@ -55,6 +55,7 @@ export class ToolRateLimiter {
     if (validEntries.length >= config.maxCalls) {
       // Find how long until the oldest entry in this window expires
       const oldest = validEntries[0];
+      if (!oldest) return { allowed: true };
       const retryAfterMs = (oldest.timestamp + config.windowMs) - now;
       return { allowed: false, retryAfterMs: Math.max(0, retryAfterMs) };
     }

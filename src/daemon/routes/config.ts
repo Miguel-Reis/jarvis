@@ -165,13 +165,13 @@ export function registerRoutes(ctx: ApiContext) {
     // --- LLM Configuration ---
     '/api/config/llm': {
       GET: async () => {
-        const { getLLMSettings } = await import('./llm-settings.ts');
+        const { getLLMSettings } = await import('../llm-settings.ts');
         return json(getLLMSettings(ctx.config));
       },
       POST: async (req: Request) => {
         try {
           const body = await req.json() as Record<string, unknown>;
-          const { saveLLMSettings, hotReloadLLMProviders } = await import('./llm-settings.ts');
+          const { saveLLMSettings, hotReloadLLMProviders } = await import('../llm-settings.ts');
 
           saveLLMSettings(ctx.config, body as any);
 
@@ -190,7 +190,7 @@ export function registerRoutes(ctx: ApiContext) {
       POST: async (req: Request) => {
         try {
           const body = await req.json() as { provider: string; api_key?: string; model?: string; base_url?: string };
-          const { testLLMProvider } = await import('./llm-settings.ts');
+          const { testLLMProvider } = await import('../llm-settings.ts');
           const result = await testLLMProvider(body, ctx.config);
           return json(result);
         } catch (err) {

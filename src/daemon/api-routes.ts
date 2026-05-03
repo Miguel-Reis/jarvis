@@ -27,7 +27,6 @@ import type { ChannelService } from './channel-service.ts';
 
 // Re-export shared helpers for backward compatibility
 export { setCorsOrigin, json, error, getSearchParams } from './routes/_shared.ts';
-export type { ApiContext } from './routes/_shared.ts';
 
 // ── Domain route modules ─────────────────────────────────────────────────────────
 
@@ -43,6 +42,11 @@ import { registerRoutes as configRoutes } from './routes/config.ts';
 import { registerRoutes as projectRoutes } from './routes/projects.ts';
 import { registerRoutes as mcpRoutes } from './routes/mcp.ts';
 import { registerRoutes as miscRoutes } from './routes/misc.ts';
+import { registerRoutes as superJarvisRoutes } from './routes/super-jarvis.ts';
+import { registerRoutes as preferencesRoutes } from './routes/preferences.ts';
+import { registerRoutes as metricsRoutes } from './routes/metrics.ts';
+import { registerRoutes as coordinationRoutes } from './routes/coordination.ts';
+import { registerRoutes as statusRoutes } from './routes/status.ts';
 
 // ── Shared helpers (also re-exported above for external use) ─────────────────────
 
@@ -69,6 +73,9 @@ export type ApiContext = {
   sidecarManager?: import('../sidecar/manager.ts').SidecarManager;
   siteBuilderService?: import('../sites/service.ts').SiteBuilderService;
   mcpService?: import('./mcp-service.ts').McpService;
+  observerService?: import('./observer-service.ts').ObserverService;
+  liveScreenService?: import('../services/live-screen.ts').LiveScreenService;
+  llmManager?: import('../llm/manager.ts').LLMManager;
 };
 
 function mergeRoutes(...allRoutes: Array<Record<string, unknown>>): Record<string, unknown> {
@@ -98,5 +105,10 @@ export function createApiRoutes(ctx: ApiContext): Record<string, unknown> {
     configRoutes(ctx),
     projectRoutes(ctx),
     mcpRoutes(ctx),
+    superJarvisRoutes(ctx),
+    preferencesRoutes(ctx),
+    metricsRoutes(ctx),
+    coordinationRoutes(ctx),
+    statusRoutes(ctx),
   );
 }

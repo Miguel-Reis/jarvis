@@ -309,7 +309,9 @@ export function useWebSocket() {
           const pending = await ar.json() as ApprovalRequest[];
           if (pending.length > 0) setPendingApprovals(pending);
         }
-      } catch {}
+      } catch (err) {
+        console.warn('[WS] Failed to load pending approvals:', err);
+      }
     };
 
     ws.onclose = () => {
@@ -612,61 +614,74 @@ export function useWebSocket() {
 
   const sendMessage = useCallback(
     (text: string, options?: { projectId?: string; threadId?: string; images?: ImageAttachment[] }) => {
-      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-
-      const id = crypto.randomUUID();
-      const threadId = options?.threadId ?? activeThreadIdRef.current;
-      const images = options?.images;
-
-      // Add user message to local state
-      setMessages((prev) => [
-        ...prev,
-        {
-          id,
-          role: "user",
-          content: text,
-          timestamp: Date.now(),
-          source: options?.projectId ? `site:${options.projectId}` : undefined,
-          images,
-        },
-      ]);
-
-      // Build payload — include content array if images are attached
-      let payload: Record<string, unknown>;
-      if (images && images.length > 0) {
-        const contentBlocks: unknown[] = images.map((img) => ({
-          type: "image",
-          source: {
-            type: "base64",
-            media_type: img.mediaType,
-            data: img.dataUrl.replace(/^data:[^;]+;base64,/, ""),
-          },
-        }));
-        if (text.trim()) {
-          contentBlocks.push({ type: "text", text });
+      try {
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+          console.warn('[WS] Cannot send message: WebSocket not connected');
+          return;
         }
-        payload = {
-          content: contentBlocks,
-          ...(text.trim() ? { text } : {}),
-          ...(options?.projectId ? { projectId: options.projectId } : {}),
-          ...(threadId ? { thread_id: threadId } : {}),
-        };
-      } else {
-        payload = {
-          text,
-          ...(options?.projectId ? { projectId: options.projectId } : {}),
-          ...(threadId ? { thread_id: threadId } : {}),
-        };
-      }
 
-      // Send to server
-      const msg: WSMessage = {
-        type: "chat",
-        payload,
-        id,
-        timestamp: Date.now(),
-      };
-      wsRef.current.send(JSON.stringify(msg));
+        const id = crypto.randomUUID();
+        const threadId = options?.threadId ?? activeThreadIdRef.current;
+        const images = options?.images;
+
+        // Add user message to local state
+        setMessages((prev) => [
+          ...prev,
+          {
+            id,
+            role: "user",
+            content: text,
+            timestamp: Date.now(),
+            source: options?.projectId ? `site:${options.projectId}` : undefined,
+            images,
+          },
+        ]);
+
+        // Build payload — include content array if images are attached
+        let payload: Record<string, unknown>;
+        if (images && images.length > 0) {
+          const contentBlocks: unknown[] = images.map((img) => ({
+            type: "image",
+            source: {
+              type: "base64",
+              media_type: img.mediaType,
+              data: img.dataUrl.replace(/^data:[^;]+;base64,/, ""),
+            },
+          }));
+          if (text.trim()) {
+            contentBlocks.push({ type: "text", text });
+          }
+          payload = {
+            content: contentBlocks,
+            ...(text.trim() ? { text } : {}),
+            ...(options?.projectId ? { projectId: options.projectId } : {}),
+            ...(threadId ? { thread_id: threadId } : {}),
+          };
+        } else {
+          payload = {
+            text,
+            ...(options?.projectId ? { projectId: options.projectId } : {}),
+            ...(threadId ? { thread_id: threadId } : {}),
+          };
+        }
+
+        // Send to server
+        const msg: WSMessage = {
+          type: "chat",
+          payload,
+          id,
+          timestamp: Date.now(),
+        };
+        try {
+          wsRef.current.send(JSON.stringify(msg));
+        } catch (err) {
+          console.error('[WS] Send error:', err);
+          // Attempt reconnection
+          reconnectAttemptsRef.current = 1;
+        }
+      } catch (err) {
+        console.error('[WS] sendMessage error:', err);
+      }
     },
     []
   );

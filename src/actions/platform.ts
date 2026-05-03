@@ -8,7 +8,7 @@ export type OS = 'windows' | 'linux' | 'darwin';
 
 /** Detect the current OS from Node.js process.platform */
 export function detectOS(): OS {
-  const p = typeof process !== 'undefined' ? process.platform : 'linux';
+  const p = typeof process !== 'undefined' && process.platform ? process.platform : 'linux';
   if (p === 'win32') return 'windows';
   if (p === 'darwin') return 'darwin';
   return 'linux';
@@ -46,9 +46,12 @@ export function isWSL(): boolean {
  *       translateCommand('ls', '-lah')      →  'dir /a /-s'    (on Windows)
  *       translateCommand('rm', 'foo')       →  'rm foo'        (on Linux, no change)
  */
-export function translateCommand(unixCmd: string, ...args: string[]): string {
+export function translateCommand(input: string | null | undefined = '', ...args: string[]): string {
   const os = detectOS();
-  const cmd = unixCmd.trim().split(/\s+/)[0].toLowerCase();
+  // Safe normalization: ensure we always have a string
+  const unixCmd = input == null ? '' : String(input);
+  const parts = unixCmd.trim().split(/\s+/);
+  const cmd = parts[0] != null ? parts[0].toLowerCase() : '';
   const rest = args.join(' ');
 
   if (os === 'windows') {

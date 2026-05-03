@@ -1,0 +1,416 @@
+/**
+ * Super Jarvis Page Styles
+ *
+ * Control center for autonomous features:
+ * - Wake-Word Detection
+ * - System Observers
+ * - Interrupts Log
+ * - Goal Directives
+ */
+
+/* Page container */
+.super-jarvis-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, var(--j-bg) 0%, #0a0a12 50%, var(--j-bg) 100%);
+  padding: 2rem;
+}
+
+.super-jarvis-container {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* Header */
+.super-jarvis-header {
+  margin-bottom: 2rem;
+}
+
+.super-jarvis-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  background: linear-gradient(to right, #8B5CF6, #A78BFA);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.super-jarvis-subtitle {
+  color: var(--j-text-dim);
+  margin-top: 0.5rem;
+}
+
+/* Cards */
+.super-jarvis-card {
+  background: rgba(24, 24, 34, 0.5);
+  backdrop-filter: blur(8px);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.super-jarvis-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+/* Grid layouts */
+.super-jarvis-grid {
+  display: grid;
+  grid-template-columns: repeat(1, 1fr);
+  gap: 1.5rem;
+}
+
+@media (min-width: 1024px) {
+  .super-jarvis-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.super-jarvis-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(1, 1fr);
+  gap: 1rem;
+}
+
+@media (min-width: 768px) {
+  .super-jarvis-grid-3 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Stats */
+.super-jarvis-stat {
+  background: rgba(51, 51, 61, 0.5);
+  border-radius: 0.5rem;
+  padding: 1rem;
+}
+
+.super-jarvis-stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.super-jarvis-stat-label {
+  font-size: 0.875rem;
+  color: var(--j-text-dim);
+}
+
+/* Observers list */
+.super-jarvis-observers {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.super-jarvis-observer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: rgba(31, 41, 55, 0.5);
+  border-radius: 0.5rem;
+  border: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.super-jarvis-observer-name {
+  font-weight: 500;
+}
+
+.super-jarvis-observer-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.super-jarvis-observer-toggle {
+  width: 2.5rem;
+  height: 1.25rem;
+  border-radius: 1rem;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.super-jarvis-observer-toggle--active {
+  background: rgba(16, 185, 129, 0.2);
+}
+
+.super-jarvis-observer-toggle--inactive {
+  background: rgba(148, 163, 184, 0.2);
+}
+
+/* Interrupts table */
+.super-jarvis-interrupts {
+  max-height: 24rem;
+  overflow-y: auto;
+}
+
+.super-jarvis-interrupt {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.super-jarvis-interrupt:last-child {
+  border-bottom: none;
+}
+
+.super-jarvis-interrupt-icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.super-jarvis-interrupt-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.super-jarvis-interrupt-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.super-jarvis-interrupt-type {
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.super-jarvis-interrupt-severity {
+  font-size: 0.75rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  text-transform: capitalize;
+}
+
+.super-jarvis-interrupt-severity--low {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60A5FA;
+}
+
+.super-jarvis-interrupt-severity--medium {
+  background: rgba(245, 158, 11, 0.2);
+  color: #FBBF24;
+}
+
+.super-jarvis-interrupt-severity--high {
+  background: rgba(239, 68, 68, 0.2);
+  color: #F87171;
+}
+
+.super-jarvis-interrupt-severity--critical {
+  background: rgba(239, 68, 68, 0.3);
+  color: #EF4444;
+}
+
+.super-jarvis-interrupt-message {
+  font-size: 0.875rem;
+  color: var(--j-text);
+}
+
+.super-jarvis-interrupt-time {
+  font-size: 0.75rem;
+  color: var(--j-text-muted);
+}
+
+/* Goal directives */
+.super-jarvis-directives {
+  margin-top: 1.5rem;
+}
+
+.super-jarvis-goal-card {
+  background: rgba(139, 92, 246, 0.1);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: 0.5rem;
+  padding: 1rem;
+}
+
+.super-jarvis-goal-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.super-jarvis-goal-level {
+  font-weight: 600;
+  color: #A78BFA;
+}
+
+.super-jarvis-goal-score {
+  font-size: 0.875rem;
+  color: var(--j-text-dim);
+}
+
+.super-jarvis-goal-health {
+  font-size: 0.75rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 0.25rem;
+}
+
+.super-jarvis-goal-health--on_track {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10B981;
+}
+
+.super-jarvis-goal-health--at_risk {
+  background: rgba(245, 158, 11, 0.2);
+  color: #F59E0B;
+}
+
+.super-jarvis-goal-health--off_track {
+  background: rgba(239, 68, 68, 0.2);
+  color: #EF4444;
+}
+
+.super-jarvis-goal-title {
+  font-size: 1.125rem;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+.super-jarvis-task-card {
+  background: rgba(51, 51, 61, 0.5);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.super-jarvis-task-label {
+  font-size: 0.75rem;
+  color: var(--j-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.25rem;
+}
+
+.super-jarvis-task-description {
+  font-size: 0.875rem;
+}
+
+.super-jarvis-task-meta {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--j-text-dim);
+}
+
+.super-jarvis-warning {
+  color: #F59E0B;
+  font-size: 0.875rem;
+}
+
+/* Buttons */
+.super-jarvis-btn {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  transition: all 0.2s;
+  border: 1px solid;
+  cursor: pointer;
+}
+
+.super-jarvis-btn--enable {
+  background: rgba(6, 182, 212, 0.2);
+  border-color: rgba(6, 182, 212, 0.5);
+  color: #22D3EE;
+}
+
+.super-jarvis-btn--enable:hover {
+  background: rgba(6, 182, 212, 0.3);
+}
+
+.super-jarvis-btn--disable {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #F87171;
+}
+
+.super-jarvis-btn--disable:hover {
+  background: rgba(239, 68, 68, 0.3);
+}
+
+.super-jarvis-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Slider */
+.super-jarvis-slider {
+  width: 100%;
+  height: 0.5rem;
+  background: rgba(51, 51, 61, 1);
+  border-radius: 0.5rem;
+  appearance: none;
+  cursor: pointer;
+}
+
+.super-jarvis-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  background: #22D3EE;
+  cursor: pointer;
+}
+
+.super-jarvis-slider::-moz-range-thumb {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  background: #22D3EE;
+  cursor: pointer;
+  border: none;
+}
+
+/* Status badge */
+.super-jarvis-status-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.super-jarvis-status-badge--listening {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10B981;
+}
+
+.super-jarvis-status-badge--error {
+  background: rgba(239, 68, 68, 0.2);
+  color: #EF4444;
+}
+
+.super-jarvis-status-badge--idle {
+  background: rgba(148, 163, 184, 0.2);
+  color: #9CA3AF;
+}
+
+/* Scrollbar */
+.super-jarvis-interrupts::-webkit-scrollbar {
+  width: 6px;
+}
+
+.super-jarvis-interrupts::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.super-jarvis-interrupts::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.2);
+  border-radius: 3px;
+}
+
+.super-jarvis-interrupts::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.3);
+}

@@ -158,13 +158,13 @@ export const KNOWN_MODELS: Record<string, KnownModel> = {
   },
 
   // LiteLLM (generic — user configures the proxy, these are common defaults)
-  'gpt-4o-mini': {
+  'gpt-4o-mini-lite': {
     displayName: 'GPT-4o Mini (LiteLLM)',
     contextWindow: 128_000,
     vision: true,
     tier: 'fast',
   },
-  'claude-sonnet-4-6': {
+  'claude-sonnet-lite': {
     displayName: 'Claude Sonnet 4 (LiteLLM)',
     contextWindow: 200_000,
     vision: true,

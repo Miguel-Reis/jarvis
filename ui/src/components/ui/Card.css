@@ -1,0 +1,84 @@
+/**
+ * Card Styles
+ */
+
+.j-card {
+  background: rgba(24, 24, 34, 0.5);
+  backdrop-filter: blur(8px);
+  border-radius: 0.75rem;
+  transition: all 0.2s ease;
+}
+
+/* Variants */
+.j-card--default {
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.j-card--elevated {
+  border: none;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+}
+
+.j-card--bordered {
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+/* Hoverable */
+.j-card--hoverable:hover {
+  background: rgba(31, 41, 55, 0.6);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+/* Padding */
+.j-card--padding-none {
+  padding: 0;
+}
+
+.j-card--padding-sm {
+  padding: 0.75rem;
+}
+
+.j-card--padding-md {
+  padding: 1rem;
+}
+
+.j-card--padding-lg {
+  padding: 1.5rem;
+}
+
+/* Header */
+.j-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+  margin-bottom: 0.75rem;
+}
+
+.j-card__header--no-border {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+/* Content */
+.j-card__content {
+  /* Content inherits card padding */
+}
+
+/* Footer */
+.j-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.1);
+  margin-top: 0.75rem;
+}
+
+.j-card__footer--no-border {
+  border-top: none;
+  margin-top: 0;
+}

@@ -21,6 +21,22 @@ export type ProgressType = 'manual' | 'auto_detected' | 'review' | 'system';
 
 export type CheckInType = 'morning_plan' | 'evening_review';
 
+// ── Execution State (for Autonomous Loop) ───────────────────────────
+
+export type SubTask = {
+  id: string;
+  description: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  completion_criteria: string;
+  attempts: number;
+};
+
+export type GoalExecutionState = {
+  current_step_index: number;
+  sub_tasks: SubTask[];
+  last_pivot_reason: string | null;
+};
+
 // ── Core Types ──────────────────────────────────────────────────────
 
 export type Goal = {
@@ -30,6 +46,17 @@ export type Goal = {
   title: string;
   description: string;
   success_criteria: string;
+  execution_state: {
+    current_step_index: number;
+    sub_tasks: Array<{
+      id: string;
+      description: string;
+      status: 'pending' | 'in_progress' | 'completed' | 'failed';
+      completion_criteria: string;
+      attempts: number;
+    }>;
+    last_pivot_reason: string | null;
+  };
   project_id: string | null;
   time_horizon: TimeHorizon;
   score: number;                     // 0.0-1.0 OKR score (0.7 = good)
@@ -105,4 +132,5 @@ export type GoalUpdate = {
   tags?: string[];
   dependencies?: string[];
   sort_order?: number;
+  execution_state?: GoalExecutionState;
 };

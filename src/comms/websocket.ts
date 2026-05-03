@@ -14,7 +14,8 @@ export type WSMessage = {
       | 'tts_start' | 'tts_end' | 'voice_start' | 'voice_end'
       | 'workflow_event'
       | 'goal_event'
-      | 'site_event';
+      | 'site_event'
+      | 'coordination_event';
   payload: unknown;
   id?: string;
   priority?: 'urgent' | 'normal' | 'low';

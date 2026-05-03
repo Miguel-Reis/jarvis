@@ -28,6 +28,8 @@ export { NotificationListener } from './notifications';
 export { ProcessMonitor } from './processes';
 export { CalendarSync } from './calendar';
 export { EmailSync } from './email';
+export { NetworkMonitor } from './network';
+export { BatteryMonitor } from './battery';
 
 /**
  * ObserverManager - Centralized coordinator for all observers

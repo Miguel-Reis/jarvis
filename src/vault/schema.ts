@@ -63,6 +63,13 @@ export function initDatabase(dbPath: string = ":memory:"): Database {
     // Set busy timeout to 5 seconds for concurrent write scenarios
     dbInstance.exec("PRAGMA busy_timeout=5000");
 
+    // Performance optimizations for concurrent access
+    dbInstance.exec("PRAGMA synchronous=NORMAL"); // Faster than FULL, safe with WAL
+    dbInstance.exec("PRAGMA cache_size=-64000"); // 64MB cache (negative = KB)
+    dbInstance.exec("PRAGMA temp_store=MEMORY"); // Store temp tables in memory
+    dbInstance.exec("PRAGMA mmap_size=268435456"); // 256MB memory-mapped I/O
+    dbInstance.exec("PRAGMA wal_autocheckpoint=1000"); // Auto-checkpoint every 1000 pages
+
     // Create all tables
     createTables(dbInstance);
 
@@ -647,6 +654,7 @@ function createTables(db: Database): void {
       authority_level INTEGER NOT NULL DEFAULT 3,
       tags TEXT,
       dependencies TEXT,
+      execution_state TEXT,
       escalation_stage TEXT NOT NULL DEFAULT 'none'
         CHECK(escalation_stage IN ('none', 'pressure', 'root_cause', 'suggest_kill')),
       escalation_started_at INTEGER,
@@ -665,6 +673,8 @@ function createTables(db: Database): void {
 
   // Idempotent migration: add project_id column if not already present (SQLite 3.35+)
   try { db.run('ALTER TABLE goals ADD COLUMN IF NOT EXISTS project_id TEXT'); } catch (err) { console.warn('[Schema] goals.project_id migration warning:', err instanceof Error ? err.message : String(err)); }
+  // Idempotent migration: add execution_state column
+  try { db.run("ALTER TABLE goals ADD COLUMN IF NOT EXISTS execution_state TEXT"); } catch (err) { console.warn('[Schema] goals.execution_state migration warning:', err instanceof Error ? err.message : String(err)); }
 
   db.run(`
     CREATE TABLE IF NOT EXISTS goal_progress (
@@ -797,4 +807,71 @@ function createTables(db: Database): void {
     )
   `);
   db.run(`CREATE INDEX IF NOT EXISTS idx_projects_name ON projects(name)`);
+
+  // ── Progress Tracking (Sprint 3): Time tracking and metrics ──
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS time_entries (
+      id TEXT PRIMARY KEY,
+      task_id TEXT,
+      goal_id TEXT REFERENCES goals(id) ON DELETE CASCADE,
+      project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
+      agent_id TEXT NOT NULL,
+      activity_type TEXT NOT NULL DEFAULT 'work'
+        CHECK(activity_type IN ('work', 'research', 'review', 'coordination', 'idle')),
+      description TEXT,
+      started_at INTEGER NOT NULL,
+      ended_at INTEGER,
+      duration_ms INTEGER,
+      metadata TEXT,
+      created_at INTEGER NOT NULL
+    )
+  `);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_time_goal ON time_entries(goal_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_time_project ON time_entries(project_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_time_agent ON time_entries(agent_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_time_started ON time_entries(started_at)`);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS productivity_metrics (
+      id TEXT PRIMARY KEY,
+      date TEXT NOT NULL,
+      agent_id TEXT NOT NULL,
+      tasks_completed INTEGER NOT NULL DEFAULT 0,
+      tasks_failed INTEGER NOT NULL DEFAULT 0,
+      time_active_ms INTEGER NOT NULL DEFAULT 0,
+      time_idle_ms INTEGER NOT NULL DEFAULT 0,
+      interruptions INTEGER NOT NULL DEFAULT 0,
+      velocity_score REAL NOT NULL DEFAULT 0.0,
+      focus_score REAL NOT NULL DEFAULT 0.0,
+      created_at INTEGER NOT NULL
+    )
+  `);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_metrics_date ON productivity_metrics(date)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_metrics_agent ON productivity_metrics(agent_id)`);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS task_history (
+      id TEXT PRIMARY KEY,
+      goal_id TEXT REFERENCES goals(id) ON DELETE CASCADE,
+      project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      status TEXT NOT NULL DEFAULT 'pending'
+        CHECK(status IN ('pending', 'in_progress', 'completed', 'failed', 'abandoned')),
+      priority TEXT NOT NULL DEFAULT 'normal'
+        CHECK(priority IN ('low', 'normal', 'high', 'critical')),
+      estimated_duration_ms INTEGER,
+      actual_duration_ms INTEGER,
+      retry_count INTEGER NOT NULL DEFAULT 0,
+      error_message TEXT,
+      result TEXT,
+      started_at INTEGER,
+      completed_at INTEGER,
+      created_at INTEGER NOT NULL
+    )
+  `);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_task_goal ON task_history(goal_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_task_status ON task_history(status)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_task_created ON task_history(created_at)`);
 }

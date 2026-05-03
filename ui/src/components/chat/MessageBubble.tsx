@@ -3,6 +3,7 @@ import type { ChatMessage } from "../../hooks/useWebSocket";
 import { ToolCallBadge } from "./ToolCallBadge";
 import { SubAgentTag } from "./SubAgentTag";
 import { MarkdownContent } from "./MarkdownContent";
+import "../../styles/chat.css";
 
 function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;

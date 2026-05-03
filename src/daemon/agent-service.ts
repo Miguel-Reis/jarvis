@@ -268,7 +268,7 @@ export class AgentService implements Service, IAgentService {
     }
 
     const messageContent: string | ContentBlock[] = effectiveBlocks ?? text;
-    const stream = this.orchestrator.streamMessage(systemPrompt, messageContent);
+    const stream = this.orchestrator.streamMessage(systemPrompt, typeof messageContent === 'string' ? messageContent : JSON.stringify(messageContent));
 
     const onComplete = async (fullText: string): Promise<void> => {
       // Note: orchestrator already adds assistant response to history
@@ -328,10 +328,17 @@ export class AgentService implements Service, IAgentService {
       console.error(`[AgentService] ${name} failed after ${maxRetries + 1} attempts:`, lastErr?.message);
     };
 
+    // Run background tasks with error handling to prevent unhandled rejections
     Promise.all([
-      runWithRetry(() => this.extractKnowledge(text, response), 'Knowledge extraction'),
-      runWithRetry(() => this.learnFromInteraction(text, response, channel), 'Learning'),
-    ]);
+      runWithRetry(() => this.extractKnowledge(text, response), 'Knowledge extraction').catch(err => {
+        console.error('[AgentService] Background knowledge extraction failed:', err instanceof Error ? err.message : err);
+      }),
+      runWithRetry(() => this.learnFromInteraction(text, response, channel), 'Learning').catch(err => {
+        console.error('[AgentService] Background learning failed:', err instanceof Error ? err.message : err);
+      }),
+    ]).catch(err => {
+      console.error('[AgentService] Background tasks failed:', err instanceof Error ? err.message : err);
+    });
 
     return response;
   }

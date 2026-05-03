@@ -42,6 +42,8 @@ type HashEntry = {
 
 export type ReactionCallback = (text: string, priority: 'urgent' | 'normal') => void;
 
+const MAX_QUEUE_SIZE = 100; // Prevent unbounded queue growth
+
 export class EventReactor {
   private agentService: IAgentService | null = null;
   private config: ReactorConfig;
@@ -102,8 +104,12 @@ export class EventReactor {
       return false;
     }
 
-    // If already processing, queue for later
+    // If already processing, queue for later (with max size limit)
     if (this.processing) {
+      if (this.queue.length >= MAX_QUEUE_SIZE) {
+        console.warn(`[EventReactor] Queue full (${MAX_QUEUE_SIZE}), dropping event: ${classified.reason}`);
+        return false; // Drop event if queue is full
+      }
       console.log(`[EventReactor] Queuing event (${this.queue.length + 1} in queue): ${classified.reason}`);
       this.queue.push(classified);
       return true; // Will be processed later
@@ -143,7 +149,10 @@ export class EventReactor {
   }
 
   private async processQueue(): Promise<void> {
-    while (this.queue.length > 0 && !this.processing) {
+    const maxQueueDrain = 10; // Prevent runaway queue processing
+    let drained = 0;
+
+    while (this.queue.length > 0 && !this.processing && drained < maxQueueDrain) {
       const next = this.queue.shift()!;
       const hash = this.hashEvent(next);
 
@@ -153,6 +162,11 @@ export class EventReactor {
       if (!this.canReactGlobally()) break;
 
       await this.processEvent(next, hash);
+      drained++;
+    }
+
+    if (this.queue.length > 0 && drained >= maxQueueDrain) {
+      console.warn(`[EventReactor] Queue drain limit reached (${maxQueueDrain}), ${this.queue.length} events remaining`);
     }
   }
 
@@ -205,7 +219,7 @@ export class EventReactor {
 
     // Prune if over limit
     while (this.seenHashes.size > this.maxHashes && this.seenHashTail) {
-      const tailHash = this.seenHashTail;
+      const tailHash: string = this.seenHashTail;
       const tailEntry = this.seenHashes.get(tailHash)!;
       this.seenHashes.delete(tailHash);
       this.seenHashTail = tailEntry.previous;

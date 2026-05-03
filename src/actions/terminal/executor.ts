@@ -14,13 +14,42 @@ export type ExecuteOptions = {
   timeout?: number;
 };
 
+// Dangerous patterns that indicate potential command injection
+const DANGEROUS_PATTERNS = [
+  /\$\(/,           // Command substitution $(...)
+  /`[^`]*`/,       // Backtick command substitution
+  /;\s*/,          // Command separator
+  /\|\|/,          // OR operator
+  /&&/,            // AND operator
+  /\|/,            // Pipe
+  />/,             // Redirect
+  /</,             // Redirect input
+  /&\s*$/,         // Background process
+  /\$\{/,          // Variable expansion ${...}
+];
+
+/**
+ * Sanitize command input to prevent command injection attacks.
+ * Returns { safe: true, command } if safe, or { safe: false, reason } if dangerous.
+ */
+function sanitizeCommand(command: string): { safe: true; command: string } | { safe: false; reason: string } {
+  for (const pattern of DANGEROUS_PATTERNS) {
+    if (pattern.test(command)) {
+      return { safe: false, reason: `Potentially dangerous pattern detected: ${pattern.source}` };
+    }
+  }
+  return { safe: true, command };
+}
+
 export class TerminalExecutor {
   private shell: string;
   private defaultTimeout: number;
+  private allowDangerous: boolean;
 
-  constructor(opts?: { shell?: string; timeout?: number }) {
+  constructor(opts?: { shell?: string; timeout?: number; allowDangerous?: boolean }) {
     this.shell = opts?.shell ?? TerminalExecutor.detectShell();
     this.defaultTimeout = opts?.timeout ?? 30000;
+    this.allowDangerous = opts?.allowDangerous ?? false;
   }
 
   /** Build the shell invocation args for a command string, handling PowerShell vs POSIX shells. */
@@ -35,6 +64,15 @@ export class TerminalExecutor {
   async execute(command: string, opts?: ExecuteOptions): Promise<CommandResult> {
     const startTime = Date.now();
     const timeout = opts?.timeout ?? this.defaultTimeout;
+
+    // Sanitize command to prevent injection attacks (unless explicitly allowed)
+    if (!this.allowDangerous) {
+      const sanitized = sanitizeCommand(command);
+      if (!sanitized.safe) {
+        throw new Error(`Command injection prevention: ${sanitized.reason}. Use allowDangerous: true if this is intentional.`);
+      }
+      command = sanitized.command;
+    }
 
     // Auto-translate Unix commands to Windows equivalents when running on Windows PowerShell/CMD
     let finalCommand = command;

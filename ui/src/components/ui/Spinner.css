@@ -1,0 +1,53 @@
+/**
+ * Spinner Styles
+ */
+
+.j-spinner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.j-spinner__circle {
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: j-spinner-spin 0.6s linear infinite;
+}
+
+/* Sizes */
+.j-spinner--sm .j-spinner__circle {
+  width: 0.875rem;
+  height: 0.875rem;
+  border-width: 1.5px;
+}
+
+.j-spinner--md .j-spinner__circle {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.j-spinner--lg .j-spinner__circle {
+  width: 2rem;
+  height: 2rem;
+  border-width: 3px;
+}
+
+/* Colors */
+.j-spinner--default {
+  color: var(--j-accent, #8B5CF6);
+}
+
+.j-spinner--primary {
+  color: var(--j-accent, #8B5CF6);
+}
+
+.j-spinner--white {
+  color: #ffffff;
+}
+
+@keyframes j-spinner-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -1,6 +1,8 @@
 import type { RoleDefinition } from './types.ts';
 import { detectOS, getPlatformDescription, getCommandAliases, translateCommand } from '../actions/platform.ts';
 import { buildToolGuide } from './tool-guide.ts';
+import { getDb } from '../vault/schema.ts';
+import { getPreferencesForPrompt } from '../vault/user-preferences.ts';
 
 export type PromptContext = {
   userName?: string;
@@ -27,6 +29,8 @@ export type PromptContext = {
     description?: string;
     path?: string;
   };
+  architecturalConstraints?: string;
+  userPreferences?: string;
 };
 
 /**
@@ -259,8 +263,109 @@ export function buildSystemPrompt(role: RoleDefinition, context?: PromptContext)
       sections.push(context.activeGoals);
     }
 
+    if (context.architecturalConstraints) {
+      sections.push('');
+      sections.push(context.architecturalConstraints);
+    }
+
+    if (context.userPreferences) {
+      sections.push('');
+      sections.push(context.userPreferences);
+    }
+
     sections.push('');
   }
 
   return sections.join('\n');
+}
+
+/**
+ * Get architectural constraints from the Vault for prompt injection.
+ * Queries entities of type 'concept' with tag 'architectural_rule' or similar.
+ * Returns formatted text for system prompt injection.
+ */
+export function getArchitecturalConstraints(projectId?: string | null): string {
+  try {
+    const db = getDb();
+    const activeProject = projectId ?? null;
+
+    // Query entities tagged as architectural rules
+    // Format: properties contains { "tags": ["architectural_rule"], "constraint": "...", "priority": "high" }
+    const rows = db.prepare(`
+      SELECT id, name, properties, type
+      FROM entities
+      WHERE type = 'concept'
+        AND properties LIKE '%architectural_rule%'
+        AND (project_id IS NULL OR project_id = ?)
+      ORDER BY updated_at DESC
+      LIMIT 20
+    `).all(activeProject) as Array<{
+      id: string;
+      name: string;
+      properties: string | null;
+      type: string;
+    }>;
+
+    if (rows.length === 0) {
+      // Fallback: check for entities with 'constraint' property
+      const fallbackRows = db.prepare(`
+        SELECT id, name, properties, type
+        FROM entities
+        WHERE type = 'concept'
+          AND properties LIKE '%constraint%'
+          AND (project_id IS NULL OR project_id = ?)
+        ORDER BY updated_at DESC
+        LIMIT 20
+      `).all(activeProject) as Array<{
+        id: string;
+        name: string;
+        properties: string | null;
+        type: string;
+      }>;
+
+      if (fallbackRows.length === 0) return '';
+
+      return formatConstraints(fallbackRows);
+    }
+
+    return formatConstraints(rows);
+  } catch (err) {
+    console.warn('[prompt-builder] getArchitecturalConstraints failed:', err);
+    return '';
+  }
+}
+
+/**
+ * Format constraint entities into readable text for system prompt.
+ */
+function formatConstraints(rows: Array<{ name: string; properties: string | null }>): string {
+  if (rows.length === 0) return '';
+
+  const lines: string[] = [];
+  lines.push('## ARCHITECTURAL CONSTRAINTS');
+  lines.push('The following constraints must be followed in all code changes:');
+  lines.push('');
+
+  for (const row of rows) {
+    let constraintText = row.name;
+    if (row.properties) {
+      try {
+        const props = JSON.parse(row.properties);
+        if (props.constraint) {
+          constraintText = props.constraint;
+        }
+        if (props.priority === 'critical' || props.priority === 'high') {
+          constraintText = `[${props.priority.toUpperCase()}] ${constraintText}`;
+        }
+      } catch {
+        // Invalid JSON — use name as-is
+      }
+    }
+    lines.push(`- ${constraintText}`);
+  }
+
+  lines.push('');
+  lines.push('**IMPORTANT**: Violating these constraints will break the system. Always verify compliance before implementing changes.');
+
+  return lines.join('\n');
 }

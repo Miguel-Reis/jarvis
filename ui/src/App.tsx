@@ -1,6 +1,7 @@
 import React, { useState, useEffect, Component, type ReactNode, type ErrorInfo } from "react";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { useVoice } from "./hooks/useVoice";
+import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { ToastProvider } from "./components/Toast";
 import { GlobalSearch } from "./components/GlobalSearch";
 import "./styles/sidebar.css";
@@ -62,8 +63,14 @@ const GoalsPage = React.lazy(() => import("./pages/GoalsPage"));
 const DashboardPage = React.lazy(() => import("./pages/DashboardPage"));
 const SitesPage = React.lazy(() => import("./pages/SitesPage"));
 const ProjectsPage = React.lazy(() => import("./pages/ProjectsPage"));
+const SuperJarvisPage = React.lazy(() => import("./pages/SuperJarvisPage"));
+const ProgressDashboardPage = React.lazy(() => import("./pages/ProgressDashboardPage.tsx"));
+const WarRoomPage = React.lazy(() => import("./pages/WarRoomPage.tsx"));
+const SystemStatusPage = React.lazy(() => import("./pages/SystemStatusPage.tsx"));
+const HUDOverlayPage = React.lazy(() => import("./pages/HUDOverlayPage.tsx"));
+const LocalBrainDashboard = React.lazy(() => import("./pages/LocalBrainDashboard"));
 
-type Route = "dashboard" | "chat" | "tasks" | "pipeline" | "memory" | "calendar" | "office" | "knowledge" | "command" | "authority" | "awareness" | "workflows" | "goals" | "sites" | "projects" | "settings";
+type Route = "dashboard" | "chat" | "tasks" | "pipeline" | "memory" | "calendar" | "office" | "knowledge" | "command" | "authority" | "awareness" | "workflows" | "goals" | "sites" | "projects" | "superjarvis" | "progress" | "warroom" | "systemstatus" | "hud" | "localbrain" | "settings";
 
 export type SettingsSection = "general" | "profile" | "llm" | "channels" | "integrations" | "sidecar" | "mcp";
 
@@ -72,7 +79,7 @@ const SETTINGS_SECTIONS: SettingsSection[] = ["general", "profile", "llm", "chan
 function getRoute(): Route {
   const hash = window.location.hash.replace("#/", "");
   if (hash.startsWith("settings")) return "settings";
-  if (["dashboard", "chat", "tasks", "pipeline", "memory", "calendar", "office", "knowledge", "command", "authority", "awareness", "workflows", "goals", "sites", "projects"].includes(hash)) {
+  if (["dashboard", "chat", "tasks", "pipeline", "memory", "calendar", "office", "knowledge", "command", "authority", "awareness", "workflows", "goals", "sites", "projects", "progress", "warroom", "systemstatus", "hud", "superjarvis"].includes(hash)) {
     return hash as Route;
   }
   return "dashboard";
@@ -114,13 +121,16 @@ const NAV_CORE: NavEntry[] = [
   { icon: "\u25CE", label: "Chat",       route: "chat" },
   { icon: "\u25A3", label: "Projects",   route: "projects" },
   { icon: "\u25C6", label: "Goals",      route: "goals" },
+  { icon: "\uD83D\uDCCA", label: "Progress",   route: "progress" },
   { icon: "\u2B21", label: "Workflows",  route: "workflows" },
   { icon: "\u25A0", label: "Sites",      route: "sites" },
+  { icon: "\uD83D\uDE80", label: "Super Jarvis", route: "superjarvis" },
 ];
 
 const NAV_INTEL: NavEntry[] = [
   { icon: "\u25B3", label: "Agents",     route: "office" },
   { icon: "\u2726", label: "Tasks",      route: "tasks" },
+  { icon: "\uD83D\uDD0D", label: "War Room",  route: "warroom" },
   { icon: "\u25A3", label: "Authority",  route: "authority" },
   { icon: "\u25C8", label: "Memory",     route: "memory" },
 ];
@@ -131,6 +141,8 @@ const NAV_MORE: NavEntry[] = [
   { icon: "\u25CB", label: "Knowledge",  route: "knowledge" },
   { icon: "\u25A3", label: "Command",    route: "command" },
   { icon: "\u25CE", label: "Awareness",  route: "awareness" },
+  { icon: "\uD83E\uDDE0", label: "Local Brain",  route: "localbrain" },
+  { icon: "\u25C9", label: "System Status", route: "systemstatus" },
 ];
 
 const SETTINGS_NAV: { section: SettingsSection; label: string }[] = [
@@ -243,27 +255,43 @@ export function App() {
   // Close bell on outside click
   useEffect(() => {
     if (!bellOpen) return;
+
     const close = () => setBellOpen(false);
-    setTimeout(() => window.addEventListener('click', close), 0);
-    return () => window.removeEventListener('click', close);
+    // Use setTimeout to avoid immediate trigger on the click that opened the bell
+    const timeoutId = setTimeout(() => {
+      window.addEventListener('click', close, { once: true });
+    }, 0);
+
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener('click', close);
+    };
   }, [bellOpen]);
 
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
-  // Global keyboard shortcuts
+  // Use keyboard shortcuts hook
+  useKeyboardShortcuts(route, true);
+
+  // Additional global shortcuts (legacy support)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
-      // Ignore when typing in an input/textarea
       const tag = (e.target as HTMLElement).tagName;
       const isEditable = tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement).isContentEditable;
 
-      if (mod && e.key === "k") { e.preventDefault(); setSearchOpen(v => !v); return; }
+      // Override for search toggle ( Cmd+K )
+      if (mod && e.key === "k") {
+        e.preventDefault();
+        return; // Handled by useKeyboardShortcuts
+      }
+      // New item shortcut
       if (mod && e.key === "n" && !isEditable) {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent("jarvis:new-item"));
         return;
       }
+      // Toggle shortcuts overlay ( Cmd+/ )
       if (mod && e.key === "/" && !isEditable) {
         e.preventDefault();
         setShortcutsOpen(v => !v);
@@ -505,6 +533,12 @@ export function App() {
           {route === "goals" && <GoalsPage goalEvents={ws.goalEvents} />}
           {route === "sites" && <SitesPage sendMessage={ws.sendMessage} isConnected={ws.isConnected} messages={ws.messages} />}
           {route === "projects" && <ProjectsPage />}
+          {route === "progress" && <ProgressDashboardPage />}
+          {route === "warroom" && <WarRoomPage />}
+          {route === "systemstatus" && <SystemStatusPage />}
+          {route === "hud" && <HUDOverlayPage />}
+          {route === "localbrain" && <LocalBrainDashboard />}
+          {route === "superjarvis" && <SuperJarvisPage />}
           {route === "authority" && <AuthorityPage />}
           {route === "settings" && <SettingsPage section={settingsSection} />}
         </React.Suspense>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import type { GoalEvent } from "../hooks/useWebSocket";
 import { GoalConstellation } from "../components/goals/GoalConstellation";
 import { GoalTimeline } from "../components/goals/GoalTimeline";

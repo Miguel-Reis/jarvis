@@ -20,6 +20,8 @@ import {
   FileWatcher,
   ClipboardMonitor,
   ProcessMonitor,
+  NetworkMonitor,
+  BatteryMonitor,
 } from '../observers/index.ts';
 import { EmailSync } from '../observers/email.ts';
 import { CalendarSync } from '../observers/calendar.ts';
@@ -55,6 +57,10 @@ function mapEventType(eventType: string): ObservationType {
     case 'session_ended':
     case 'suggestion_ready':
       return 'screen_capture';
+    case 'network':
+      return 'app_activity';
+    case 'battery':
+      return 'app_activity';
     default:
       return 'app_activity';
   }
@@ -96,6 +102,12 @@ export class ObserverService implements Service {
 
       // Register Calendar observer (if Google auth available)
       this.manager.register(new CalendarSync(this.googleAuth ?? undefined));
+
+      // Register Network monitor (connectivity, latency)
+      this.manager.register(new NetworkMonitor());
+
+      // Register Battery monitor (power management)
+      this.manager.register(new BatteryMonitor());
 
       // Set event handler: store in vault + classify + route
       this.manager.setEventHandler((event: ObserverEvent) => {

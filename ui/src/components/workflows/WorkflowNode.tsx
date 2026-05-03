@@ -1,5 +1,6 @@
 import React, { memo } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
+import "../../styles/workflows.css";
 
 type WorkflowNodeData = {
   label: string;

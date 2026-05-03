@@ -1,0 +1,83 @@
+/**
+ * Event Timeline Styles
+ *
+ * Chronological display of agent coordination events.
+ */
+
+.event-timeline-container {
+  padding: 1rem;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.event-timeline {
+  position: relative;
+  padding-left: 2rem;
+}
+
+.event-timeline::before {
+  content: '';
+  position: absolute;
+  left: 0.5rem;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: rgba(148, 163, 184, 0.2);
+}
+
+.event-timeline-item {
+  position: relative;
+  padding-bottom: 1rem;
+}
+
+.event-timeline-dot {
+  position: absolute;
+  left: -1.625rem;
+  top: 0.25rem;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  border: 2px solid;
+  background: var(--bg-primary);
+}
+
+.event-timeline-dot--task {
+  border-color: rgba(59, 130, 246, 0.5);
+}
+
+.event-timeline-dot--escalation {
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+.event-timeline-dot--completion {
+  border-color: rgba(16, 185, 129, 0.5);
+}
+
+.event-timeline-dot--communication {
+  border-color: rgba(139, 92, 246, 0.5);
+}
+
+.event-timeline-content {
+  background: rgba(31, 41, 55, 0.5);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid rgba(75, 85, 99, 0.3);
+}
+
+.event-timeline-type {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.25rem;
+}
+
+.event-timeline-time {
+  font-size: 0.75rem;
+  opacity: 0.6;
+}
+
+.event-timeline-details {
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+}

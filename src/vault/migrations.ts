@@ -19,7 +19,7 @@ import { withTransaction } from './schema.ts';
 
 // ── Migration version ───────────────────────────────────────────────
 
-const CURRENT_VERSION = 3;
+const CURRENT_VERSION = 4;
 
 const MIGRATIONS: Array<{
   version: number;
@@ -54,6 +54,42 @@ const MIGRATIONS: Array<{
         db.run('ALTER TABLE commitments ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE SET NULL');
         db.run('ALTER TABLE conversations ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE SET NULL');
         db.run('ALTER TABLE goals ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE SET NULL');
+      });
+    },
+  },
+
+  // v4: add deep memory synthesis tables
+  {
+    version: 4,
+    name: 'add deep memory synthesis tables',
+    up: () => {
+      const db = getDb();
+      withTransaction(() => {
+        db.run(`
+          CREATE TABLE IF NOT EXISTS synthesized_patterns (
+            id TEXT PRIMARY KEY,
+            category TEXT NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT,
+            source_projects TEXT,
+            occurrence_count INTEGER,
+            success_rate REAL,
+            last_observed INTEGER,
+            related_concepts TEXT,
+            confidence REAL,
+            created_at INTEGER
+          )
+        `);
+        db.run(`
+          CREATE TABLE IF NOT EXISTS knowledge_links (
+            from_entity TEXT NOT NULL,
+            to_entity TEXT NOT NULL,
+            link_type TEXT NOT NULL,
+            strength REAL,
+            created_at INTEGER,
+            PRIMARY KEY (from_entity, to_entity)
+          )
+        `);
       });
     },
   },

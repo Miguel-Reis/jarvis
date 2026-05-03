@@ -12,7 +12,10 @@ export async function api<T>(
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error((body as any).error ?? `HTTP ${res.status}`);
+    const error = body && typeof body === 'object' && 'error' in body
+      ? (body as { error: string }).error
+      : `HTTP ${res.status}`;
+    throw new Error(error);
   }
   return res.json();
 }

@@ -165,6 +165,7 @@ export default function ChatPage({
 
         {/* Input */}
         <ChatInput
+          data-chat-send
           onSend={(text, images) => sendMessage(text, { ...(activeThreadId ? { threadId: activeThreadId } : {}), ...(images ? { images } : {}) })}
           disabled={!isConnected}
           disableImages={disableImages}

@@ -2,11 +2,36 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 
 type SearchResult = {
   id: string;
-  type: "entity" | "thread" | "goal" | "task";
+  type: "entity" | "thread" | "goal" | "task" | "action" | "navigation";
   title: string;
   subtitle?: string;
-  href: string;
+  href?: string;
+  action?: () => void;
+  shortcut?: string;
 };
+
+type CommandAction = {
+  id: string;
+  title: string;
+  subtitle: string;
+  shortcut: string;
+  category: "navigation" | "action";
+  action: () => void;
+};
+
+const COMMAND_ACTIONS: CommandAction[] = [
+  { id: "new-chat", title: "New Chat", subtitle: "Start a new conversation", shortcut: "⌘N", category: "action", action: () => window.location.hash = "#/chat" },
+  { id: "new-goal", title: "New Goal", subtitle: "Create a new goal", shortcut: "⌘G", category: "action", action: () => window.dispatchEvent(new CustomEvent("jarvis:new-goal")) },
+  { id: "new-task", title: "New Task", subtitle: "Create a new task", shortcut: "⌘T", category: "action", action: () => window.dispatchEvent(new CustomEvent("jarvis:new-task")) },
+  { id: "dashboard", title: "Dashboard", subtitle: "Go to dashboard", shortcut: "⌘D", category: "navigation", action: () => window.location.hash = "#/dashboard" },
+  { id: "goals", title: "Goals", subtitle: "View all goals", shortcut: "", category: "navigation", action: () => window.location.hash = "#/goals" },
+  { id: "workflows", title: "Workflows", subtitle: "View workflows", shortcut: "", category: "navigation", action: () => window.location.hash = "#/workflows" },
+  { id: "projects", title: "Projects", subtitle: "View projects", shortcut: "", category: "navigation", action: () => window.location.hash = "#/projects" },
+  { id: "superjarvis", title: "Super Jarvis", subtitle: "Control center", shortcut: "", category: "navigation", action: () => window.location.hash = "#/superjarvis" },
+  { id: "progress", title: "Progress", subtitle: "View progress dashboard", shortcut: "", category: "navigation", action: () => window.location.hash = "#/progress" },
+  { id: "warroom", title: "War Room", subtitle: "Agent coordination", shortcut: "", category: "navigation", action: () => window.location.hash = "#/warroom" },
+  { id: "settings", title: "Settings", subtitle: "Configure Jarvis", shortcut: "", category: "navigation", action: () => window.location.hash = "#/settings" },
+];
 
 type Props = {
   open: boolean;
@@ -40,23 +65,50 @@ export function GlobalSearch({ open, onClose }: Props) {
   }, [open]);
 
   useEffect(() => {
-    if (!debouncedQuery.trim()) { setResults([]); return; }
-    const q = debouncedQuery.trim();
+    if (!debouncedQuery.trim()) {
+      // Show command actions when query is empty
+      const actions: SearchResult[] = COMMAND_ACTIONS.map(a => ({
+        id: a.id,
+        type: a.category,
+        title: a.title,
+        subtitle: a.subtitle,
+        shortcut: a.shortcut,
+        action: a.action,
+      }));
+      setResults(actions);
+      return;
+    }
+
+    const q = debouncedQuery.trim().toLowerCase();
     setLoading(true);
     setActiveIdx(0);
+
+    // Filter command actions by query
+    const matchedActions: SearchResult[] = COMMAND_ACTIONS
+      .filter(a => a.title.toLowerCase().includes(q) || a.subtitle.toLowerCase().includes(q))
+      .map(a => ({
+        id: a.id,
+        type: a.category as "navigation" | "action",
+        title: a.title,
+        subtitle: a.subtitle,
+        shortcut: a.shortcut,
+        action: a.action,
+      }));
 
     Promise.allSettled([
       fetch(`/api/vault/search?q=${encodeURIComponent(q)}&limit=5`).then(r => r.ok ? r.json() : { entities: [], facts: [] }),
       fetch(`/api/vault/threads/search?q=${encodeURIComponent(q)}`).then(r => r.ok ? r.json() : []),
       fetch(`/api/goals?q=${encodeURIComponent(q)}&limit=5`).then(r => r.ok ? r.json() : []),
     ]).then(([entitiesRes, threadsRes, goalsRes]) => {
-      const combined: SearchResult[] = [];
+      const combined: SearchResult[] = [...matchedActions];
 
       if (entitiesRes.status === "fulfilled") {
         const { entities = [] } = entitiesRes.value as { entities: any[] };
         for (const e of entities.slice(0, 4)) {
           combined.push({ id: `e-${e.id}`, type: "entity", title: e.name, subtitle: e.type, href: "#/memory" });
         }
+      } else {
+        console.warn("[GlobalSearch] Entities search failed:", entitiesRes.reason);
       }
 
       if (threadsRes.status === "fulfilled") {
@@ -64,6 +116,8 @@ export function GlobalSearch({ open, onClose }: Props) {
         for (const t of threads.slice(0, 4)) {
           combined.push({ id: `t-${t.id ?? t.thread_id}`, type: "thread", title: t.title ?? t.content?.slice(0, 60) ?? "Thread", subtitle: "Chat thread", href: "#/chat" });
         }
+      } else {
+        console.warn("[GlobalSearch] Threads search failed:", threadsRes.reason);
       }
 
       if (goalsRes.status === "fulfilled") {
@@ -71,14 +125,23 @@ export function GlobalSearch({ open, onClose }: Props) {
         for (const g of goals.slice(0, 4)) {
           combined.push({ id: `g-${g.id}`, type: "goal", title: g.title, subtitle: `${g.status} · ${g.level}`, href: "#/goals" });
         }
+      } else {
+        console.warn("[GlobalSearch] Goals search failed:", goalsRes.reason);
       }
 
       setResults(combined);
+    }).catch(err => {
+      console.error("[GlobalSearch] Search failed:", err);
+      setResults(matchedActions); // Fallback to just command actions
     }).finally(() => setLoading(false));
   }, [debouncedQuery]);
 
   const handleSelect = useCallback((result: SearchResult) => {
-    window.location.hash = result.href;
+    if (result.action) {
+      result.action();
+    } else if (result.href) {
+      window.location.hash = result.href;
+    }
     onClose();
   }, [onClose]);
 
@@ -96,6 +159,8 @@ export function GlobalSearch({ open, onClose }: Props) {
     thread: "#A78BFA",
     goal: "#34D399",
     task: "#FBBF24",
+    action: "#F472B6",
+    navigation: "#22D3EE",
   };
 
   return (
@@ -127,7 +192,8 @@ export function GlobalSearch({ open, onClose }: Props) {
             ref={inputRef}
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="Search goals, entities, threads..."
+            placeholder="Type to search or press Cmd+K for commands..."
+            data-global-search
             style={{
               flex: 1, marginLeft: "10px", background: "none", border: "none", outline: "none",
               color: "rgba(255,255,255,0.9)", fontSize: "14px",
@@ -142,6 +208,22 @@ export function GlobalSearch({ open, onClose }: Props) {
         {/* Results */}
         {results.length > 0 ? (
           <div style={{ maxHeight: "360px", overflowY: "auto" }}>
+            {/* Section headers */}
+            {results.some(r => r.type === "action") && (
+              <div style={{ padding: "8px 16px 4px", fontSize: "10px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "rgba(255,255,255,0.3)" }}>
+                Actions
+              </div>
+            )}
+            {results.some(r => r.type === "navigation") && (
+              <div style={{ padding: "8px 16px 4px", fontSize: "10px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "rgba(255,255,255,0.3)" }}>
+                Navigation
+              </div>
+            )}
+            {results.some(r => ["entity", "thread", "goal", "task"].includes(r.type as string)) && (
+              <div style={{ padding: "8px 16px 4px", fontSize: "10px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "rgba(255,255,255,0.3)" }}>
+                Search Results
+              </div>
+            )}
             {results.map((r, i) => (
               <button
                 key={r.id}
@@ -156,14 +238,19 @@ export function GlobalSearch({ open, onClose }: Props) {
               >
                 <span style={{
                   fontSize: "9px", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase",
-                  color: TYPE_COLORS[r.type] ?? "#A78BFA", width: "46px", flexShrink: 0,
+                  color: TYPE_COLORS[r.type] ?? "#A78BFA", width: "60px", flexShrink: 0,
                 }}>
                   {r.type}
                 </span>
                 <span style={{ flex: 1, fontSize: "13px", color: "rgba(255,255,255,0.88)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {r.title}
                 </span>
-                {r.subtitle && (
+                {r.shortcut && (
+                  <kbd style={{ fontSize: "9px", padding: "2px 5px", borderRadius: "3px", background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.4)", border: "1px solid rgba(255,255,255,0.1)", flexShrink: 0 }}>
+                    {r.shortcut}
+                  </kbd>
+                )}
+                {r.subtitle && !r.shortcut && (
                   <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.35)", flexShrink: 0 }}>{r.subtitle}</span>
                 )}
               </button>
@@ -175,8 +262,8 @@ export function GlobalSearch({ open, onClose }: Props) {
           </div>
         ) : !debouncedQuery ? (
           <div style={{ padding: "16px", display: "flex", gap: "6px", flexWrap: "wrap" }}>
-            {["Goals", "Entities", "Threads"].map(hint => (
-              <span key={hint} style={{ fontSize: "11px", padding: "3px 8px", borderRadius: "5px", background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.3)", border: "1px solid rgba(255,255,255,0.06)" }}>
+            {["⌘N New Chat", "⌘G New Goal", "⌘D Dashboard"].map(hint => (
+              <span key={hint} style={{ fontSize: "11px", padding: "3px 8px", borderRadius: "5px", background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.4)", border: "1px solid rgba(255,255,255,0.06)" }}>
                 {hint}
               </span>
             ))}

@@ -179,8 +179,10 @@ export class BrowserController {
     try {
       await this.cdp.send('Page.navigate', { url });
     } catch (err) {
-      // If navigate fails, suppress the dangling loadPromise timeout
-      loadPromise.catch(() => {});
+      // If navigate fails, suppress the dangling loadPromise timeout and log it
+      loadPromise.catch((loadErr) => {
+        console.warn('[BrowserController] Navigation failed, suppressing load timeout:', loadErr instanceof Error ? loadErr.message : loadErr);
+      });
       throw err;
     }
 
@@ -248,6 +250,11 @@ export class BrowserController {
     const coords = this.elementCoords.get(elementId);
     if (!coords) {
       return `Error: Element [${elementId}] not found. Run browser_snapshot first.`;
+    }
+
+    // Validate coordinates are within reasonable screen bounds
+    if (coords.x < 0 || coords.y < 0 || coords.x > 10000 || coords.y > 10000) {
+      return `Error: Element [${elementId}] has invalid coordinates (${coords.x}, ${coords.y}). Page may have changed. Run browser_snapshot again.`;
     }
 
     await this.cdp.send('Input.dispatchMouseEvent', {

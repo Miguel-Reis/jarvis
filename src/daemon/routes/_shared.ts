@@ -6,8 +6,8 @@
 import type { HealthMonitor } from '../health.ts';
 import type { AgentService } from '../agent-service.ts';
 import type { JarvisConfig } from '../../config/types.ts';
-import type { WebSocketService } from './ws-service.ts';
-import type { ChannelService } from './channel-service.ts';
+import type { WebSocketService } from '../ws-service.ts';
+import type { ChannelService } from '../channel-service.ts';
 import type { AuthorityEngine } from '../../authority/engine.ts';
 import type { ApprovalManager } from '../../authority/approval.ts';
 import type { AuditTrail, AuthorityDecisionType } from '../../authority/audit.ts';

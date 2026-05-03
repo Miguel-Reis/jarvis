@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import type { VoiceState } from "../../hooks/useVoice";
 import type { ImageAttachment } from "../../hooks/useWebSocket";
+import "../../styles/chat.css";
 
 type VoiceProps = {
   voiceState: VoiceState;

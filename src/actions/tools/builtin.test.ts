@@ -79,7 +79,7 @@ test('write_file returns error string (not throws) for protected paths', async (
   const result = await writeFile('/this-path-should-never-exist-jarvis-test/file.txt', 'x');
   // Either it wrote (unexpected) or returned an error string
   if (!result.includes('File written successfully')) {
-    expect(result).toContain('Error writing file:');
+    expect(result).toMatch(/(Error writing file:|Path traversal detected:)/);
   }
 });
 

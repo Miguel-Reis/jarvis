@@ -12,9 +12,12 @@ import type { ApprovalManager, ApprovalRequest } from '../authority/approval.ts'
 import type { AuditTrail } from '../authority/audit.ts';
 import type { EmergencyController } from '../authority/emergency.ts';
 import { getActionForTool } from '../authority/tool-action-map.ts';
+import { getArchitecturalConstraints } from '../roles/prompt-builder.ts';
+import { globalLocalBrain, type LocalBrainResult } from '../brain/local-brain.ts';
 
 const MAX_TOOL_ITERATIONS = 200;
 const MAX_TOOL_RESULT_CHARS = 6000; // Cap individual tool results to control context size
+const MAX_TOOL_ITERATIONS_WARNING = 50; // Warn when approaching limit
 
 export class AgentOrchestrator {
   private hierarchy: AgentHierarchy;
@@ -67,6 +70,24 @@ export class AgentOrchestrator {
 
   setEmergencyController(controller: EmergencyController): void {
     this.emergencyController = controller;
+  }
+
+  /**
+   * Handle an external interrupt event.
+   * This method allows the system to pivot the autonomous loop immediately.
+   */
+  async interrupt(event: any): Promise<void> {
+    console.log(`[Orchestrator] Handling interrupt: ${event.type} (Severity: ${event.severity})`);
+
+    const primary = this.getPrimary();
+    if (!primary) {
+      console.error('[Orchestrator] Cannot interrupt: No primary agent active.');
+      return;
+    }
+
+    // Inject the interrupt as a high-priority system message to the primary agent
+    const interruptMsg = `\n\n🚨 SYSTEM INTERRUPT [${event.severity.toUpperCase()}]: ${event.message}\nData: ${JSON.stringify(event.data)}\n\nIMPORTANT: Suspend your current task immediately and prioritize addressing this event.`;
+    primary.addMessage('system', interruptMsg);
   }
 
   setApprovalCallback(cb: (request: ApprovalRequest) => void): void {
@@ -156,10 +177,24 @@ export class AgentOrchestrator {
     this.hierarchy.addAgent(agent);
 
     // Add system message with role context for sub-agents
-    agent.addMessage(
-      'system',
-      `You are ${role.name}, spawned by ${parent.agent.role.name}. ${role.description}\n\nResponsibilities:\n${role.responsibilities.map((r) => `- ${r}`).join('\n')}\n\nYou report to: ${parent.agent.role.name}\n\nCommunication style: ${role.communication_style.tone} tone, ${role.communication_style.verbosity} verbosity, ${role.communication_style.formality} formality.`
-    );
+    const systemLines: string[] = [
+      `You are ${role.name}, spawned by ${parent.agent.role.name}. ${role.description}`,
+      '',
+      'Responsibilities:',
+      ...role.responsibilities.map((r) => `- ${r}`),
+      '',
+      `You report to: ${parent.agent.role.name}`,
+      '',
+      `Communication style: ${role.communication_style.tone} tone, ${role.communication_style.verbosity} verbosity, ${role.communication_style.formality} formality.`,
+    ];
+
+    // Inject architectural constraints for sub-agent inheritance
+    const constraints = getArchitecturalConstraints();
+    if (constraints) {
+      systemLines.push('', constraints);
+    }
+
+    agent.addMessage('system', systemLines.join('\n'));
 
     return agent;
   }
@@ -201,6 +236,54 @@ export class AgentOrchestrator {
   }
 
   /**
+   * Process a user message through Local Brain first, then LLM if no match.
+   * Local Brain handles simple/pattern-based requests without LLM calls.
+   */
+  async processMessageWithLocalBrain(systemPrompt: string, message: string): Promise<string> {
+    const primary = this.getPrimary();
+    if (!primary) {
+      throw new Error('No primary agent exists. Create one first.');
+    }
+
+    // Add user message to persistent history
+    primary.addMessage('user', message);
+
+    // Try Local Brain first
+    const localResult = await globalLocalBrain.process(message);
+
+    if (localResult.matched) {
+      // Local Brain handled it - execute tool calls directly
+      console.log(`[Orchestrator] Local Brain matched: ${localResult.skill.name}`);
+
+      if (localResult.result.toolCalls && localResult.result.toolCalls.length > 0) {
+        // Execute tool calls
+        const results: string[] = [];
+        for (const tc of localResult.result.toolCalls) {
+          const result = await this.executeTool({
+            id: crypto.randomUUID(),
+            name: tc.tool,
+            arguments: tc.args,
+          });
+          results.push(typeof result === 'string' ? result : JSON.stringify(result));
+        }
+
+        const response = localResult.result.response ?? `Executed ${localResult.skill.name}: ${results.join(', ')}`;
+        primary.addMessage('assistant', response);
+        return response;
+      }
+
+      // Return cached/direct response
+      const response = localResult.result.response ?? `Local action completed: ${localResult.result.action}`;
+      primary.addMessage('assistant', response);
+      return response;
+    }
+
+    // Fall back to LLM
+    console.log(`[Orchestrator] Local Brain miss, falling back to LLM: ${localResult.reason}`);
+    return this.processMessage(systemPrompt, message);
+  }
+
+  /**
    * Process a user message through the primary agent (non-streaming).
    * Includes the tool execution loop: LLM → tool_calls → execute → re-call → repeat.
    */
@@ -231,6 +314,11 @@ export class AgentOrchestrator {
 
     // Tool execution loop
     for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
+      // Warn when approaching iteration limit
+      if (iteration === MAX_TOOL_ITERATIONS_WARNING) {
+        console.warn(`[Orchestrator] Approaching max tool iterations (${iteration}/${MAX_TOOL_ITERATIONS}). Possible loop detected.`);
+      }
+
       const llmResponse: LLMResponse = await this.llmManager.chat(messages, { tools });
 
       if (llmResponse.finish_reason === 'tool_use' && llmResponse.tool_calls.length > 0) {
@@ -251,6 +339,19 @@ export class AgentOrchestrator {
           });
           const logStr = typeof result === 'string' ? result.slice(0, 100) : `[${result.length} content blocks]`;
           console.log(`[Orchestrator] Tool ${tc.name} → ${logStr}...`);
+
+          // Review Phase: Check for tool execution failures
+          if (typeof result === 'string' && (result.toLowerCase().includes('error') || result.toLowerCase().includes('failed') || result.toLowerCase().includes('exception'))) {
+            const correctionPrompt = `The previous tool execution failed with: ${result}.
+Analyze why it failed (wrong arguments, missing permissions, environmental change)
+and generate a correction strategy. Do NOT attempt the tool again immediately.`;
+
+            const primary = this.getPrimary();
+            if (primary) {
+              primary.addMessage('system', correctionPrompt);
+              messages.push({ role: 'system', content: correctionPrompt });
+            }
+          }
 
           // Capture document markers so they appear in the final response
           if (typeof result === 'string') {
@@ -279,6 +380,80 @@ export class AgentOrchestrator {
     // Add final response to persistent history
     primary.addMessage('assistant', finalText);
     return finalText;
+  }
+
+  /**
+   * Stream a message through Local Brain first, then LLM if no match.
+   * Yields text/tool_call events through all iterations.
+   */
+  async *streamMessageWithLocalBrain(systemPrompt: string, message: string): AsyncIterable<LLMStreamEvent> {
+    const primary = this.getPrimary();
+    if (!primary) {
+      throw new Error('No primary agent exists. Create one first.');
+    }
+
+    // Add user message to persistent history
+    primary.addMessage('user', message);
+
+    // Try Local Brain first
+    const localResult = await globalLocalBrain.process(message);
+
+    if (localResult.matched) {
+      // Local Brain handled it
+      console.log(`[Orchestrator] Local Brain matched: ${localResult.skill.name}`);
+
+      if (localResult.result.toolCalls && localResult.result.toolCalls.length > 0) {
+        // Execute tool calls and yield results
+        for (const tc of localResult.result.toolCalls) {
+          yield { type: 'tool_call' as const, tool_call: { id: crypto.randomUUID(), name: tc.tool, arguments: tc.args } };
+        }
+
+        const results: string[] = [];
+        for (const tc of localResult.result.toolCalls) {
+          const result = await this.executeTool({
+            id: crypto.randomUUID(),
+            name: tc.tool,
+            arguments: tc.args,
+          });
+          results.push(typeof result === 'string' ? result : JSON.stringify(result));
+        }
+
+        const response = localResult.result.response ?? `Executed ${localResult.skill.name}: ${results.join(', ')}`;
+        yield { type: 'text', text: response };
+        primary.addMessage('assistant', response);
+        yield {
+          type: 'done',
+          response: {
+            content: response,
+            tool_calls: [],
+            usage: { input_tokens: 0, output_tokens: 0 },
+            model: 'local-brain',
+            finish_reason: 'stop',
+          },
+        };
+        return;
+      }
+
+      // Return cached/direct response
+      const response = localResult.result.response ?? `Local action completed: ${localResult.result.action}`;
+      yield { type: 'text', text: response };
+      primary.addMessage('assistant', response);
+      yield {
+        type: 'done',
+        response: {
+          content: response,
+          tool_calls: [],
+          usage: { input_tokens: 0, output_tokens: 0 },
+          model: 'local-brain',
+          finish_reason: 'stop',
+        },
+      };
+      return;
+    }
+
+    // Fall back to LLM
+    console.log(`[Orchestrator] Local Brain miss, falling back to LLM: ${localResult.reason}`);
+    yield* this.streamMessage(systemPrompt, message);
   }
 
   /**
@@ -408,6 +583,19 @@ export class AgentOrchestrator {
         });
         const logStr = typeof result === 'string' ? result.slice(0, 100) : `[${result.length} content blocks]`;
         console.log(`[Orchestrator] Tool ${tc.name} → ${logStr}...`);
+
+        // Review Phase: Check for tool execution failures
+        if (typeof result === 'string' && (result.toLowerCase().includes('error') || result.toLowerCase().includes('failed') || result.toLowerCase().includes('exception'))) {
+          const correctionPrompt = `The previous tool execution failed with: ${result}.
+Analyze why it failed (wrong arguments, missing permissions, environmental change)
+and generate a correction strategy. Do NOT attempt the tool again immediately.`;
+
+          const primary = this.getPrimary();
+          if (primary) {
+            primary.addMessage('system', correctionPrompt);
+            messages.push({ role: 'system', content: correctionPrompt });
+          }
+        }
 
         // Inject document markers into the stream so the UI can render download cards
         if (typeof result === 'string') {

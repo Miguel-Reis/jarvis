@@ -1,0 +1,72 @@
+/**
+ * Badge Styles
+ */
+
+.j-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 9999px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Sizes */
+.j-badge--sm {
+  padding: 0.125rem 0.5rem;
+  font-size: 0.625rem;
+}
+
+.j-badge--md {
+  padding: 0.25rem 0.625rem;
+  font-size: 0.75rem;
+}
+
+.j-badge--lg {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
+}
+
+/* Variants */
+.j-badge--default {
+  background: rgba(148, 163, 184, 0.15);
+  color: #9CA3AF;
+}
+
+.j-badge--success {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10B981;
+}
+
+.j-badge--warning {
+  background: rgba(245, 158, 11, 0.15);
+  color: #F59E0B;
+}
+
+.j-badge--danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: #F87171;
+}
+
+.j-badge--info {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60A5FA;
+}
+
+.j-badge--purple {
+  background: rgba(139, 92, 246, 0.15);
+  color: #A78BFA;
+}
+
+/* Dot indicator */
+.j-badge__dot {
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.j-badge--sm .j-badge__dot {
+  width: 0.25rem;
+  height: 0.25rem;
+}

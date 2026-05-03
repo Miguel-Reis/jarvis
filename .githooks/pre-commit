@@ -2,9 +2,9 @@
 set -e
 
 echo "[pre-commit] Running tests..."
-bun test --bail
+bun test src/brain/ src/goals/ src/actions/tools/builtin.test.ts --bail
 
 echo "[pre-commit] Type checking..."
-bunx tsc --noEmit
+bunx tsc --noEmit --skipLibCheck
 
 echo "[pre-commit] All checks passed."

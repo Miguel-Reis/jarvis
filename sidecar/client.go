@@ -26,6 +26,7 @@ type SidecarClient struct {
 	claims          *SidecarTokenClaims
 	handlers        map[string]RPCHandler
 	conn            *websocket.Conn
+	connMu          sync.RWMutex // protects conn access (race condition fix)
 	reconnectDelay  time.Duration
 	stopped         bool
 	availableCaps   []SidecarCapability
@@ -75,6 +76,8 @@ func (c *SidecarClient) Start(ctx context.Context) {
 
 func (c *SidecarClient) Stop() {
 	c.stopped = true
+	c.connMu.Lock()
+	defer c.connMu.Unlock()
 	if c.conn != nil {
 		c.conn.Close(websocket.StatusNormalClosure, "client shutdown")
 		c.conn = nil
@@ -132,7 +135,9 @@ func (c *SidecarClient) connectAndServe(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("dial: %w", err)
 	}
+	c.connMu.Lock()
 	c.conn = conn
+	c.connMu.Unlock()
 	// Allow large messages (10MB)
 	conn.SetReadLimit(10 * 1024 * 1024)
 
@@ -187,40 +192,60 @@ func (c *SidecarClient) sendCapabilitiesUpdate(ctx context.Context) error {
 }
 
 func (c *SidecarClient) readLoop(ctx context.Context) error {
+	defer func() {
+		// Cleanup: close connection and nil it out when readLoop exits
+		c.connMu.Lock()
+		if c.conn != nil {
+			c.conn.Close(websocket.StatusGoingAway, "readLoop exited")
+			c.conn = nil
+		}
+		c.connMu.Unlock()
+	}()
+
 	for {
-		_, data, err := c.conn.Read(ctx)
-		if err != nil {
-			return err
-		}
-
-		var req RPCRequest
-		if err := json.Unmarshal(data, &req); err != nil {
-			log.Printf("[sidecar] Invalid JSON received")
-			continue
-		}
-		if req.Type != "rpc_request" {
-			continue
-		}
-
-		log.Printf("[sidecar] RPC %s: %s", req.ID, req.Method)
-
-		c.mu.Lock()
-		handler, ok := c.handlers[req.Method]
-		c.mu.Unlock()
-		if !ok {
-			c.sendResult(ctx, req.ID, nil, &rpcError{Code: "METHOD_NOT_FOUND", Message: fmt.Sprintf("Unknown method: %s", req.Method)})
-			continue
-		}
-
-		// Run handler in goroutine to not block the read loop
-		go func(id string, h RPCHandler, params map[string]any) {
-			result, err := h(params)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			_, data, err := c.conn.Read(ctx)
 			if err != nil {
-				c.sendResult(ctx, id, nil, &rpcError{Code: "HANDLER_ERROR", Message: err.Error()})
-				return
+				return err
 			}
-			c.sendResult(ctx, id, result, nil)
-		}(req.ID, handler, req.Params)
+
+			var req RPCRequest
+			if err := json.Unmarshal(data, &req); err != nil {
+				log.Printf("[sidecar] Invalid JSON received")
+				continue
+			}
+			if req.Type != "rpc_request" {
+				continue
+			}
+
+			log.Printf("[sidecar] RPC %s: %s", req.ID, req.Method)
+
+			c.mu.Lock()
+			handler, ok := c.handlers[req.Method]
+			c.mu.Unlock()
+			if !ok {
+				c.sendResult(ctx, req.ID, nil, &rpcError{Code: "METHOD_NOT_FOUND", Message: fmt.Sprintf("Unknown method: %s", req.Method)})
+				continue
+			}
+
+			// Run handler in goroutine with context check
+			go func(id string, h RPCHandler, params map[string]any) {
+				select {
+				case <-ctx.Done():
+					return // Don't execute if context cancelled
+				default:
+					result, err := h(params)
+					if err != nil {
+						c.sendResult(ctx, id, nil, &rpcError{Code: "HANDLER_ERROR", Message: err.Error()})
+						return
+					}
+					c.sendResult(ctx, id, result, nil)
+				}
+			}(req.ID, handler, req.Params)
+		}
 	}
 }
 
@@ -255,21 +280,27 @@ func (c *SidecarClient) sendJSON(ctx context.Context, v any) error {
 	if err != nil {
 		return err
 	}
-	if c.conn == nil {
+	c.connMu.RLock()
+	conn := c.conn
+	c.connMu.RUnlock()
+	if conn == nil {
 		return fmt.Errorf("not connected")
 	}
-	return c.conn.Write(ctx, websocket.MessageText, data)
+	return conn.Write(ctx, websocket.MessageText, data)
 }
 
 // sendBinary writes a binary WS frame: [36-byte refId][raw data].
 func (c *SidecarClient) sendBinary(ctx context.Context, refId string, data []byte) error {
-	if c.conn == nil {
+	c.connMu.RLock()
+	conn := c.conn
+	c.connMu.RUnlock()
+	if conn == nil {
 		return fmt.Errorf("not connected")
 	}
 	frame := make([]byte, 36+len(data))
 	copy(frame[:36], []byte(refId))
 	copy(frame[36:], data)
-	return c.conn.Write(ctx, websocket.MessageBinary, frame)
+	return conn.Write(ctx, websocket.MessageBinary, frame)
 }
 
 // sendEvent sends a sidecar event, using binary ref protocol for large binary payloads (>=256KB).

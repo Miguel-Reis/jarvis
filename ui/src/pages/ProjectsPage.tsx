@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from "react";
 import { useApiData } from "../hooks/useApi";
+import "../styles/settings.css";
 
 type Project = {
   id: string;
@@ -35,7 +36,11 @@ export default function ProjectsPage() {
   const flash = (text: string) => { setMsg(text); setTimeout(() => setMsg(null), 3000); };
 
   const handleCreate = async () => {
-    if (!form.name.trim()) return;
+    if (!form.name.trim()) {
+      console.warn("[ProjectsPage] Project name is empty");
+      return;
+    }
+    console.log("[ProjectsPage] Creating project:", form);
     setSaving(true);
     try {
       const res = await fetch("/api/projects", {
@@ -43,7 +48,9 @@ export default function ProjectsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
+      console.log("[ProjectsPage] Response status:", res.status);
       const d = await res.json() as { ok?: boolean; project?: Project; error?: string };
+      console.log("[ProjectsPage] Response data:", d);
       if (d.ok) {
         setCreating(false);
         setForm({ name: "", description: "", path: "", color: "#6b7280" });
@@ -52,6 +59,9 @@ export default function ProjectsPage() {
       } else {
         flash(d.error ?? "Failed");
       }
+    } catch (err) {
+      console.error("[ProjectsPage] Create error:", err);
+      flash(err instanceof Error ? err.message : "Network error");
     } finally { setSaving(false); }
   };
 

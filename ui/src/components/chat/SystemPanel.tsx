@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import type { ChatMessage } from "../../hooks/useWebSocket";
 import { isSystemMessage } from "./MessageList";
+import "../../styles/chat.css";
 
 type Props = {
   messages: ChatMessage[];

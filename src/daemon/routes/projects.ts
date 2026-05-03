@@ -590,8 +590,8 @@ export function registerRoutes(ctx: ApiContext) {
           const result = await ctx.siteBuilderService.githubManager.push(projectPath, undefined, body.force);
           if (!result.success) return error(result.error ?? 'Push failed');
 
-          const project = ctx.siteBuilderService.projectManager.getProject(id);
-          if (project?.githubUrl) {
+          const project = await ctx.siteBuilderService.projectManager.getProject(id);
+          if (project && 'githubUrl' in project && project.githubUrl) {
             const { readFileSync } = require('node:fs');
             const { join } = require('node:path');
             const meta = readFileSync(join(projectPath, '.jarvis-project.json'), 'utf-8');

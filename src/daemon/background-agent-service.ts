@@ -33,6 +33,10 @@ import { getRecentObservations } from '../vault/observations.ts';
 import { findContent } from '../vault/content-pipeline.ts';
 import { getRecentConversation, getMessages } from '../vault/conversations.ts';
 import { getActiveGoalsSummary } from '../vault/retrieval.ts';
+import { getArchitecturalConstraints } from '../roles/prompt-builder.ts';
+import { getActiveDirectivesFromVault } from '../vault/goals.ts';
+import { getPreferencesForPrompt } from '../vault/user-preferences.ts';
+import { getOrCreateCurrentProjectContext, getProjectContextForPrompt } from '../vault/project-contexts.ts';
 
 const BG_CDP_PORT = 9223;
 const BG_PROFILE_DIR = join(homedir(), '.jarvis', 'browser', 'bg-profile');
@@ -167,8 +171,18 @@ export class BackgroundAgentService implements Service, IAgentService {
 
     // Wait if busy — event reactor already has its own queue, so this is a safety net
     const waitStart = Date.now();
-    while (this.busy && Date.now() - waitStart < 60_000) {
-      await new Promise(r => setTimeout(r, 1000));
+    const maxWaitMs = 60_000;
+    const waitIntervalMs = 1000;
+    let iterations = 0;
+    const maxIterations = maxWaitMs / waitIntervalMs;
+
+    while (this.busy && Date.now() - waitStart < maxWaitMs && iterations < maxIterations) {
+      iterations++;
+      await new Promise(r => setTimeout(r, waitIntervalMs));
+    }
+
+    if (this.busy) {
+      console.warn('[BackgroundAgent] Timeout waiting for busy agent, queueing anyway');
     }
 
     this.busy = true;
@@ -272,17 +286,61 @@ export class BackgroundAgentService implements Service, IAgentService {
       }
     }
 
-    // --- ACTIVE GOALS ---
+    // --- ACTIVE GOALS & DIRECTIVES ---
     try {
+      // Get structured directives for goal-driven execution
+      const directives = getActiveDirectivesFromVault();
+
+      if (directives && directives.goal) {
+        parts.push('', '# 🎯 CURRENT DIRECTIVE (Highest Priority Goal)');
+        parts.push(`**Goal**: ${directives.goal.title} (${directives.goal.level})`);
+        parts.push(`**Score**: ${directives.goal.score.toFixed(1)}/1.0 | **Health**: ${directives.goal.health}`);
+        parts.push(`**Status**: ${directives.goal.status}`);
+
+        if (directives.current_task) {
+          parts.push('');
+          parts.push('**CURRENT TASK** (execute this now):');
+          parts.push(`- ${directives.current_task.description}`);
+          parts.push(`  - Status: ${directives.current_task.status}`);
+          parts.push(`  - Completion criteria: ${directives.current_task.completion_criteria}`);
+          parts.push(`  - Attempts: ${directives.current_task.attempts}`);
+        }
+
+        if (directives.next_tasks && directives.next_tasks.length > 0) {
+          parts.push('');
+          parts.push('**NEXT TASKS** (queue after current):');
+          for (const task of directives.next_tasks.slice(0, 5)) {
+            parts.push(`- ${task.description} [${task.status}]`);
+          }
+        }
+
+        if (directives.needs_decomposition) {
+          parts.push('');
+          parts.push('⚠️ **NEEDS DECOMPOSITION**: This goal has no sub-tasks. Break it down into actionable steps before executing.');
+        }
+
+        parts.push('');
+        parts.push('Cross-reference with recent chat. If goals were discussed but not updated, flag it.');
+      }
+
+      // Also show full goals summary for context
       const goalsSummary = getActiveGoalsSummary();
       if (goalsSummary) {
-        parts.push('', '# ACTIVE GOALS');
-        parts.push('Cross-reference these with the recent chat. If goals were discussed but not updated, flag it.');
-        parts.push('');
+        parts.push('', '# ALL ACTIVE GOALS');
         parts.push(goalsSummary);
       }
     } catch (err) {
-      console.error('[BackgroundAgent] Error loading goals summary:', err);
+      console.error('[BackgroundAgent] Error loading goal directives:', err);
+      // Fallback to simple summary
+      try {
+        const goalsSummary = getActiveGoalsSummary();
+        if (goalsSummary) {
+          parts.push('', '# ACTIVE GOALS');
+          parts.push(goalsSummary);
+        }
+      } catch {
+        // Ignore
+      }
     }
 
     if (coalescedEvents) {
@@ -372,6 +430,41 @@ export class BackgroundAgentService implements Service, IAgentService {
       }
     } catch (err) {
       console.error('[BackgroundAgent] Error loading observations:', err);
+    }
+
+    // Get architectural constraints
+    try {
+      const constraints = getArchitecturalConstraints();
+      if (constraints) {
+        context.architecturalConstraints = constraints;
+      }
+    } catch (err) {
+      console.error('[BackgroundAgent] Error loading architectural constraints:', err);
+    }
+
+    // Get user preferences (learned patterns)
+    try {
+      const preferences = getPreferencesForPrompt();
+      if (preferences) {
+        context.userPreferences = preferences;
+      }
+    } catch (err) {
+      console.error('[BackgroundAgent] Error loading user preferences:', err);
+    }
+
+    // Get project context (multi-project switching)
+    try {
+      const projectCtx = getOrCreateCurrentProjectContext();
+      if (projectCtx) {
+        context.currentProject = {
+          name: projectCtx.name,
+          path: projectCtx.rootPath,
+          description: projectCtx.description,
+        };
+        context.architecturalConstraints = getProjectContextForPrompt(projectCtx);
+      }
+    } catch (err) {
+      console.error('[BackgroundAgent] Error loading project context:', err);
     }
 
     return context;

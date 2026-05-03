@@ -6,8 +6,24 @@
  */
 
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, existsSync, unlinkSync } from 'node:fs';
-import { resolve, dirname, join } from 'node:path';
+import { resolve, dirname, join, normalize } from 'node:path';
 import { homedir } from 'node:os';
+
+/**
+ * Validate that a resolved path doesn't escape the allowed base directory.
+ * Prevents path traversal attacks via ../../../etc/passwd style inputs.
+ */
+function validatePath(rawPath: string, baseDir: string): { valid: true; resolved: string } | { valid: false; error: string } {
+  const resolved = resolve(baseDir, rawPath);
+  const normalizedBase = normalize(baseDir + '/');
+
+  // Check for path traversal attempts
+  if (!resolved.startsWith(normalizedBase) && resolved !== normalizedBase.slice(0, -1)) {
+    return { valid: false, error: `Path traversal detected: ${rawPath} resolves outside allowed directory` };
+  }
+
+  return { valid: true, resolved };
+}
 import { execSync } from 'node:child_process';
 import { hostname, platform, arch, cpus, version, tmpdir } from 'node:os';
 import { TerminalExecutor } from '../terminal/executor.ts';
@@ -18,7 +34,30 @@ import { routeToSidecar } from './sidecar-route.ts';
 import { listSidecarsTool } from './sidecar-list.ts';
 import { DESKTOP_TOOLS } from './desktop.ts';
 
-const terminal = new TerminalExecutor({ timeout: 30000 });
+// Per-tool timeout configuration (ms)
+export const TOOL_TIMEOUTS: Record<string, number> = {
+  run_command: 30000,
+  browser_navigate: 60000,
+  browser_snapshot: 15000,
+  browser_click: 10000,
+  browser_type: 10000,
+  browser_scroll: 10000,
+  browser_evaluate: 15000,
+  browser_screenshot: 20000,
+  browser_upload_file: 30000,
+  web_search: 45000,
+  read_file: 10000,
+  write_file: 10000,
+  list_directory: 10000,
+  get_clipboard: 5000,
+  set_clipboard: 5000,
+  capture_screen: 15000,
+  get_system_info: 5000,
+};
+
+const DEFAULT_TOOL_TIMEOUT = 30000;
+
+const terminal = new TerminalExecutor({ timeout: DEFAULT_TOOL_TIMEOUT });
 
 // Shared browser controller (lazy-connected on first browser tool use)
 export const browser = new BrowserController();
@@ -143,7 +182,11 @@ export const readFileTool: ToolDefinition = {
 
     const rawPath = params.path as string;
     const baseCwd = getDefaultCwd() || homedir();
-    const filePath = resolve(baseCwd, rawPath);
+    const pathValidation = validatePath(rawPath, baseCwd);
+    if (!pathValidation.valid) {
+      return `Error: ${pathValidation.error}`;
+    }
+    const filePath = pathValidation.resolved;
 
     if (!existsSync(filePath)) {
       return `Error: File not found: ${filePath}`;
@@ -197,7 +240,11 @@ export const writeFileTool: ToolDefinition = {
 
     const rawPath = params.path as string;
     const baseCwd = getDefaultCwd() || homedir();
-    const filePath = resolve(baseCwd, rawPath);
+    const pathValidation = validatePath(rawPath, baseCwd);
+    if (!pathValidation.valid) {
+      return `Error: ${pathValidation.error}`;
+    }
+    const filePath = pathValidation.resolved;
     const content = params.content as string;
 
     try {
@@ -236,7 +283,11 @@ export const listDirectoryTool: ToolDefinition = {
 
     const rawPath = params.path as string;
     const baseCwd = getDefaultCwd() || homedir();
-    const dirPath = resolve(baseCwd, rawPath);
+    const pathValidation = validatePath(rawPath, baseCwd);
+    if (!pathValidation.valid) {
+      return `Error: ${pathValidation.error}`;
+    }
+    const dirPath = pathValidation.resolved;
 
     if (!existsSync(dirPath)) {
       return `Error: Directory not found: ${dirPath}`;

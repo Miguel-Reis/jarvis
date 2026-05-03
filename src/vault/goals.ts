@@ -13,9 +13,10 @@ import type {
 
 // ── Row types (raw DB) ──────────────────────────────────────────────
 
-type GoalRow = Omit<Goal, 'tags' | 'dependencies'> & {
+type GoalRow = Omit<Goal, 'tags' | 'dependencies' | 'execution_state'> & {
   tags: string | null;
   dependencies: string | null;
+  execution_state: string | null;
 };
 
 type ProgressRow = GoalProgressEntry;
@@ -29,10 +30,16 @@ type CheckInRow = Omit<GoalCheckIn, 'goals_reviewed' | 'actions_planned' | 'acti
 // ── Parsers ─────────────────────────────────────────────────────────
 
 function parseGoal(row: GoalRow): Goal {
+  const parsedExecutionState = row.execution_state ? JSON.parse(row.execution_state) : {
+    current_step_index: 0,
+    sub_tasks: [],
+    last_pivot_reason: null,
+  };
   return {
     ...row,
     tags: row.tags ? JSON.parse(row.tags) : [],
     dependencies: row.dependencies ? JSON.parse(row.dependencies) : [],
+    execution_state: parsedExecutionState,
   };
 }
 
@@ -73,8 +80,8 @@ export function createGoal(
     `INSERT INTO goals (id, parent_id, level, title, description, success_criteria,
       project_id, time_horizon, score, score_reason, status, health, deadline, started_at,
       estimated_hours, actual_hours, authority_level, tags, dependencies,
-      escalation_stage, escalation_started_at, sort_order, created_at, updated_at, completed_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0.0, NULL, ?, 'on_track', ?, ?, ?, 0, ?, ?, ?, 'none', NULL, ?, ?, ?, NULL)`
+      escalation_stage, escalation_started_at, sort_order, created_at, updated_at, completed_at, execution_state)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0.0, NULL, ?, 'on_track', ?, ?, ?, 0, ?, ?, ?, 'none', NULL, ?, ?, ?, NULL, ?)`,
   ).run(
     id,
     opts?.parent_id ?? null,
@@ -93,6 +100,7 @@ export function createGoal(
     opts?.dependencies ? JSON.stringify(opts.dependencies) : null,
     opts?.sort_order ?? 0,
     now, now,
+    JSON.stringify({ current_step_index: 0, sub_tasks: [], last_pivot_reason: null }),
   );
 
   const goal = getGoal(id);
@@ -207,6 +215,7 @@ export function updateGoal(id: string, updates: GoalUpdate): Goal | null {
   if (updates.tags !== undefined) { sets.push('tags = ?'); params.push(JSON.stringify(updates.tags)); }
   if (updates.dependencies !== undefined) { sets.push('dependencies = ?'); params.push(JSON.stringify(updates.dependencies)); }
   if (updates.sort_order !== undefined) { sets.push('sort_order = ?'); params.push(updates.sort_order); }
+  if ('execution_state' in updates && updates.execution_state !== undefined) { sets.push('execution_state = ?'); params.push(JSON.stringify(updates.execution_state)); }
 
   if (sets.length === 0) return existing;
 
@@ -440,6 +449,45 @@ export function getTodayCheckIn(type: 'morning_plan' | 'evening_review'): GoalCh
 }
 
 // ── Metrics ─────────────────────────────────────────────────────────
+
+/**
+ * Get the most critical active goal and its current execution state.
+ * Static version that doesn't require GoalService instance.
+ */
+export function getActiveDirectivesFromVault() {
+  // 1. Find the most critical active goal (prioritize by health, then deadline)
+  const activeGoals = findGoals({ status: 'active' })
+    .filter(g => g.level === 'objective' || g.level === 'key_result');
+
+  if (activeGoals.length === 0) return null;
+
+  // Sort by health (critical first) and then by deadline
+  const healthOrder = { 'critical': 0, 'behind': 1, 'at_risk': 2, 'on_track': 3 };
+  activeGoals.sort((a, b) => {
+    const healthDiff = healthOrder[a.health] - healthOrder[b.health];
+    if (healthDiff !== 0) return healthDiff;
+    // If same health, prioritize by deadline (earliest first)
+    if (a.deadline && b.deadline) return a.deadline - b.deadline;
+    return 0;
+  });
+
+  const goal = activeGoals[0];
+  const execState = (goal as any).execution_state || { current_step_index: 0, sub_tasks: [], last_pivot_reason: null };
+
+  // Extract current and next tasks
+  const currentTask = execState.sub_tasks[execState.current_step_index] || null;
+  const nextTasks = execState.sub_tasks.slice(execState.current_step_index + 1);
+
+  // Check if goal needs decomposition
+  const needsDecomposition = !execState.sub_tasks || execState.sub_tasks.length === 0;
+
+  return {
+    goal,
+    current_task: currentTask,
+    next_tasks: nextTasks,
+    needs_decomposition: needsDecomposition,
+  };
+}
 
 export function getGoalMetrics(): {
   total: number;

@@ -31,6 +31,16 @@ type VoiceSession = {
   startedAt: number;
 };
 
+/**
+ * Wake-word detection hook for browser-based clients.
+ * This is called when a client connects and requests wake-word activation.
+ */
+async function activateClientWakeWord(ws: ServerWebSocket<unknown>, interruptManager?: any): Promise<void> {
+  // In a browser context, the client would use the WakeWordService class
+  // This is a server-side stub - actual wake-word runs in the dashboard
+  console.log('[WSService] Client requested wake-word activation (browser handles detection)');
+}
+
 export class WebSocketService implements Service {
   name = 'websocket';
   private _status: ServiceStatus = 'stopped';
@@ -116,6 +126,20 @@ export class WebSocketService implements Service {
   setSTTProvider(provider: STTProvider): void {
     this.sttProvider = provider;
     console.log('[WSService] STT provider set');
+  }
+
+  /**
+   * Set the voice loop service for low-latency voice interaction.
+   */
+  setVoiceLoopService(service: import('../services/voice-loop.ts').VoiceLoopService): void {
+    // Wire STT/TTS providers to voice loop
+    if (this.sttProvider) {
+      service.setSTTProvider(this.sttProvider);
+    }
+    if (this.ttsProvider) {
+      service.setTTSProvider(this.ttsProvider);
+    }
+    console.log('[WSService] Voice Loop Service wired');
   }
 
   /**
@@ -206,7 +230,7 @@ export class WebSocketService implements Service {
    */
   private pingAllClients(): void {
     if (!this.wsServer) return;
-    const clients = this.wsServer.clients;
+    const clients = (this.wsServer as any).clients;
     if (clients.size === 0) return;
 
     console.log(`[WSService] Ping to ${clients.size} client(s)`);
@@ -527,6 +551,19 @@ export class WebSocketService implements Service {
     if (event.goalId && this.triggerManager) {
       try { this.triggerManager.checkGoalEvent(event.goalId, event.type, event.data); } catch { /* non-critical */ }
     }
+  }
+
+  /**
+   * Broadcast a coordination event to all connected clients.
+   * Used for War Room real-time agent coordination visibility.
+   */
+  broadcastCoordinationEvent(event: { type: string; agentId?: string; data: Record<string, unknown>; timestamp: number }): void {
+    const message: WSMessage = {
+      type: 'coordination_event',
+      payload: event,
+      timestamp: event.timestamp,
+    };
+    this.wsServer.broadcast(message);
   }
 
   broadcastSiteEvent(event: { type: string; projectId: string; data: Record<string, unknown>; timestamp: number }): void {

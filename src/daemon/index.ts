@@ -39,6 +39,22 @@ import { DeferredExecutor } from "../authority/deferred-executor.ts";
 import { sendDesktopNotification } from "../comms/desktop-notify.ts";
 import { SidecarManager } from "../sidecar/manager.ts";
 import { createUpdater, type Updater } from "./updater.ts";
+import { InterruptManager, FileWatcherObserver, ProcessMonitorObserver, ErrorMonitorObserver, ScreenObserver } from "../agents/interrupt-manager.ts";
+import { WakeWordService } from "../services/wake-word.ts";
+import { PreferenceLearnerService } from "../services/preference-learner.ts";
+import { ProjectContextService } from "../services/project-context-service.ts";
+import { NotificationService } from "../services/notification-service.ts";
+import { ScreenCaptureService } from "../services/screen-capture.ts";
+import { VLMAnalyzer } from "../services/vlm-analyzer.ts";
+import { AutoTestService } from "../services/auto-test-service.ts";
+import { LiveScreenService } from "../services/live-screen.ts";
+import { getTimeTracker } from "../services/time-tracker.ts";
+import { getMetricsService } from "../services/metrics-service.ts";
+import { getPredictionEngine } from "../services/prediction-engine.ts";
+import { getCoordinationLogger } from "../services/coordination-logger.ts";
+import { getDeepMemorySynthesisService } from "../services/deep-memory-synthesis.ts";
+import { getVoiceLoopService } from "../services/voice-loop.ts";
+import { getDailyRhythmService } from "../services/daily-rhythm.ts";
 
 // Constants
 const DEFAULT_PORT = 3142;  // JARVIS port
@@ -61,6 +77,22 @@ let bgAgent: BackgroundAgentService | null = null;
 let mcpServiceInstance: McpService | null = null;
 let awarenessService: import('../awareness/service.ts').AwarenessService | null = null;
 let goalService: import('../goals/service.ts').GoalService | null = null;
+let interruptManager: InterruptManager | null = null;
+let wakeWordService: WakeWordService | null = null;
+let preferenceLearnerService: PreferenceLearnerService | null = null;
+let projectContextService: ProjectContextService | null = null;
+let notificationService: NotificationService | null = null;
+let screenCaptureService: ScreenCaptureService | null = null;
+let vlmAnalyzer: VLMAnalyzer | null = null;
+let autoTestService: AutoTestService | null = null;
+let liveScreenService: LiveScreenService | null = null;
+let timeTracker = getTimeTracker();
+let metricsService = getMetricsService();
+let predictionEngine = getPredictionEngine();
+let coordinationLogger = getCoordinationLogger();
+let deepMemoryService: import('../services/deep-memory-synthesis.ts').DeepMemorySynthesisService | null = null;
+let voiceLoopService: import('../services/voice-loop.ts').VoiceLoopService | null = null;
+let dailyRhythmService: import('../services/daily-rhythm.ts').DailyRhythmService | null = null;
 let updater: Updater | null = null;
 
 /**
@@ -183,6 +215,78 @@ async function handleShutdown(signal: string): Promise<void> {
     if (bgAgent) {
       await bgAgent.stop();
       bgAgent = null;
+    }
+
+    // Stop interrupt manager (unregister all observers)
+    if (interruptManager) {
+      interruptManager.shutdown();
+      interruptManager = null;
+    }
+
+    // Stop wake-word service
+    if (wakeWordService) {
+      wakeWordService.stop();
+      wakeWordService = null;
+    }
+
+    // Stop preference learner service
+    if (preferenceLearnerService) {
+      await preferenceLearnerService.stop();
+      preferenceLearnerService = null;
+    }
+
+    // Stop project context service
+    if (projectContextService) {
+      await projectContextService.stop();
+      projectContextService = null;
+    }
+
+    // Stop notification service
+    if (notificationService) {
+      await notificationService.stop();
+      notificationService = null;
+    }
+
+    // Stop screen capture service
+    if (screenCaptureService) {
+      await screenCaptureService.stop();
+      screenCaptureService = null;
+    }
+
+    // Stop VLM analyzer
+    if (vlmAnalyzer) {
+      await vlmAnalyzer.stop();
+      vlmAnalyzer = null;
+    }
+
+    // Stop live screen service
+    if (liveScreenService) {
+      await liveScreenService.stop();
+      liveScreenService = null;
+    }
+
+    // Stop auto test service
+    if (autoTestService) {
+      await autoTestService.stop();
+      autoTestService = null;
+    }
+
+    // Stop deep memory synthesis service
+    if (deepMemoryService) {
+      await deepMemoryService.stop();
+      deepMemoryService = null;
+    }
+
+    // Stop voice loop service
+    if (voiceLoopService) {
+      await voiceLoopService.stop();
+      voiceLoopService = null;
+    }
+
+    // Stop daily rhythm service
+    if (dailyRhythmService) {
+      await dailyRhythmService.stop();
+      dailyRhythmService = null;
     }
 
     // Stop health monitor
@@ -495,6 +599,9 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
       awarenessService: null as any,
       goalService: undefined,
       sidecarManager,
+      observerService: observerService ?? undefined,
+      liveScreenService: null as any,
+      llmManager: agentService.getLLMManager(),
     };
     setCorsOrigin(jarvisConfig.daemon.port);
     const apiRoutes = createApiRoutes(apiContext);
@@ -551,6 +658,35 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
     await bgAgentService.start();
     bgAgent = bgAgentService;
     console.log('[Daemon] Background agent started (separate browser for heartbeat/reactions)');
+
+    // 10b-ii. Create and start InterruptManager (bridges system observers to orchestrator)
+    const orchestratorForInterrupts = agentService.getOrchestrator();
+    interruptManager = new InterruptManager(orchestratorForInterrupts);
+
+    // 10b-iii. Register system observers
+    const fileWatcher = new FileWatcherObserver(interruptManager, [config.dataDir]);
+    const processMonitor = new ProcessMonitorObserver(interruptManager, ['jarvis', 'sidecar']);
+    const errorMonitor = new ErrorMonitorObserver(interruptManager, [/error/i, /failed/i, /exception/i]);
+
+    interruptManager.registerObserver(fileWatcher);
+    interruptManager.registerObserver(processMonitor);
+    interruptManager.registerObserver(errorMonitor);
+    console.log('[Daemon] Registered 3 system observers: file-watcher, process-monitor, error-monitor');
+
+    // 10b-iv. Wire CoordinationLogger to WebSocket for real-time War Room updates
+    coordinationLogger.onEvent((event) => {
+      wsService.broadcastCoordinationEvent({
+        type: event.type,
+        agentId: event.fromAgent,
+        data: event.data,
+        timestamp: event.timestamp,
+      });
+    });
+    console.log('[Daemon] CoordinationLogger wired to WebSocket for War Room real-time updates');
+
+    // 10b-iv. Start WakeWordService (optional, browser-based)
+    // Note: This runs only in browser context (dashboard), not in Node.js daemon
+    console.log('[Daemon] WakeWordService available (dashboard-only, requires microphone permission)');
 
     // 10c. Wire reactor + executor to background agent (separate browser, no chat contention)
     reactor.setAgentService(bgAgentService);
@@ -756,6 +892,250 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
       }
     }
 
+    // 10a-1b. Preference Learner Service (User Persona Synthesis)
+    try {
+      const prefService = new PreferenceLearnerService();
+      await prefService.start();
+      preferenceLearnerService = prefService;
+      console.log('[Daemon] Preference Learner Service started (User Persona Synthesis)');
+    } catch (err) {
+      console.error('[Daemon] Preference Learner Service failed to start:', err instanceof Error ? err.message : err);
+      // Non-fatal — daemon continues without preference learning
+    }
+
+    // 10a-1c. Project Context Service (Multi-Project Switching)
+    try {
+      const projService = new ProjectContextService();
+      await projService.start();
+      projectContextService = projService;
+      console.log('[Daemon] Project Context Service started (Multi-Project Switching)');
+    } catch (err) {
+      console.error('[Daemon] Project Context Service failed to start:', err instanceof Error ? err.message : err);
+      // Non-fatal — daemon continues without project context
+    }
+
+    // 10a-1d. Notification Service (Smart Notifications)
+    try {
+      const notifService = new NotificationService();
+      await notifService.start();
+      notificationService = notifService;
+
+      // Wire notification callback to WebSocket
+      notifService.setNotificationCallback((notification) => {
+        const text = `**${notification.title}**\n${notification.message}`;
+        // Map NotificationPriority to WSPriority
+        const wsPriority = notification.priority === 'critical' || notification.priority === 'high' ? 'urgent' :
+                           notification.priority === 'normal' ? 'normal' : 'low';
+        wsService.broadcastNotification(text, wsPriority);
+
+        // Voice for critical
+        if (notification.priority === 'critical') {
+          wsService.broadcastProactiveVoice(notification.message).catch(err =>
+            console.error('[Daemon] Notification TTS error:', err)
+          );
+        }
+      });
+
+      console.log('[Daemon] Notification Service started (Smart Notifications)');
+    } catch (err) {
+      console.error('[Daemon] Notification Service failed to start:', err instanceof Error ? err.message : err);
+      // Non-fatal — daemon continues without smart notifications
+    }
+
+    // 10a-1e. Visual Context Engine (Screen Capture + VLM Analysis)
+    try {
+      const screenCap = new ScreenCaptureService({
+        captureIntervalMs: 30000,  // 30 seconds
+        privacyMode: false,
+      });
+      await screenCap.start();
+      screenCaptureService = screenCap;
+
+      const vlm = new VLMAnalyzer({
+        model: 'claude-sonnet-4-6',
+        maxTokens: 500,
+      });
+      await vlm.start();
+      vlmAnalyzer = vlm;
+
+      // Wire capture to VLM analyzer
+      screenCap.setCaptureCallback((capture) => {
+        vlm.analyzeCapture(capture).catch(err =>
+          console.error('[Daemon] VLM analysis error:', err)
+        );
+      });
+
+      // Wire VLM context change to WebSocket for UI visibility
+      vlm.setContextChangeCallback((context) => {
+        const text = `**Visual Context**: ${context.application} - ${context.activityType}`;
+        wsService.broadcastNotification(text, 'low');
+      });
+
+      // Register ScreenObserver in InterruptManager
+      if (interruptManager) {
+        const screenObserver = new ScreenObserver(interruptManager);
+        interruptManager.registerObserver(screenObserver);
+      }
+
+      console.log('[Daemon] Visual Context Engine started (Screen Capture + VLM)');
+    } catch (err) {
+      console.error('[Daemon] Visual Context Engine failed to start:', err instanceof Error ? err.message : err);
+      // Non-fatal — daemon continues without visual context
+    }
+
+    // 10a-1f. Live Screen Service (Sidecar-based screen sharing)
+    try {
+      const liveScreen = new LiveScreenService({
+        captureIntervalMs: 5000,  // 5 seconds for "live" feel
+        privacyMode: false,
+      });
+
+      // Wire capture callback to VLM analyzer if available
+      if (vlmAnalyzer) {
+        liveScreen.setCaptureCallback((capture) => {
+          if (!capture.error && capture.imageData) {
+            vlmAnalyzer.analyzeCapture({
+              imageData: capture.imageData,
+              base64: capture.base64,
+              mimeType: capture.mimeType,
+              timestamp: capture.timestamp,
+              width: capture.width,
+              height: capture.height,
+            }).catch(err =>
+              console.error('[LiveScreen] VLM analysis error:', err)
+            );
+          }
+        });
+      }
+
+      await liveScreen.start();
+      liveScreenService = liveScreen;
+      apiContext.liveScreenService = liveScreen;
+
+      console.log('[Daemon] Live Screen Service started (sidecar-based screen sharing)');
+    } catch (err) {
+      console.error('[Daemon] Live Screen Service failed to start:', err instanceof Error ? err.message : err);
+      // Non-fatal — daemon continues without live screen
+    }
+
+    // 10a-1g. Automated Testing Service (Test-on-Save + Fix Suggestions)
+    try {
+      const autoTest = new AutoTestService({
+        enabled: true,
+        runOnSave: true,
+        runOnHeartbeat: false,
+        suggestFixes: true,
+        testCommand: 'bun test',
+        debounceMs: 500,
+        watchPatterns: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx'],
+        ignorePatterns: ['node_modules', 'dist', 'build', '.git', '*.test.ts', '*.spec.ts'],
+      });
+
+      // Wire to InterruptManager for test failure reporting
+      if (interruptManager) {
+        autoTest.setInterruptManager(interruptManager);
+      }
+
+      // Wire test complete callback to WebSocket for UI visibility
+      autoTest.setTestCompleteCallback((result) => {
+        const text = `**Tests ${result.passed ? '✅ PASSED' : '❌ FAILED'}**\n${result.output.split('\n').slice(0, 3).join('\n')}`;
+        wsService.broadcastNotification(text, result.passed ? 'low' : 'urgent');
+      });
+
+      await autoTest.start();
+      autoTestService = autoTest;
+
+      console.log('[Daemon] Automated Testing Service started (watch mode active)');
+    } catch (err) {
+      console.error('[Daemon] Automated Testing Service failed to start:', err instanceof Error ? err.message : err);
+      // Non-fatal — daemon continues without auto-testing
+    }
+
+    // 10a-1g. Deep Memory Synthesis Service (Phase 5)
+    try {
+      const deepMemory = getDeepMemorySynthesisService();
+
+      // Wire pattern discovered callback to WebSocket for UI visibility
+      deepMemory.setPatternDiscoveredCallback((pattern) => {
+        const text = `**🧠 Pattern Discovered**: ${pattern.name}\n${pattern.description} (confidence: ${(pattern.confidence * 100).toFixed(0)}%)`;
+        wsService.broadcastNotification(text, 'low');
+      });
+
+      await deepMemory.start();
+      deepMemoryService = deepMemory;
+
+      console.log('[Daemon] Deep Memory Synthesis Service started (cross-project pattern learning)');
+    } catch (err) {
+      console.error('[Daemon] Deep Memory Synthesis Service failed to start:', err instanceof Error ? err.message : err);
+      // Non-fatal — daemon continues without deep memory
+    }
+
+    // 10a-1h. Voice Loop Service (Phase 5 - Voice-First Interaction)
+    try {
+      const voiceLoop = getVoiceLoopService();
+
+      // Wire transcript callback to route to agent
+      voiceLoop.setTranscriptCallback((sessionId, transcript) => {
+        console.log(`[VoiceLoop] Transcript from ${sessionId}: "${transcript.slice(0, 100)}..."`);
+        // Route transcript to background agent for processing
+        if (bgAgent) {
+          bgAgent.handleMessage(transcript, 'voice').catch(err =>
+            console.error('[VoiceLoop] Agent processing error:', err)
+          );
+        }
+      });
+
+      // Wire TTS done callback
+      voiceLoop.setTTSDoneCallback((sessionId) => {
+        console.log(`[VoiceLoop] TTS done for session ${sessionId}`);
+      });
+
+      await voiceLoop.start();
+      voiceLoopService = voiceLoop;
+
+      // Wire voice loop to WebSocket service
+      wsService.setVoiceLoopService(voiceLoop);
+
+      console.log('[Daemon] Voice Loop Service started (low-latency STT/TTS)');
+    } catch (err) {
+      console.error('[Daemon] Voice Loop Service failed to start:', err instanceof Error ? err.message : err);
+      // Non-fatal — daemon continues without voice loop
+    }
+
+    // 10a-1i. Daily Rhythm Service (Phase 5 - Calendar & Daily Rhythm)
+    try {
+      const dailyRhythm = getDailyRhythmService();
+
+      // Wire morning briefing callback
+      dailyRhythm.setBriefingCallback((briefing) => {
+        const priorities = briefing.priorities.slice(0, 3).join(' | ');
+        const goalsCount = briefing.goals.length;
+        const text = `**🌅 Morning Briefing**\n${goalsCount} active goals\nPriorities: ${priorities}\n${briefing.motivationalMessage}`;
+        wsService.broadcastNotification(text, 'normal');
+        console.log(`[DailyRhythm] Morning briefing broadcast: ${goalsCount} goals, priorities: ${priorities.slice(0, 80)}`);
+      });
+
+      // Wire evening review callback
+      dailyRhythm.setReviewCallback((review) => {
+        const text = `**🌙 Evening Review**\n${review.progressSummary}\n${review.accountabilityMessage}`;
+        wsService.broadcastNotification(text, 'normal');
+        console.log(`[DailyRhythm] Evening review broadcast: ${review.completedTasks} completed, ${review.failedTasks} failed`);
+      });
+
+      // Wire check-in callback
+      dailyRhythm.setCheckInCallback((message) => {
+        wsService.broadcastNotification(message, 'low');
+      });
+
+      await dailyRhythm.start();
+      dailyRhythmService = dailyRhythm;
+
+      console.log('[Daemon] Daily Rhythm Service started (morning/evening windows, accountability)');
+    } catch (err) {
+      console.error('[Daemon] Daily Rhythm Service failed to start:', err instanceof Error ? err.message : err);
+      // Non-fatal — daemon continues without daily rhythm
+    }
+
     // 10a-2. Site Builder Service
     if (jarvisConfig.sites?.enabled !== false) {
       try {
@@ -769,9 +1149,9 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
           max_concurrent_servers: 3,
         };
         const siteBuilderService = new SiteBuilderService(sitesConfig);
-        await siteBuilderService.start();
-        apiContext.siteBuilderService = siteBuilderService;
         registry.register(siteBuilderService);
+        await registry.startService('site-builder');
+        apiContext.siteBuilderService = siteBuilderService;
 
         // Wire proxy into WebSocket server for dev server HTTP/WS forwarding
         wsService.getServer().setSiteProxy(siteBuilderService.proxy);

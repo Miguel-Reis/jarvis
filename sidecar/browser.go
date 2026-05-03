@@ -22,8 +22,19 @@ type cdpClient struct {
 	conn    *websocket.Conn
 	port    int
 	msgID   atomic.Int64
-	pending map[int64]chan json.RawMessage
+	pending map[int64]chan CDPResult
 	pendMu  sync.Mutex
+	closed  chan struct{} // Signals client closure
+}
+
+type CDPResult struct {
+	Result json.RawMessage
+	Error  *CDPError
+}
+
+type CDPError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
 }
 
 var activeCDP struct {
@@ -97,7 +108,8 @@ func newCDPClient(port int) (*cdpClient, error) {
 	c := &cdpClient{
 		conn:    conn,
 		port:    port,
-		pending: make(map[int64]chan json.RawMessage),
+		pending: make(map[int64]chan CDPResult),
+		closed:  make(chan struct{}),
 	}
 
 	// Start read loop
@@ -116,7 +128,7 @@ func (c *cdpClient) readLoop() {
 		var msg struct {
 			ID     int64           `json:"id"`
 			Result json.RawMessage `json:"result"`
-			Error  json.RawMessage `json:"error"`
+			Error  *CDPError       `json:"error"`
 		}
 		if json.Unmarshal(data, &msg) != nil {
 			continue
@@ -133,10 +145,11 @@ func (c *cdpClient) readLoop() {
 		c.pendMu.Unlock()
 
 		if ok {
+			// Send typed result
 			if msg.Error != nil {
-				ch <- msg.Error
+				ch <- CDPResult{Error: msg.Error}
 			} else {
-				ch <- msg.Result
+				ch <- CDPResult{Result: msg.Result}
 			}
 		}
 	}
@@ -144,7 +157,7 @@ func (c *cdpClient) readLoop() {
 
 func (c *cdpClient) send(method string, params map[string]any) (json.RawMessage, error) {
 	id := c.msgID.Add(1)
-	ch := make(chan json.RawMessage, 1)
+	ch := make(chan CDPResult, 1) // Use typed channel
 
 	c.pendMu.Lock()
 	c.pending[id] = ch
@@ -156,9 +169,16 @@ func (c *cdpClient) send(method string, params map[string]any) (json.RawMessage,
 		"params": params,
 	}
 
-	data, _ := json.Marshal(msg)
+	data, err := json.Marshal(msg)
+	if err != nil {
+		c.pendMu.Lock()
+		delete(c.pending, id)
+		c.pendMu.Unlock()
+		return nil, err
+	}
+
 	c.mu.Lock()
-	err := c.conn.Write(context.Background(), websocket.MessageText, data)
+	err = c.conn.Write(context.Background(), websocket.MessageText, data)
 	c.mu.Unlock()
 	if err != nil {
 		c.pendMu.Lock()
@@ -167,14 +187,26 @@ func (c *cdpClient) send(method string, params map[string]any) (json.RawMessage,
 		return nil, err
 	}
 
+	// Use shorter timeout for CDP calls (10s instead of 30s)
 	select {
-	case result := <-ch:
-		return result, nil
-	case <-time.After(30 * time.Second):
+	case result, ok := <-ch:
+		if !ok {
+			return nil, fmt.Errorf("channel closed for %s", method)
+		}
+		if result.Error != nil {
+			return nil, fmt.Errorf("CDP error %d: %s", result.Error.Code, result.Error.Message)
+		}
+		return result.Result, nil
+	case <-time.After(10 * time.Second):
 		c.pendMu.Lock()
 		delete(c.pending, id)
 		c.pendMu.Unlock()
 		return nil, fmt.Errorf("CDP timeout for %s", method)
+	case <-c.closed:
+		c.pendMu.Lock()
+		delete(c.pending, id)
+		c.pendMu.Unlock()
+		return nil, fmt.Errorf("CDP client closed for %s", method)
 	}
 }
 
@@ -184,6 +216,16 @@ func (c *cdpClient) close() {
 		activeCDP.client = nil
 	}
 	activeCDP.mu.Unlock()
+
+	// Signal closure to pending requests
+	c.pendMu.Lock()
+	for _, ch := range c.pending {
+		close(ch)
+	}
+	c.pending = make(map[int64]chan CDPResult)
+	c.pendMu.Unlock()
+
+	close(c.closed) // Broadcast closure
 	c.conn.Close(websocket.StatusNormalClosure, "closing")
 }
 
