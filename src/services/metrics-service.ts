@@ -186,14 +186,14 @@ export class MetricsService {
         ? db.prepare(`
             SELECT
               SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
-              SUM(duration_ms) as total_ms
+              SUM(actual_duration_ms) as total_ms
             FROM task_history
             WHERE created_at >= ? AND created_at <= ? AND agent_id = ?
           `)
         : db.prepare(`
             SELECT
               SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
-              SUM(duration_ms) as total_ms
+              SUM(actual_duration_ms) as total_ms
             FROM task_history
             WHERE created_at >= ? AND created_at <= ?
           `);

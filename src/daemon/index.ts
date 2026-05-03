@@ -1471,6 +1471,12 @@ process.on('unhandledRejection', (reason) => {
     return;
   }
 
+  // WSL2 display errors (xrandr, screen capture) should NOT crash the daemon
+  if (msg.includes("Can't open display") || msg.includes('xrandr') || msg.includes('X11')) {
+    console.warn('[Daemon] Non-fatal WSL2 display error (ignoring):', msg);
+    return;
+  }
+
   console.error('[Daemon] Unhandled rejection:', reason);
   handleShutdown('unhandledRejection');
 });
