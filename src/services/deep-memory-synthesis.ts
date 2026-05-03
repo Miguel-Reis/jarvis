@@ -152,7 +152,7 @@ export class DeepMemorySynthesisService implements Service {
     // Find recurring coding activities
     const stmt = db.prepare(`
       SELECT
-        task_id,
+        id,
         project_id,
         title,
         status,
@@ -165,7 +165,7 @@ export class DeepMemorySynthesisService implements Service {
     `);
 
     const tasks = stmt.all() as Array<{
-      task_id: string;
+      id: string;
       project_id: string;
       title: string;
       status: string;
@@ -271,42 +271,42 @@ export class DeepMemorySynthesisService implements Service {
 
     // Find recurring architectural concepts
     const stmt = db.prepare(`
-      SELECT concept, tags, project_id, COUNT(*) as occurrences
+      SELECT name, properties, project_id, COUNT(*) as occurrences
       FROM entities
-      WHERE entity_type = 'concept'
-      GROUP BY concept, project_id
+      WHERE type = 'concept'
+      GROUP BY name, project_id
       HAVING occurrences >= ?
     `);
 
     const results = stmt.all(this.config.minOccurrences) as Array<{
-      concept: string;
-      tags: string;
+      name: string;
+      properties: string;
       project_id: string;
       occurrences: number;
     }>;
 
     // Group concepts across projects
-    const conceptMap = new Map<string, { projects: string[]; count: number; tags: string }>();
+    const conceptMap = new Map<string, { projects: string[]; count: number; properties: string }>();
 
     for (const result of results) {
-      const existing = conceptMap.get(result.concept) || { projects: [], count: 0, tags: result.tags };
+      const existing = conceptMap.get(result.name) || { projects: [], count: 0, properties: result.properties };
       existing.projects.push(result.project_id);
       existing.count += result.occurrences;
-      conceptMap.set(result.concept, existing);
+      conceptMap.set(result.name, existing);
     }
 
-    for (const [concept, data] of conceptMap.entries()) {
+    for (const [conceptName, data] of conceptMap.entries()) {
       if (data.projects.length >= 2) {
         const pattern: SynthesizedPattern = {
           id: generateId(),
           category: 'architecture',
-          name: `Architecture: ${concept}`,
+          name: `Architecture: ${conceptName}`,
           description: `Cross-project architectural concept: ${data.count} occurrences across ${data.projects.length} projects`,
           sourceProjects: data.projects,
           occurrenceCount: data.count,
           successRate: 1.0,
           lastObserved: Date.now(),
-          relatedConcepts: (data.tags || '').split(',').map(t => t.trim()).filter(Boolean),
+          relatedConcepts: [],
           confidence: Math.min(1, data.count / 50),
         };
 
@@ -326,18 +326,18 @@ export class DeepMemorySynthesisService implements Service {
 
     // Find entities with similar tags or relationships
     const stmt = db.prepare(`
-      SELECT id, entity_type, concept, tags, project_id
+      SELECT id, type, name, properties, project_id
       FROM entities
-      WHERE entity_type IN ('concept', 'observation')
+      WHERE type IN ('concept', 'tool', 'place')
       ORDER BY created_at DESC
       LIMIT 500
     `);
 
     const entities = stmt.all() as Array<{
       id: string;
-      entity_type: string;
-      concept: string;
-      tags: string;
+      type: string;
+      name: string;
+      properties: string;
       project_id: string;
     }>;
 
