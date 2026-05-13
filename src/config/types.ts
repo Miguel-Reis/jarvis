@@ -128,6 +128,27 @@ export type UserConfig = {
   name?: string;
 };
 
+export type RemoteConnectionConfig = {
+  /** Hostname or IP. Omitted when `via` resolves the full chain (rare). */
+  host?: string;
+  /** SSH user. */
+  user?: string;
+  /** Path to private key (supports ~). */
+  key?: string;
+  /** SSH port (default 22). */
+  port?: number;
+  /** Name of another connection to use as ProxyJump (chains allowed). */
+  via?: string;
+  /** Hypervisor running on this host. */
+  hypervisor?: 'virtualbox';
+  /** Effective user for hypervisor CLI calls (VBoxManage is per-user). */
+  vm_user?: string;
+};
+
+export type RemoteConfig = {
+  connections: Record<string, RemoteConnectionConfig>;
+};
+
 export type JarvisConfig = {
   user?: UserConfig;
   daemon: {
@@ -171,6 +192,7 @@ export type JarvisConfig = {
   authority: AuthorityConfig;
   heartbeat: HeartbeatConfig;
   active_role: string;  // role file name
+  remote?: RemoteConfig;
 };
 
 export const DEFAULT_CONFIG: JarvisConfig = {
@@ -268,7 +290,7 @@ export const DEFAULT_CONFIG: JarvisConfig = {
   },
   authority: {
     default_level: 3,
-    governed_categories: ['send_email', 'send_message', 'make_payment'],
+    governed_categories: ['send_email', 'send_message', 'make_payment', 'remote_shell', 'vm_control'],
     overrides: [],
     context_rules: [],
     learning: {

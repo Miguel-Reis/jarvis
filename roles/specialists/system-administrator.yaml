@@ -53,5 +53,6 @@ sub_roles: []
 tools:
   - terminal
   - file-ops
+  - remote-shell
 
 authority_level: 4

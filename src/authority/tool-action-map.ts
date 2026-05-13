@@ -35,6 +35,10 @@ export const TOOL_ACTION_MAP: Record<string, ActionCategory> = {
   desktop_launch_app: 'control_app',
   desktop_screenshot: 'control_app',
 
+  // Remote shell over SSH
+  ssh_run: 'remote_shell',
+  list_remote_connections: 'read_data',
+
   // Delegation
   delegate_task: 'spawn_agent',
   manage_agents: 'spawn_agent',
@@ -53,6 +57,8 @@ export const CATEGORY_ACTION_MAP: Record<string, ActionCategory> = {
   'file-ops': 'write_data',
   browser: 'access_browser',
   desktop: 'control_app',
+  'remote-shell': 'remote_shell',
+  'vm-control': 'vm_control',
   delegation: 'spawn_agent',
   content: 'write_data',
   tasks: 'write_data',
