@@ -68,19 +68,52 @@ cp /mnt/c/Users/<you>/.ssh/id_ed25519 ~/.ssh/
 chmod 600 ~/.ssh/id_ed25519
 ```
 
-## VM control (preview)
+## VM control (Phase 2)
 
-Phases 2 and 3 (not yet shipped) will add `vm_list`, `vm_start`, `vm_stop`, `vm_snapshot_*`, and `vm_serial_*` tools that call `VBoxManage` through the same `RemoteShell`. Until then, drive `VBoxManage` directly through `ssh_run`:
+The following tools are available for VirtualBox VMs on a remote host:
 
+| Tool | Description | Approval |
+|------|-------------|----------|
+| `vm_list` | List all VMs (or `running: true` for only running) | auto |
+| `vm_info` | Get detailed VM info (state, memory, CPUs) | auto |
+| `vm_get_state` | Get VM state (running, powered off, saved) | auto |
+| `vm_start` | Start a VM in headless mode | required |
+| `vm_stop` | Stop a VM (mode: acpipowerbutton, poweroff, savestate) | required |
+| `vm_snapshot_take` | Take a snapshot (optional description) | required |
+| `vm_snapshot_list` | List snapshots for a VM | auto |
+| `vm_snapshot_restore` | Restore a VM to a snapshot | required (data loss) |
+| `vm_snapshot_delete` | Delete a snapshot | required |
+
+All tools accept `connection` (required) and `vm` (VM name or UUID, except `vm_list`).
+
+Example:
 ```
-ssh_run({connection: "homelab", command: "VBoxManage list vms"})
-ssh_run({connection: "homelab", command: "VBoxManage startvm freebsd-vm --type headless"})
+vm_list({connection: "homelab"})
+vm_start({connection: "homelab", vm: "freebsd-vm"})
+vm_snapshot_take({connection: "homelab", vm: "freebsd-vm", name: "pre-update", description: "Before system update"})
 ```
 
-For headless serial console access, configure the VM once:
+Under the hood, these call `VBoxManage` on the remote host via the same `RemoteShell` interface that `ssh_run` uses. If `vm_user` is set in the connection config and differs from the SSH user, commands are prefixed with `sudo -u <vm_user>`.
+
+## Serial console (Phase 3)
+
+For headless VMs that need interaction before SSH is available (e.g., during `bsdinstall`), configure the VM once:
 
 ```
 VBoxManage modifyvm <vm> --uart1 0x3F8 4 --uartmode1 server /tmp/<vm>-console.sock
 ```
 
-…and on the FreeBSD guest, set `console="comconsole"` in `/boot/loader.conf`. Phase 3 will wrap this with `vm_serial_read` / `vm_serial_send`.
+…and on the FreeBSD guest, set `console="comconsole"` in `/boot/loader.conf`.
+
+| Tool | Description | Approval |
+|------|-------------|----------|
+| `vm_serial_read` | Read last N lines from the serial console socket | auto |
+| `vm_serial_send` | Send text to the serial console | required if text contains `\n` |
+
+Example:
+```
+vm_serial_read({connection: "homelab", socketPath: "/tmp/freebsd-vm-console.sock", lines: 30})
+vm_serial_send({connection: "homelab", socketPath: "/tmp/freebsd-vm-console.sock", text: "root\n"})
+```
+
+**Warning**: If the VM has a shell listening on the serial port, `vm_serial_send` will execute whatever you send. Approval is required for any text containing newlines.

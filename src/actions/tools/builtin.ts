@@ -58,6 +58,7 @@ import { routeToSidecar } from './sidecar-route.ts';
 import { listSidecarsTool } from './sidecar-list.ts';
 import { DESKTOP_TOOLS } from './desktop.ts';
 import { sshRunTool, listRemoteConnectionsTool } from './remote.ts';
+import { vmListTool, vmInfoTool, vmStartTool, vmStopTool, vmSnapshotTakeTool, vmSnapshotListTool, vmSnapshotRestoreTool, vmSnapshotDeleteTool, vmGetStateTool, vmSerialReadTool, vmSerialSendTool } from './vm.ts';
 
 // Per-tool timeout configuration (ms)
 export const TOOL_TIMEOUTS: Record<string, number> = {
@@ -1169,6 +1170,19 @@ export const NON_BROWSER_TOOLS: ToolDefinition[] = [
   vectorSearchTool,
   sshRunTool,
   listRemoteConnectionsTool,
+  // VM lifecycle (VirtualBox)
+  vmListTool,
+  vmInfoTool,
+  vmGetStateTool,
+  vmStartTool,
+  vmStopTool,
+  vmSnapshotTakeTool,
+  vmSnapshotListTool,
+  vmSnapshotRestoreTool,
+  vmSnapshotDeleteTool,
+  // Serial console
+  vmSerialReadTool,
+  vmSerialSendTool,
 ];
 
 /**

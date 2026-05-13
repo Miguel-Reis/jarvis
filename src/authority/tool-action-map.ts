@@ -39,6 +39,19 @@ export const TOOL_ACTION_MAP: Record<string, ActionCategory> = {
   ssh_run: 'remote_shell',
   list_remote_connections: 'read_data',
 
+  // VM control (VirtualBox)
+  vm_list: 'vm_control',
+  vm_info: 'vm_control',
+  vm_get_state: 'vm_control',
+  vm_start: 'vm_control',
+  vm_stop: 'vm_control',
+  vm_snapshot_take: 'vm_control',
+  vm_snapshot_list: 'vm_control',
+  vm_snapshot_restore: 'vm_control',
+  vm_snapshot_delete: 'vm_control',
+  vm_serial_read: 'vm_control',
+  vm_serial_send: 'vm_control',
+
   // Delegation
   delegate_task: 'spawn_agent',
   manage_agents: 'spawn_agent',

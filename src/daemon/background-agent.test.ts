@@ -4,7 +4,8 @@ import { BrowserController } from '../actions/browser/session.ts';
 
 describe('NON_BROWSER_TOOLS', () => {
   test('contains the expected non-browser tools', () => {
-    expect(NON_BROWSER_TOOLS).toHaveLength(15);
+    // 15 base tools + 9 VM tools + 2 serial console tools = 26
+    expect(NON_BROWSER_TOOLS).toHaveLength(26);
     const names = NON_BROWSER_TOOLS.map(t => t.name);
     expect(names).toContain('run_command');
     expect(names).toContain('read_file');
@@ -17,6 +18,19 @@ describe('NON_BROWSER_TOOLS', () => {
     expect(names).toContain('get_system_info');
     expect(names).toContain('ssh_run');
     expect(names).toContain('list_remote_connections');
+    // Phase 2 VM tools
+    expect(names).toContain('vm_list');
+    expect(names).toContain('vm_info');
+    expect(names).toContain('vm_get_state');
+    expect(names).toContain('vm_start');
+    expect(names).toContain('vm_stop');
+    expect(names).toContain('vm_snapshot_take');
+    expect(names).toContain('vm_snapshot_list');
+    expect(names).toContain('vm_snapshot_restore');
+    expect(names).toContain('vm_snapshot_delete');
+    // Phase 3 serial console
+    expect(names).toContain('vm_serial_read');
+    expect(names).toContain('vm_serial_send');
   });
 
   test('none have browser category', () => {
@@ -57,6 +71,7 @@ describe('createBrowserTools', () => {
   });
 
   test('BUILTIN_TOOLS = NON_BROWSER_TOOLS + 8 browser + 9 desktop tools', () => {
+    // 8 browser tools + 9 desktop tools = 17 UI tools
     expect(BUILTIN_TOOLS).toHaveLength(NON_BROWSER_TOOLS.length + 8 + 9);
   });
 
