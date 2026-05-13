@@ -17,6 +17,7 @@ import type { LLMTool } from '../../llm/provider.ts';
 import { routeToSidecar } from './sidecar-route.ts';
 import { listSidecarsTool } from './sidecar-list.ts';
 import { DESKTOP_TOOLS } from './desktop.ts';
+import { sshRunTool, listRemoteConnectionsTool } from './remote.ts';
 
 const terminal = new TerminalExecutor({ timeout: 30000 });
 
@@ -814,6 +815,8 @@ export const NON_BROWSER_TOOLS: ToolDefinition[] = [
   captureScreenTool,
   getSystemInfoTool,
   listSidecarsTool,
+  sshRunTool,
+  listRemoteConnectionsTool,
 ];
 
 /**

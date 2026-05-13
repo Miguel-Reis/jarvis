@@ -400,6 +400,22 @@ function createTables(db: Database): void {
     )
   `);
 
+  // Authority: First-contact log for remote connections
+  // Future risk-aware approval rules will consult this to skip approval
+  // for non-destructive commands on already-approved (connection, role) pairs.
+  db.run(`
+    CREATE TABLE IF NOT EXISTS remote_connection_log (
+      id TEXT PRIMARY KEY,
+      connection TEXT NOT NULL,
+      role_id TEXT NOT NULL,
+      first_contact_at INTEGER NOT NULL,
+      approved_at INTEGER,
+      approver TEXT,
+      UNIQUE(connection, role_id)
+    )
+  `);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_remote_log_connection ON remote_connection_log(connection)`);
+
   // ── Awareness (M13): Screen captures, sessions, suggestions ──
 
   db.run(`

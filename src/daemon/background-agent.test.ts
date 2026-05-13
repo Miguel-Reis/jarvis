@@ -3,8 +3,8 @@ import { createBrowserTools, NON_BROWSER_TOOLS, BUILTIN_TOOLS } from '../actions
 import { BrowserController } from '../actions/browser/session.ts';
 
 describe('NON_BROWSER_TOOLS', () => {
-  test('contains 9 non-browser tools', () => {
-    expect(NON_BROWSER_TOOLS).toHaveLength(9);
+  test('contains the expected non-browser tools', () => {
+    expect(NON_BROWSER_TOOLS).toHaveLength(11);
     const names = NON_BROWSER_TOOLS.map(t => t.name);
     expect(names).toContain('run_command');
     expect(names).toContain('read_file');
@@ -15,6 +15,8 @@ describe('NON_BROWSER_TOOLS', () => {
     expect(names).toContain('set_clipboard');
     expect(names).toContain('capture_screen');
     expect(names).toContain('get_system_info');
+    expect(names).toContain('ssh_run');
+    expect(names).toContain('list_remote_connections');
   });
 
   test('none have browser category', () => {

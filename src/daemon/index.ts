@@ -921,6 +921,15 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
       console.log('[Daemon] Sidecar routing enabled for run_command, read_file, write_file, list_directory');
     }
 
+    // 10g.1. Inject remote-connection registry for ssh_run / list_remote_connections
+    {
+      const { ConnectionRegistry } = await import('../actions/remote/connection-registry.ts');
+      const { setRemoteRegistry } = await import('../actions/tools/remote.ts');
+      setRemoteRegistry(new ConnectionRegistry(config));
+      const count = Object.keys(config.remote?.connections ?? {}).length;
+      console.log(`[Daemon] Remote connection registry enabled (${count} connection${count === 1 ? '' : 's'})`);
+    }
+
     // 10h. Wire sidecar events into event pipeline (skip awareness events — already handled by awareness service)
     const awarenessEventTypes = ['screen_capture', 'context_changed', 'idle_detected'];
     sidecarManager.onEvent((sidecarId, event) => {
