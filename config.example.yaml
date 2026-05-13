@@ -85,5 +85,30 @@ tts:
 #   openai:
 #     api_key: "sk-..."
 
+# Remote hosts reachable over SSH. Each entry becomes a "connection" the
+# ssh_run / list_remote_connections tools can target.
+#
+# Authentication uses the system `ssh` binary, so ~/.ssh/config, ssh-agent,
+# known_hosts, and ProxyJump all work as usual. ControlMaster is enabled
+# automatically (socket under ~/.ssh/jarvis-cm-*) so subsequent commands reuse
+# the same connection.
+#
+# Every ssh_run call requires user approval (remote_shell is a governed
+# category). To exempt specific connections or commands, add a context_rule
+# under `authority.context_rules` with condition: tool_name and effect: allow.
+#
+# remote:
+#   connections:
+#     homelab:
+#       host: 192.168.1.50
+#       user: miguel
+#       key: ~/.ssh/id_ed25519
+#       hypervisor: virtualbox
+#       vm_user: miguel              # owner of VBoxManage VMs (it's per-user)
+#     freebsd-vm:
+#       via: homelab                 # ProxyJump through homelab
+#       host: 10.0.0.10
+#       user: root
+
 # Active role (must match a filename in roles/ without extension)
 active_role: "personal-assistant"

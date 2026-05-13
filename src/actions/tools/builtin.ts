@@ -57,6 +57,7 @@ import type { LLMTool } from '../../llm/provider.ts';
 import { routeToSidecar } from './sidecar-route.ts';
 import { listSidecarsTool } from './sidecar-list.ts';
 import { DESKTOP_TOOLS } from './desktop.ts';
+import { sshRunTool, listRemoteConnectionsTool } from './remote.ts';
 
 // Per-tool timeout configuration (ms)
 export const TOOL_TIMEOUTS: Record<string, number> = {
@@ -1166,6 +1167,8 @@ export const NON_BROWSER_TOOLS: ToolDefinition[] = [
   graphifyImportTool,
   graphifyConnectionsTool,
   vectorSearchTool,
+  sshRunTool,
+  listRemoteConnectionsTool,
 ];
 
 /**

@@ -6,7 +6,8 @@ export type ActionCategory =
   | 'execute_command' | 'install_software'
   | 'make_payment' | 'modify_settings'
   | 'spawn_agent' | 'terminate_agent'
-  | 'access_browser' | 'control_app';
+  | 'access_browser' | 'control_app'
+  | 'remote_shell' | 'vm_control';
 
 /**
  * Maps action categories to minimum required authority level
@@ -27,10 +28,12 @@ export const AUTHORITY_REQUIREMENTS: Record<ActionCategory, number> = {
   'write_data': 3,
   'send_message': 3,
 
-  // Level 5-6: + execute commands, control apps
+  // Level 5-6: + execute commands, control apps, remote/VM operations
   'execute_command': 5,
   'access_browser': 5,
   'control_app': 5,
+  'remote_shell': 5,
+  'vm_control': 5,
 
   // Level 7-8: + spawn agents, send email, install software
   'spawn_agent': 1,
