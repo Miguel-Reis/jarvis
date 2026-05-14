@@ -4,7 +4,7 @@
  * Reusable card container with consistent styling.
  */
 
-import React, { HTMLAttributes, forwardRef } from 'react';
+import { forwardRef, type HTMLAttributes } from 'react';
 import './Card.css';
 
 interface CardProps extends HTMLAttributes<HTMLDivElement> {

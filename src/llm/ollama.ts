@@ -78,7 +78,9 @@ export class OllamaProvider implements LLMProvider {
   private apiKey: string | undefined;
 
   constructor(baseUrl = 'http://localhost:11434', defaultModel = 'llama3', apiKey?: string) {
-    this.baseUrl = baseUrl.replace(/\/$/, '');
+    // Use default if baseUrl is empty/whitespace
+    const effectiveUrl = baseUrl && baseUrl.trim().length > 0 ? baseUrl : 'http://localhost:11434';
+    this.baseUrl = effectiveUrl.replace(/\/$/, '');
     this.defaultModel = defaultModel;
     this.apiKey = apiKey || undefined;
   }

@@ -48,11 +48,17 @@ export default function ChatPage({
 
   useEffect(() => {
     fetch('/api/config/llm')
-      .then((r) => r.ok ? r.json() : null)
+      .then((r) => {
+        if (!r.ok) {
+          console.error('[ChatPage] LLM config response not ok:', r.status, r.statusText);
+          return null;
+        }
+        return r.json();
+      })
       .then((data) => {
         if (data?.primary === 'ollama') setDisableImages(true);
       })
-      .catch(() => {});
+      .catch((err) => console.error('[ChatPage] Failed to fetch LLM config:', err));
   }, []);
 
   const systemMessageCount = useMemo(

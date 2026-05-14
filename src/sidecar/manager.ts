@@ -9,7 +9,7 @@ import { generateKeyPair, exportJWK, exportPKCS8, exportSPKI, importPKCS8, impor
 import { existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import type { ServerWebSocket } from 'bun';
-import type { Service, ServiceStatus } from '../daemon/services.ts';
+import type { Service, ServiceStatus } from '../daemon/types.ts';
 import { getDb, generateId } from '../vault/schema.ts';
 import type {
   SidecarRecord,

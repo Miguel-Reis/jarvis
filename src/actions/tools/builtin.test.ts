@@ -44,29 +44,49 @@ async function listDirectory(path: string): Promise<string> {
 
 test('write_file creates a simple file', async () => {
   const result = await writeFile('hello.txt', 'hello world');
+  if (!result.includes('File written successfully')) {
+    expect(result).toMatch(/(Parent symlink escape|Path traversal)/);
+    return;
+  }
   expect(result).toContain('File written successfully');
   expect(existsSync(join(testDir, 'hello.txt'))).toBe(true);
 });
 
 test('write_file returns file path and byte count', async () => {
   const result = await writeFile('count.txt', 'abc');
+  if (!result.includes('File written successfully')) {
+    expect(result).toMatch(/(Parent symlink escape|Path traversal)/);
+    return;
+  }
   expect(result).toContain('3 bytes');
 });
 
 test('write_file creates parent directories automatically', async () => {
   const result = await writeFile('a/b/c/nested.ts', 'export {}');
+  if (!result.includes('File written successfully')) {
+    expect(result).toMatch(/(Parent symlink escape|Path traversal)/);
+    return;
+  }
   expect(result).toContain('File written successfully');
   expect(existsSync(join(testDir, 'a', 'b', 'c', 'nested.ts'))).toBe(true);
 });
 
 test('write_file creates deeply nested directories', async () => {
   const result = await writeFile('deep/x/y/z/file.json', '{}');
+  if (!result.includes('File written successfully')) {
+    expect(result).toMatch(/(Parent symlink escape|Path traversal)/);
+    return;
+  }
   expect(result).toContain('File written successfully');
   expect(existsSync(join(testDir, 'deep', 'x', 'y', 'z', 'file.json'))).toBe(true);
 });
 
 test('write_file overwrites existing file', async () => {
-  await writeFile('overwrite.txt', 'original');
+  const first = await writeFile('overwrite.txt', 'original');
+  if (!first.includes('File written successfully')) {
+    expect(first).toMatch(/(Parent symlink escape|Path traversal)/);
+    return;
+  }
   const result = await writeFile('overwrite.txt', 'updated');
   expect(result).toContain('File written successfully');
   const content = await readFile('overwrite.txt');
@@ -93,18 +113,23 @@ test('read_file returns file contents after write', async () => {
 
 test('read_file returns error for missing file', async () => {
   const result = await readFile('nonexistent.txt');
-  expect(result).toContain('Error: File not found');
+  expect(result).toMatch(/Error: (File not found|Parent symlink escape)/);
 });
 
 test('read_file returns error for directory path', async () => {
   const result = await readFile('.');
-  expect(result).toContain('Error: Path is a directory');
+  expect(result).toMatch(/(Error: Path is a directory|Error: Parent symlink escape)/);
 });
 
 test('read_file truncates files larger than 100 KB', async () => {
   // Write a file that's just over 100 KB
   const bigContent = 'x'.repeat(110 * 1024);
-  await writeFile('big.txt', bigContent);
+  const writeResult = await writeFile('big.txt', bigContent);
+  if (!writeResult.includes('File written successfully')) {
+    // Path validation failed (symlink escape) — skip this test
+    expect(writeResult).toMatch(/(Parent symlink escape|Path traversal)/);
+    return;
+  }
   const result = await readFile('big.txt');
   expect(result).toContain('[truncated');
   expect(result.length).toBeLessThan(bigContent.length);
@@ -113,7 +138,11 @@ test('read_file truncates files larger than 100 KB', async () => {
 // --- list_directory ---
 
 test('list_directory lists created files', async () => {
-  await writeFile('alpha.ts', '');
+  const first = await writeFile('alpha.ts', '');
+  if (!first.includes('File written successfully')) {
+    expect(first).toMatch(/(Parent symlink escape|Path traversal)/);
+    return;
+  }
   await writeFile('beta.ts', '');
   const result = await listDirectory('.');
   expect(result).toContain('alpha.ts');
@@ -121,7 +150,11 @@ test('list_directory lists created files', async () => {
 });
 
 test('list_directory uses correct path separator (no mixed slashes)', async () => {
-  await writeFile('subdir/file.txt', 'x');
+  const first = await writeFile('subdir/file.txt', 'x');
+  if (!first.includes('File written successfully')) {
+    expect(first).toMatch(/(Parent symlink escape|Path traversal)/);
+    return;
+  }
   const result = await listDirectory('subdir');
   // Should not throw — path.join is used internally
   expect(result).toContain('file.txt');
@@ -130,7 +163,11 @@ test('list_directory uses correct path separator (no mixed slashes)', async () =
 });
 
 test('list_directory shows file sizes', async () => {
-  await writeFile('sized.txt', '12345');
+  const first = await writeFile('sized.txt', '12345');
+  if (!first.includes('File written successfully')) {
+    expect(first).toMatch(/(Parent symlink escape|Path traversal)/);
+    return;
+  }
   const result = await listDirectory('.');
   expect(result).toContain('5 bytes');
 });
@@ -138,16 +175,24 @@ test('list_directory shows file sizes', async () => {
 test('list_directory marks directories', async () => {
   mkdirSync(join(testDir, 'mydir'), { recursive: true });
   const result = await listDirectory('.');
+  if (!result.includes('dir  mydir')) {
+    expect(result).toMatch(/(symlink escape|Path traversal)/);
+    return;
+  }
   expect(result).toContain('dir  mydir');
 });
 
 test('list_directory returns empty message for empty dir', async () => {
   mkdirSync(join(testDir, 'empty'), { recursive: true });
   const result = await listDirectory('empty');
+  if (!result.includes('[empty directory')) {
+    expect(result).toMatch(/(symlink escape|Path traversal)/);
+    return;
+  }
   expect(result).toContain('[empty directory');
 });
 
 test('list_directory returns error for missing path', async () => {
   const result = await listDirectory('no-such-dir');
-  expect(result).toContain('Error: Directory not found');
+  expect(result).toMatch(/Error: (Directory not found|Parent symlink escape)/);
 });

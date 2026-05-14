@@ -59,6 +59,7 @@ const OLLAMA_MODELS = [
   "mixtral",
   "codellama",
   "qwen2.5",
+  "qwen3.5:397b-cloud",
   "deepseek-coder-v2",
   "phi3",
 ];
@@ -310,15 +311,17 @@ export function LLMPanel() {
         body.api_key = geminiKey || undefined;
         body.model = resolveModel(geminiModel, geminiCustomModel);
       } else if (provider === "ollama") {
-        body.base_url = ollamaBaseUrl;
-        body.model = resolveModel(ollamaModel, ollamaCustomModel);
+        // Use config base_url if state hasn't synced yet
+        body.base_url = ollamaBaseUrl || config?.ollama?.base_url;
+        body.model = resolveModel(ollamaModel, ollamaCustomModel) || config?.ollama?.model;
         body.api_key = ollamaKey || undefined;
       } else if (provider === "openrouter") {
         body.api_key = openrouterKey || undefined;
         body.model = resolveModel(openrouterModel, openrouterCustomModel);
       } else if (provider === "litellm") {
-        body.base_url = litellmBaseUrl;
-        body.model = resolveModel(litellmModel, litellmCustomModel);
+        // Use config base_url if state hasn't synced yet
+        body.base_url = litellmBaseUrl || config?.litellm?.base_url;
+        body.model = resolveModel(litellmModel, litellmCustomModel) || config?.litellm?.model;
         body.api_key = litellmKey || undefined;
       }
       const result = await api<TestResult>("/api/config/llm/test", {

@@ -41,7 +41,6 @@ export class DesktopController implements AppController {
 
   // Element cache from last snapshot (like BrowserController.elementCoords)
   private elementCache = new Map<number, UIElement>();
-  private lastSnapshotWindow: { pid: number; title: string } | null = null;
 
   constructor(port: number = DEFAULT_PORT) {
     this.port = port;
@@ -383,11 +382,11 @@ export class DesktopController implements AppController {
     });
   }
 
-  private flattenTree(elements: any[], depth: number, result: FlatElement[]): void {
+  private flattenTree(elements: UIElement[], depth: number, result: FlatElement[]): void {
     for (const el of elements) {
-      const id = el.id;
+      const id = el.id as unknown as number;
       const uiElement: UIElement = {
-        id: String(id),
+        id,
         role: el.role || '',
         name: el.name || '',
         value: el.value || null,
@@ -404,7 +403,7 @@ export class DesktopController implements AppController {
         name: el.name || '',
         value: el.value || null,
         depth,
-        isEnabled: el.isEnabled !== false,
+        isEnabled: el.isEnabled ?? true,
       });
 
       // Recurse into children
@@ -414,25 +413,28 @@ export class DesktopController implements AppController {
     }
   }
 
-  private toWindowInfo(raw: any): WindowInfo {
+  private toWindowInfo(raw: Partial<WindowInfo>): WindowInfo {
     return {
-      pid: raw.pid || 0,
-      title: raw.title || '',
-      className: raw.className || '',
-      bounds: raw.bounds || { x: 0, y: 0, width: 0, height: 0 },
-      focused: raw.focused || false,
+      pid: raw.pid ?? 0,
+      title: raw.title ?? '',
+      className: raw.className ?? '',
+      bounds: raw.bounds ?? { x: 0, y: 0, width: 0, height: 0 },
+      focused: raw.focused ?? false,
     };
   }
 
-  private parseElements(raw: any[]): UIElement[] {
-    return raw.map((el) => ({
-      id: String(el.id),
-      role: el.role || '',
-      name: el.name || '',
-      value: el.value || null,
-      bounds: el.bounds || { x: 0, y: 0, width: 0, height: 0 },
-      children: el.children ? this.parseElements(el.children) : [],
-      properties: el.properties || {},
-    }));
+  private parseElements(raw: unknown[]): UIElement[] {
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .filter((el): el is { id: unknown; role?: string; name?: string; value?: string; bounds?: { x: number; y: number; width: number; height: number }; children?: unknown[]; properties?: unknown } => typeof el === 'object' && el !== null && 'id' in el)
+      .map((el) => ({
+        id: el.id as number ?? 0,
+        role: el.role ?? '',
+        name: el.name ?? '',
+        value: el.value ?? null,
+        bounds: el.bounds ?? { x: 0, y: 0, width: 0, height: 0 },
+        children: Array.isArray(el.children) ? this.parseElements(el.children) : [],
+        properties: (el.properties as Record<string, unknown>) ?? {},
+      }));
   }
 }

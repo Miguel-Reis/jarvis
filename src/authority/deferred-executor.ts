@@ -9,6 +9,7 @@ import type { AuthorityLearner } from './learning.ts';
 import type { ActionCategory } from '../roles/authority.ts';
 
 export type ExecutionResultCallback = (requestId: string, request: ApprovalRequest, result: string) => void;
+export type GrantTemporaryCallback = (agentId: string, action: ActionCategory) => void;
 
 export class DeferredExecutor {
   private toolRegistry: ToolRegistry | null = null;
@@ -16,6 +17,7 @@ export class DeferredExecutor {
   private auditTrail: AuditTrail;
   private learner: AuthorityLearner | null = null;
   private onResult: ExecutionResultCallback | null = null;
+  private grantTemporary: GrantTemporaryCallback | null = null;
 
   constructor(approvalManager: ApprovalManager, auditTrail: AuditTrail) {
     this.approvalManager = approvalManager;
@@ -34,8 +36,13 @@ export class DeferredExecutor {
     this.onResult = cb;
   }
 
+  setGrantTemporaryCallback(cb: GrantTemporaryCallback): void {
+    this.grantTemporary = cb;
+  }
+
   /**
    * Execute a previously approved request.
+   * CRITICAL: Grants temporary permission BEFORE executing to prevent repeat approvals.
    */
   async executeApproved(requestId: string): Promise<string> {
     const request = this.approvalManager.getRequest(requestId);
@@ -45,6 +52,12 @@ export class DeferredExecutor {
 
     if (!this.toolRegistry) {
       return 'Error: No tool registry configured';
+    }
+
+    // FIX: Grant temporary permission BEFORE executing
+    // This ensures subsequent calls from the same agent don't trigger new approvals
+    if (this.grantTemporary) {
+      this.grantTemporary(request.agent_id, request.action_category as ActionCategory);
     }
 
     const startTime = Date.now();

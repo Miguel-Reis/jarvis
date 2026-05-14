@@ -249,20 +249,17 @@ test('WebSocketServer - auth token blocks unauthenticated requests', async () =>
     const body = await api.json() as any;
     expect(body.error).toBe('Unauthorized');
 
-    // Dashboard without cookie → 401 HTML with hash-to-query bootstrap script
+    // Dashboard without cookie → 401 HTML
     const dash = await fetch('http://localhost:3150/');
     expect(dash.status).toBe(401);
     const html = await dash.text();
-    expect(html).toContain("location.replace");
-    expect(html).toContain(".get('token')");
+    expect(html).toContain('Unauthorized');
 
-    // Query param with valid token → 302 + Set-Cookie
+    // Query param token is NO LONGER SUPPORTED — should return 401 (not 302)
     const withToken = await fetch('http://localhost:3150/?token=test-secret-123', { redirect: 'manual' });
-    expect(withToken.status).toBe(302);
-    expect(withToken.headers.get('Set-Cookie')).toContain('token=test-secret-123');
-    expect(withToken.headers.get('Location')).toBe('/');
+    expect(withToken.status).toBe(401);
 
-    // Query param with wrong token → 401
+    // Query param with any token → still 401 (tokens via URL are blocked)
     const wrongToken = await fetch('http://localhost:3150/?token=wrong', { redirect: 'manual' });
     expect(wrongToken.status).toBe(401);
   } finally {

@@ -58,6 +58,13 @@ export function getAppController(): AppController {
       const { MacAppController } = require('./macos.ts');
       return new MacAppController();
     }
+    case 'freebsd': {
+      // FreeBSD: throw descriptive error for headless mode
+      throw new Error(
+        `FreeBSD detected. Desktop control not available. ` +
+        `Run with --no-local-tools for headless mode (chat + terminal commands only).`
+      );
+    }
     default:
       throw new Error(`Unsupported platform: ${platform}`);
   }

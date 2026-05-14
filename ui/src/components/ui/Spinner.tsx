@@ -4,7 +4,7 @@
  * Loading spinner with configurable size and color.
  */
 
-import React, { forwardRef, HTMLAttributes } from 'react';
+import { forwardRef, type HTMLAttributes } from 'react';
 import './Spinner.css';
 
 export type SpinnerSize = 'sm' | 'md' | 'lg';

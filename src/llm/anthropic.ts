@@ -41,11 +41,13 @@ type AnthropicResponse = {
   usage: {
     input_tokens: number;
     output_tokens: number;
+    cache_creation_input_tokens?: number;
+    cache_read_input_tokens?: number;
   };
 };
 
 type AnthropicStreamEvent =
-  | { type: 'message_start'; message: Partial<AnthropicResponse> }
+  | { type: 'message_start'; message: Partial<Omit<AnthropicResponse, 'usage'>> & { usage?: AnthropicResponse['usage'] } }
   | { type: 'content_block_start'; index: number; content_block: AnthropicContentBlock }
   | { type: 'content_block_delta'; index: number; delta: { type: 'text_delta'; text: string } | { type: 'input_json_delta'; partial_json: string } }
   | { type: 'content_block_stop'; index: number }
@@ -53,7 +55,7 @@ type AnthropicStreamEvent =
   | { type: 'message_stop' }
   | { type: 'error'; error: { type: string; message: string } };
 
-const MAX_RETRIES = 0;
+const MAX_RETRIES = 3;
 const RETRY_BASE_DELAY_MS = 5000; // 5s, 10s, 20s
 
 export class AnthropicProvider implements LLMProvider {
@@ -109,8 +111,10 @@ export class AnthropicProvider implements LLMProvider {
   async chat(messages: LLMMessage[], options: LLMOptions = {}): Promise<LLMResponse> {
     const { model = this.defaultModel, temperature, max_tokens = 16384, tools, tool_choice } = options;
 
-    // Compact history for Claude's context window
-    const budget = calculateHistoryBudget(200000);
+    // Compact aggressively to stay under per-minute input token rate limits.
+    // Claude's context is 200K, but org rate limits are typically 30K-60K input tokens/min;
+    // keeping per-request history under ~20K leaves headroom for back-to-back chats.
+    const budget = calculateHistoryBudget(20000);
     const compactedMessages = compactHistory(messages, budget);
 
     const { system, messages: anthropicMessages } = this.convertMessages(compactedMessages);
@@ -120,10 +124,10 @@ export class AnthropicProvider implements LLMProvider {
       max_tokens,
     };
 
-    if (system) body.system = system;
+    if (system) body.system = this.buildCachedSystem(system);
     if (temperature !== undefined) body.temperature = temperature;
     if (tools && tools.length > 0) {
-      body.tools = this.convertTools(tools);
+      body.tools = this.convertTools(tools, true);
       // Anthropic uses budget_tokens for tool use (no explicit tool_choice needed)
     }
 
@@ -135,8 +139,10 @@ export class AnthropicProvider implements LLMProvider {
   async *stream(messages: LLMMessage[], options: LLMOptions = {}): AsyncIterable<LLMStreamEvent> {
     const { model = this.defaultModel, temperature, max_tokens = 16384, tools, tool_choice } = options;
 
-    // Compact history for Claude's context window
-    const budget = calculateHistoryBudget(200000);
+    // Compact aggressively to stay under per-minute input token rate limits.
+    // Claude's context is 200K, but org rate limits are typically 30K-60K input tokens/min;
+    // keeping per-request history under ~20K leaves headroom for back-to-back chats.
+    const budget = calculateHistoryBudget(20000);
     const compactedMessages = compactHistory(messages, budget);
 
     const { system, messages: anthropicMessages } = this.convertMessages(compactedMessages);
@@ -147,10 +153,10 @@ export class AnthropicProvider implements LLMProvider {
       stream: true,
     };
 
-    if (system) body.system = system;
+    if (system) body.system = this.buildCachedSystem(system);
     if (temperature !== undefined) body.temperature = temperature;
     if (tools && tools.length > 0) {
-      body.tools = this.convertTools(tools);
+      body.tools = this.convertTools(tools, true);
       // Anthropic automatically uses tools when provided (no explicit tool_choice needed)
     }
 
@@ -171,7 +177,7 @@ export class AnthropicProvider implements LLMProvider {
     const toolCalls: LLMToolCall[] = [];
     let currentToolCall: { id: string; name: string; input_json: string } | null = null;
     let stopReason: string | null = null;
-    let usage = { input_tokens: 0, output_tokens: 0 };
+    let usage: { input_tokens: number; output_tokens: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number } = { input_tokens: 0, output_tokens: 0 };
     let responseModel = model;
 
     try {
@@ -198,6 +204,12 @@ export class AnthropicProvider implements LLMProvider {
 
             if (event.type === 'message_start' && event.message.usage) {
               usage.input_tokens = event.message.usage.input_tokens;
+              if (event.message.usage.cache_read_input_tokens !== undefined) {
+                usage.cache_read_input_tokens = event.message.usage.cache_read_input_tokens;
+              }
+              if (event.message.usage.cache_creation_input_tokens !== undefined) {
+                usage.cache_creation_input_tokens = event.message.usage.cache_creation_input_tokens;
+              }
               if (event.message.model) responseModel = event.message.model;
             } else if (event.type === 'content_block_start') {
               if (event.content_block.type === 'tool_use') {
@@ -351,12 +363,28 @@ export class AnthropicProvider implements LLMProvider {
     return { system, messages: anthropicMessages };
   }
 
-  private convertTools(tools: LLMTool[]): AnthropicToolDef[] {
-    return tools.map(tool => ({
+  private convertTools(tools: LLMTool[], cacheLast = false): AnthropicToolDef[] {
+    const defs: AnthropicToolDef[] = tools.map(tool => ({
       name: tool.name,
       description: tool.description,
       input_schema: tool.parameters,
     }));
+    // Caching the final tool definition implicitly caches the entire tools prefix.
+    // Tool definitions are large and stable across turns — high cache-hit value.
+    if (cacheLast && defs.length > 0) {
+      (defs[defs.length - 1] as AnthropicToolDef & { cache_control?: { type: 'ephemeral' } })
+        .cache_control = { type: 'ephemeral' };
+    }
+    return defs;
+  }
+
+  /**
+   * Wrap the system prompt as a single text block with ephemeral cache_control.
+   * System prompts in Jarvis are stable per session (role + persona) → cache hits
+   * save ~20-40% input tokens on multi-turn chats. 5-minute TTL.
+   */
+  private buildCachedSystem(system: string): Array<{ type: 'text'; text: string; cache_control?: { type: 'ephemeral' } }> {
+    return [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }];
   }
 
   private convertResponse(response: AnthropicResponse): LLMResponse {
@@ -381,6 +409,8 @@ export class AnthropicProvider implements LLMProvider {
       usage: {
         input_tokens: response.usage.input_tokens,
         output_tokens: response.usage.output_tokens,
+        ...(response.usage.cache_read_input_tokens !== undefined && { cache_read_input_tokens: response.usage.cache_read_input_tokens }),
+        ...(response.usage.cache_creation_input_tokens !== undefined && { cache_creation_input_tokens: response.usage.cache_creation_input_tokens }),
       },
       model: response.model,
       finish_reason: this.mapStopReason(response.stop_reason),

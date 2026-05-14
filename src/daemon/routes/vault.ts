@@ -9,7 +9,17 @@ import { findEntities, getEntity, searchEntitiesByName, createEntity, deleteEnti
 import { findFacts, createFact, deleteFact } from '../../vault/facts.ts';
 import { findRelationships, getEntityRelationships } from '../../vault/relationships.ts';
 import { getDb } from '../../vault/schema.ts';
+import { getVectorIndex } from '../../vault/vector-index.ts';
 import type { EntityType } from '../../vault/entities.ts';
+
+function indexEntityAsync(entityId: string, name: string, properties?: Record<string, unknown>): void {
+  // Fire-and-forget: don't block the POST response on embedding latency.
+  // Errors are logged inside VectorIndexService.addEntity.
+  const content = (properties?.summary as string) || (properties?.description as string) || name;
+  getVectorIndex().addEntity(entityId, content).catch(err => {
+    console.error('[VaultRoutes] addEntity to vector index failed:', err instanceof Error ? err.message : err);
+  });
+}
 
 function escapeLike(s: string): string {
   return s.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
@@ -34,6 +44,7 @@ export function registerRoutes(_ctx: ApiContext) {
           const body = await req.json() as { type: EntityType; name: string; properties?: Record<string, unknown>; source?: string };
           if (!body.type || !body.name?.trim()) return error('type and name are required', 400);
           const entity = createEntity(body.type, body.name.trim(), body.properties, body.source);
+          indexEntityAsync(entity.id, entity.name, body.properties);
           return json(entity, 201);
         } catch (err) { return error(`${err}`); }
       },
@@ -48,6 +59,9 @@ export function registerRoutes(_ctx: ApiContext) {
       DELETE: (req: Request & { params: { id: string } }) => {
         const ok = deleteEntity(req.params.id);
         if (!ok) return error('Entity not found', 404);
+        getVectorIndex().removeEntity(req.params.id).catch(err => {
+          console.error('[VaultRoutes] removeEntity from vector index failed:', err instanceof Error ? err.message : err);
+        });
         return json({ ok: true });
       },
     },

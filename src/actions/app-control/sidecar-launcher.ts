@@ -190,7 +190,7 @@ export async function launchSidecar(port: number = DEFAULT_PORT): Promise<Runnin
   }
 
   if (!reachable) {
-    try { proc.kill(); } catch {}
+    try { proc.kill(); } catch (err) { console.warn('[SidecarLauncher] Failed to kill unreachable sidecar:', err); }
     throw new Error(
       `Sidecar started but not reachable on port ${port} after 10s.\n` +
       `Binary: ${exePath}`
@@ -216,7 +216,7 @@ export async function stopSidecar(running: RunningSidecar): Promise<void> {
 
   // Kill process if we spawned it
   if (running.proc) {
-    try { running.proc.kill(); } catch {}
+    try { running.proc.kill(); } catch (err) { console.warn('[SidecarLauncher] Failed to kill sidecar process:', err); }
 
     // Wait for exit
     const deadline = Date.now() + 3000;
@@ -225,7 +225,7 @@ export async function stopSidecar(running: RunningSidecar): Promise<void> {
       await Bun.sleep(100);
     }
 
-    try { running.proc.kill(9); } catch {}
+    try { running.proc.kill(9); } catch (err) { console.warn('[SidecarLauncher] Failed to force kill sidecar:', err); }
   }
 
   console.log('[SidecarLauncher] Sidecar stopped');

@@ -6,8 +6,16 @@
  */
 
 import { existsSync, statSync } from "node:fs";
-import { ServiceRegistry, type ServiceStatus } from "./services.ts";
 import { getDb } from "../vault/schema.ts";
+
+type ServiceStatus = 'stopped' | 'starting' | 'running' | 'stopping' | 'error';
+
+interface ServiceLike {
+  name: string;
+  start(): Promise<void>;
+  stop(): Promise<void>;
+  status?: () => ServiceStatus;
+}
 
 export type HealthStatus = {
   uptime: number;           // seconds
@@ -19,13 +27,13 @@ export type HealthStatus = {
 
 export class HealthMonitor {
   private startTime: number;
-  private registry: ServiceRegistry;
+  private services: ServiceLike[];
   private checkInterval: Timer | null = null;
   private dbPath: string;
 
-  constructor(registry: ServiceRegistry, dbPath: string) {
+  constructor(services: ServiceLike[], dbPath: string) {
     this.startTime = Date.now();
-    this.registry = registry;
+    this.services = services;
     this.dbPath = dbPath;
   }
 
@@ -65,7 +73,10 @@ export class HealthMonitor {
   getHealth(): HealthStatus {
     const now = Date.now();
     const uptime = Math.floor((now - this.startTime) / 1000);
-    const services = this.registry.getStatus();
+    const services: Record<string, ServiceStatus> = {};
+    for (const service of this.services) {
+      services[service.name] = service.status?.() ?? 'running';
+    }
     const memory = this.getMemoryStats();
     const database = this.getDatabaseStats();
 
@@ -91,9 +102,7 @@ export class HealthMonitor {
     if (unhealthyServices.length > 0) {
       console.warn('[HealthMonitor] ⚠ Unhealthy services detected:');
       for (const [name, status] of unhealthyServices) {
-        const info = this.registry.getServiceInfo(name);
-        const error = info?.error ? ` - ${info.error}` : '';
-        console.warn(`  - ${name}: ${status}${error}`);
+        console.warn(`  - ${name}: ${status}`);
       }
     }
 

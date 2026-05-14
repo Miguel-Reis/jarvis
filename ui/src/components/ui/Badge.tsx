@@ -4,7 +4,7 @@
  * Reusable badge/tag for status, types, and labels.
  */
 
-import React, { HTMLAttributes, forwardRef } from 'react';
+import { forwardRef, type HTMLAttributes } from 'react';
 import './Badge.css';
 
 export type BadgeVariant = 'default' | 'success' | 'warning' | 'danger' | 'info' | 'purple';

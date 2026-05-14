@@ -20,12 +20,27 @@ type Props = {
   voice?: VoiceProps;
 };
 
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
+const ALLOWED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+
 function fileToImageAttachment(file: File): Promise<ImageAttachment> {
   return new Promise((resolve, reject) => {
+    // Validate file size
+    if (file.size > MAX_IMAGE_SIZE) {
+      reject(new Error(`Image too large: ${(file.size / 1024 / 1024).toFixed(2)}MB (max 5MB)`));
+      return;
+    }
+
+    // Validate file type
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      reject(new Error(`Invalid image type: ${file.type}. Allowed: ${ALLOWED_IMAGE_TYPES.join(', ')}`));
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = () => {
       const dataUrl = reader.result as string;
-      resolve({ dataUrl, mediaType: file.type || "image/png" });
+      resolve({ dataUrl, mediaType: file.type });
     };
     reader.onerror = reject;
     reader.readAsDataURL(file);

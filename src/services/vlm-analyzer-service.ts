@@ -11,8 +11,8 @@
  * Results are injected into agent context for "UI-aware" assistance.
  */
 
-import type { Service, ServiceStatus } from '../daemon/services.ts';
-import type { ScreenCaptureResult } from './screen-capture.ts';
+import type { Service, ServiceStatus } from '../daemon/types.ts';
+import type { ScreenCaptureResult } from './screen-capture-service.ts';
 import { InterruptManager } from '../agents/interrupt-manager.ts';
 
 export interface VLMAnalyzerConfig {

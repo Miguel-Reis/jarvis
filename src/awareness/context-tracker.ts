@@ -21,7 +21,7 @@ const WEAK_ERROR_PATTERN = /\b(error|exception|failed|fatal|crash|denied|refused
 const ERROR_CONFIRM_PATTERN = /(?:at .+:\d+|line \d+|\.ts:\d+|\.js:\d+|\.py:\d+|\.go:\d+|throw |exit code|status [45]\d{2}|Traceback|^\s+\^|command not found|No such file|permission denied|cannot find module|Module not found|Compilation failed|Build failed|ERR!|npm ERR|error\[\w+\]|✗|✘|FAIL|FAILED|returned non-zero|Process exited)/mi;
 
 // JARVIS own log lines — filter these out from error detection
-const JARVIS_LOG_PREFIX = /\[(CaptureEngine|ObserverManager|file-watcher|clipboard|processes|notifications|email|calendar|Daemon|ServiceRegistry|AgentService|WSService|OCREngine|Awareness|DesktopController|Executor|HealthMonitor|ChannelManager|TelegramAdapter|BackgroundAgent|WebSocketServer|EventReactor|Orchestrator|ChannelService|ObserverService)\]/;
+const JARVIS_LOG_PREFIX = /\[(CaptureEngine|ObserverManager|file-watcher|clipboard|processes|notifications|email|calendar|Daemon|AgentService|WSService|OCREngine|Awareness|DesktopController|Executor|HealthMonitor|ChannelManager|TelegramAdapter|BackgroundAgent|WebSocketServer|EventReactor|Orchestrator|ChannelService|ObserverService)\]/;
 
 // URL pattern in text
 const URL_PATTERN = /https?:\/\/[^\s<>"{}|\\^`[\]]+/;

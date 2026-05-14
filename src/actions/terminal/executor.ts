@@ -44,12 +44,10 @@ function sanitizeCommand(command: string): { safe: true; command: string } | { s
 export class TerminalExecutor {
   private shell: string;
   private defaultTimeout: number;
-  private allowDangerous: boolean;
 
-  constructor(opts?: { shell?: string; timeout?: number; allowDangerous?: boolean }) {
+  constructor(opts?: { shell?: string; timeout?: number }) {
     this.shell = opts?.shell ?? TerminalExecutor.detectShell();
     this.defaultTimeout = opts?.timeout ?? 30000;
-    this.allowDangerous = opts?.allowDangerous ?? false;
   }
 
   /** Build the shell invocation args for a command string, handling PowerShell vs POSIX shells. */
@@ -65,14 +63,12 @@ export class TerminalExecutor {
     const startTime = Date.now();
     const timeout = opts?.timeout ?? this.defaultTimeout;
 
-    // Sanitize command to prevent injection attacks (unless explicitly allowed)
-    if (!this.allowDangerous) {
-      const sanitized = sanitizeCommand(command);
-      if (!sanitized.safe) {
-        throw new Error(`Command injection prevention: ${sanitized.reason}. Use allowDangerous: true if this is intentional.`);
-      }
-      command = sanitized.command;
+    // Sanitize command to prevent injection attacks
+    const sanitized = sanitizeCommand(command);
+    if (!sanitized.safe) {
+      throw new Error(`Command injection prevention: ${sanitized.reason}`);
     }
+    command = sanitized.command;
 
     // Auto-translate Unix commands to Windows equivalents when running on Windows PowerShell/CMD
     let finalCommand = command;

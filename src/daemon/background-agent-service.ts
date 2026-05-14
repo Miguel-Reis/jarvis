@@ -11,15 +11,13 @@
 
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import type { Service, ServiceStatus } from './services.ts';
+import type { Service, ServiceStatus } from './types.ts';
 import type { IAgentService } from './agent-service-interface.ts';
 import type { JarvisConfig } from '../config/types.ts';
-import type { RoleDefinition } from '../roles/types.ts';
 import type { LLMManager } from '../llm/manager.ts';
 import type { ResearchQueue } from './research-queue.ts';
 
 import { AgentOrchestrator } from '../agents/orchestrator.ts';
-import { loadRole } from '../roles/loader.ts';
 import { ToolRegistry } from '../actions/tools/registry.ts';
 import { NON_BROWSER_TOOLS, createBrowserTools } from '../actions/tools/builtin.ts';
 import { BrowserController } from '../actions/browser/session.ts';
@@ -27,33 +25,30 @@ import { DESKTOP_TOOLS } from '../actions/tools/desktop.ts';
 import { commitmentsTool } from '../actions/tools/commitments.ts';
 import { researchQueueTool } from '../actions/tools/research.ts';
 import { webSearchTool } from '../actions/tools/search.ts';
-import { buildSystemPrompt, type PromptContext } from '../roles/prompt-builder.ts';
-import { getDueCommitments, getUpcoming } from '../vault/commitments.ts';
-import { getRecentObservations } from '../vault/observations.ts';
-import { findContent } from '../vault/content-pipeline.ts';
 import { getRecentConversation, getMessages } from '../vault/conversations.ts';
-import { getActiveGoalsSummary } from '../vault/retrieval.ts';
-import { getArchitecturalConstraints } from '../roles/prompt-builder.ts';
 import { getActiveDirectivesFromVault } from '../vault/goals.ts';
+import { getActiveGoalsSummary } from '../vault/retrieval.ts';
+import { BaseAgentService } from './base-agent-service.ts';
+import { loadActiveRoleFromConfig } from '../roles/loader.ts';
+import type { RoleDefinition } from '../roles/types.ts';
+import type { PromptContext } from '../roles/prompt-builder.ts';
 import { getPreferencesForPrompt } from '../vault/user-preferences.ts';
 import { getOrCreateCurrentProjectContext, getProjectContextForPrompt } from '../vault/project-contexts.ts';
 
 const BG_CDP_PORT = 9223;
 const BG_PROFILE_DIR = join(homedir(), '.jarvis', 'browser', 'bg-profile');
 
-export class BackgroundAgentService implements Service, IAgentService {
+export class BackgroundAgentService extends BaseAgentService implements Service, IAgentService {
   name = 'background-agent';
   private _status: ServiceStatus = 'stopped';
-  private config: JarvisConfig;
   private llmManager: LLMManager;
   private orchestrator: AgentOrchestrator;
   private bgBrowser: BrowserController;
-  private role: RoleDefinition | null = null;
   private researchQueue: ResearchQueue | null = null;
   private busy = false;
 
   constructor(config: JarvisConfig, llmManager: LLMManager) {
-    this.config = config;
+    super(config);
     this.llmManager = llmManager;
     this.orchestrator = new AgentOrchestrator();
     this.bgBrowser = new BrowserController(BG_CDP_PORT, BG_PROFILE_DIR);
@@ -126,6 +121,10 @@ export class BackgroundAgentService implements Service, IAgentService {
     return this._status;
   }
 
+  getOrchestrator(): AgentOrchestrator {
+    return this.orchestrator;
+  }
+
   get isBusy(): boolean {
     return this.busy;
   }
@@ -187,7 +186,7 @@ export class BackgroundAgentService implements Service, IAgentService {
 
     this.busy = true;
     try {
-      const systemPrompt = this.buildSystemPrompt(channel);
+      const systemPrompt = this.buildFullSystemPrompt(channel);
       return await this.orchestrator.processMessage(systemPrompt, text);
     } catch (err) {
       console.error('[BackgroundAgent] Message error:', err);
@@ -198,12 +197,6 @@ export class BackgroundAgentService implements Service, IAgentService {
   }
 
   // --- Private methods ---
-
-  private buildSystemPrompt(channel: string): string {
-    if (!this.role) return '';
-    const context = this.buildPromptContext();
-    return buildSystemPrompt(this.role, context);
-  }
 
   /**
    * Get the last N messages from the most recent chat conversation.
@@ -239,7 +232,6 @@ export class BackgroundAgentService implements Service, IAgentService {
         .map(m => {
           const time = new Date(m.created_at).toLocaleTimeString();
           const role = m.role === 'user' ? 'USER' : 'JARVIS';
-          // Truncate long messages to keep context manageable
           const content = m.content.length > 500 ? m.content.slice(0, 500) + '...' : m.content;
           return `[${time}] ${role}: ${content}`;
         });
@@ -256,13 +248,10 @@ export class BackgroundAgentService implements Service, IAgentService {
     }
   }
 
-  private buildHeartbeatPrompt(coalescedEvents?: string): string {
+  protected override buildHeartbeatPrompt(coalescedEvents?: string): string {
     if (!this.role) return '';
-
-    const context = this.buildPromptContext();
-    const rolePrompt = buildSystemPrompt(this.role, context);
-
-    const parts = [rolePrompt, '', '# Heartbeat Check', this.role.heartbeat_instructions];
+    const basePrompt = super.buildHeartbeatPrompt(coalescedEvents);
+    const parts = [basePrompt];
 
     // --- RECENT CHAT CONTEXT ---
     const chat = this.getRecentChatContext(20);
@@ -272,14 +261,12 @@ export class BackgroundAgentService implements Service, IAgentService {
       parts.push('');
       parts.push(chat.transcript);
 
-      // Staleness warning
       if (chat.minutesSinceLastUserMessage !== null && chat.minutesSinceLastUserMessage >= 120) {
         parts.push('');
         parts.push(`⚠ CONVERSATION STALE: Last user message was ${chat.minutesSinceLastUserMessage} minutes ago.`);
         parts.push('Consider a gentle proactive check-in if appropriate during active hours.');
       }
 
-      // Detect if JARVIS was last to speak (may have promised something)
       if (chat.lastAssistantMessageAt && chat.lastUserMessageAt && chat.lastAssistantMessageAt > chat.lastUserMessageAt) {
         parts.push('');
         parts.push('NOTE: JARVIS was the last to speak. Check if that last message contained any promises, "I\'ll do X" statements, or tasks that may not have been completed.');
@@ -288,9 +275,7 @@ export class BackgroundAgentService implements Service, IAgentService {
 
     // --- ACTIVE GOALS & DIRECTIVES ---
     try {
-      // Get structured directives for goal-driven execution
       const directives = getActiveDirectivesFromVault();
-
       if (directives && directives.goal) {
         parts.push('', '# 🎯 CURRENT DIRECTIVE (Highest Priority Goal)');
         parts.push(`**Goal**: ${directives.goal.title} (${directives.goal.level})`);
@@ -323,7 +308,6 @@ export class BackgroundAgentService implements Service, IAgentService {
         parts.push('Cross-reference with recent chat. If goals were discussed but not updated, flag it.');
       }
 
-      // Also show full goals summary for context
       const goalsSummary = getActiveGoalsSummary();
       if (goalsSummary) {
         parts.push('', '# ALL ACTIVE GOALS');
@@ -331,116 +315,24 @@ export class BackgroundAgentService implements Service, IAgentService {
       }
     } catch (err) {
       console.error('[BackgroundAgent] Error loading goal directives:', err);
-      // Fallback to simple summary
       try {
         const goalsSummary = getActiveGoalsSummary();
         if (goalsSummary) {
           parts.push('', '# ACTIVE GOALS');
           parts.push(goalsSummary);
         }
-      } catch {
-        // Ignore
-      }
+      } catch { /* Ignore */ }
     }
-
-    if (coalescedEvents) {
-      parts.push('', '# Recent System Events', coalescedEvents);
-    }
-
-    parts.push('', '# COMMITMENT EXECUTION');
-    parts.push('If any commitments are overdue or due soon, EXECUTE them now using your tools.');
-    parts.push('Do not just mention them — actually perform the work. Use browse, terminal, file operations as needed.');
-
-    if (this.researchQueue && this.researchQueue.queuedCount() > 0) {
-      const next = this.researchQueue.getNext();
-      if (next) {
-        parts.push('', '# BACKGROUND RESEARCH');
-        parts.push(`You have a research topic queued: "${next.topic}"`);
-        parts.push(`Reason: ${next.reason}`);
-        parts.push(`Research ID: ${next.id}`);
-        parts.push('If nothing urgent needs your attention, research this topic now.');
-        parts.push('Use your browser and tools to gather information, then use the research_queue tool with action "complete" to save your findings.');
-      }
-    } else {
-      parts.push('', '# IDLE MODE');
-      parts.push('No research topics queued. If nothing urgent, you may:');
-      parts.push('- Check news or trends relevant to the user');
-      parts.push('- Review and organize pending tasks');
-      parts.push('- Or simply report "All clear" if nothing needs attention');
-    }
-
-    parts.push('', '# Important', 'You have full tool access during this heartbeat. If you need to take action (browse the web, run commands, check files), DO IT. Be proactive and aggressive about helping.');
 
     return parts.join('\n');
   }
 
-  private buildPromptContext(): PromptContext {
-    const osPlatform = process.platform;
-    const osName = osPlatform === 'win32' ? 'Windows' : osPlatform === 'darwin' ? 'macOS' : 'Linux';
+  protected override buildPromptContext(userMessage?: string, precomputedKnowledge?: string): PromptContext {
+    const baseContext = super.buildPromptContext(userMessage, precomputedKnowledge);
+
     const context: PromptContext = {
-      currentTime: new Date().toISOString(),
-      systemEnvironment: {
-        os: osName,
-        shell: osPlatform === 'win32' ? (process.env.COMSPEC ?? 'powershell.exe') : (process.env.SHELL ?? '/bin/bash'),
-        arch: process.arch,
-      },
+      ...baseContext,
     };
-
-    // Get due commitments
-    try {
-      const due = getDueCommitments();
-      const upcoming = getUpcoming(5);
-      const allCommitments = [...due, ...upcoming];
-
-      if (allCommitments.length > 0) {
-        context.activeCommitments = allCommitments.map((c) => {
-          const dueStr = c.when_due
-            ? ` (due: ${new Date(c.when_due).toLocaleString()})`
-            : '';
-          return `[${c.priority}] ${c.what}${dueStr} — ${c.status}`;
-        });
-      }
-    } catch (err) {
-      console.error('[BackgroundAgent] Error loading commitments:', err);
-    }
-
-    // Get active content pipeline items
-    try {
-      const activeContent = findContent({}).filter(
-        (c) => c.stage !== 'published'
-      ).slice(0, 10);
-      if (activeContent.length > 0) {
-        context.contentPipeline = activeContent.map((c) => {
-          const tags = c.tags.length > 0 ? ` [${c.tags.join(', ')}]` : '';
-          return `"${c.title}" (${c.content_type}) — ${c.stage}${tags}`;
-        });
-      }
-    } catch (err) {
-      console.error('[BackgroundAgent] Error loading content pipeline:', err);
-    }
-
-    // Get recent observations
-    try {
-      const observations = getRecentObservations(undefined, 10);
-      if (observations.length > 0) {
-        context.recentObservations = observations.map((o) => {
-          const time = new Date(o.created_at).toLocaleTimeString();
-          return `[${time}] ${o.type}: ${JSON.stringify(o.data).slice(0, 200)}`;
-        });
-      }
-    } catch (err) {
-      console.error('[BackgroundAgent] Error loading observations:', err);
-    }
-
-    // Get architectural constraints
-    try {
-      const constraints = getArchitecturalConstraints();
-      if (constraints) {
-        context.architecturalConstraints = constraints;
-      }
-    } catch (err) {
-      console.error('[BackgroundAgent] Error loading architectural constraints:', err);
-    }
 
     // Get user preferences (learned patterns)
     try {
@@ -470,33 +362,9 @@ export class BackgroundAgentService implements Service, IAgentService {
     return context;
   }
 
-  private loadActiveRole(): RoleDefinition {
-    const roleName = this.config.active_role;
-
-    // Package-root-relative paths for global install compatibility
-    const pkgRoot = join(import.meta.dir, '../..');
-    const paths = [
-      join(pkgRoot, `roles/${roleName}.yaml`),
-      join(pkgRoot, `roles/${roleName}.yml`),
-      join(pkgRoot, `config/roles/${roleName}.yaml`),
-      join(pkgRoot, `config/roles/${roleName}.yml`),
-      // Also try CWD-relative for local dev
-      `roles/${roleName}.yaml`,
-      `roles/${roleName}.yml`,
-    ];
-
-    for (const rolePath of paths) {
-      try {
-        const role = loadRole(rolePath);
-        console.log(`[BackgroundAgent] Loaded role '${role.name}' from ${rolePath}`);
-        return role;
-      } catch {
-        // Try next path
-      }
-    }
-
-    throw new Error(
-      `[BackgroundAgent] Could not load role '${roleName}'. Searched: ${paths.join(', ')}`
-    );
+  protected override loadActiveRole(): RoleDefinition {
+    const role = loadActiveRoleFromConfig(this.config.active_role);
+    console.log(`[BackgroundAgent] Loaded role '${role.name}'`);
+    return role;
   }
 }

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useApiData, api } from "../../hooks/useApi";
+import { validatePhoneNumber, validateUrl, validateTelegramToken, validateDiscordToken } from "../../lib/validators";
 
 type ChannelStatusData = {
   channels: Record<string, boolean>;
@@ -33,6 +34,19 @@ type TTSConfigData = {
     model: string;
     stability: number;
     similarity_boost: number;
+  } | null;
+  azure: {
+    has_api_key: boolean;
+    region: string;
+    output_format: string;
+  } | null;
+  google: {
+    has_api_key: boolean;
+    language_code: string;
+  } | null;
+  openai: {
+    has_api_key: boolean;
+    model: string;
   } | null;
 };
 
@@ -91,14 +105,25 @@ export function ChannelsPanel() {
 
   // TTS form
   const [ttsEnabled, setTtsEnabled] = useState(false);
-  const [ttsProvider, setTtsProvider] = useState("edge");
-  const [ttsVoice, setTtsVoice] = useState("en-US-AriaNeural");
+  const [ttsProvider, setTtsProvider] = useState("azure");
+  const [ttsVoice, setTtsVoice] = useState("pt-PT-DuarteNeural");
   const [ttsRate, setTtsRate] = useState("+0%");
+  // ElevenLabs
   const [elApiKey, setElApiKey] = useState("");
   const [elVoiceId, setElVoiceId] = useState("");
   const [elModel, setElModel] = useState("eleven_flash_v2_5");
   const [elVoices, setElVoices] = useState<ElevenLabsVoice[]>([]);
   const [elVoicesLoading, setElVoicesLoading] = useState(false);
+  // Azure
+  const [azureApiKey, setAzureApiKey] = useState("");
+  const [azureRegion, setAzureRegion] = useState("westeurope");
+  // Google
+  const [googleApiKey, setGoogleApiKey] = useState("");
+  const [googleLanguage, setGoogleLanguage] = useState("pt-PT");
+  // OpenAI
+  const [openaiApiKey, setOpenaiApiKey] = useState("");
+  const [openaiModel, setOpenaiModel] = useState("tts-1");
+  const [openaiVoice, setOpenaiVoice] = useState("alloy");
 
   // Edge TTS voices
   const [edgeVoices, setEdgeVoices] = useState<{ voice_id: string; name: string; locale: string }[]>([]);
@@ -143,46 +168,93 @@ export function ChannelsPanel() {
   useEffect(() => {
     if (ttsCfg) {
       setTtsEnabled(ttsCfg.enabled);
-      setTtsProvider(ttsCfg.provider || "edge");
-      setTtsVoice(ttsCfg.voice);
+      setTtsProvider(ttsCfg.provider || "azure");
+      setTtsVoice(ttsCfg.voice || "pt-PT-DuarteNeural");
       setTtsRate(ttsCfg.rate);
       if (ttsCfg.elevenlabs) {
         setElVoiceId(ttsCfg.elevenlabs.voice_id ?? "");
         setElModel(ttsCfg.elevenlabs.model);
       }
+      if (ttsCfg.azure) {
+        setAzureRegion(ttsCfg.azure.region || "westeurope");
+      }
+      if (ttsCfg.google) {
+        setGoogleLanguage(ttsCfg.google.language_code || "pt-PT");
+      }
+      if (ttsCfg.openai) {
+        setOpenaiModel(ttsCfg.openai.model || "tts-1");
+        setOpenaiVoice(ttsCfg.openai.voice || "alloy");
+      }
     }
   }, [ttsCfg]);
 
-  // Fetch Edge TTS voices on mount
+  // Fetch voices when provider changes
   useEffect(() => {
-    setEdgeVoicesLoading(true);
-    api<{ voice_id: string; name: string; locale: string }[]>("/api/tts/voices?provider=edge&lang=en")
-      .then(v => setEdgeVoices(v))
-      .catch(() => {})
-      .finally(() => setEdgeVoicesLoading(false));
-  }, []);
-
-  // Fetch ElevenLabs voices when provider is elevenlabs and key is configured
-  const fetchElVoices = async () => {
-    setElVoicesLoading(true);
-    try {
-      const voices = await api<ElevenLabsVoice[]>("/api/tts/voices?provider=elevenlabs");
-      setElVoices(voices);
-    } catch {
-      setElVoices([]);
-    }
-    setElVoicesLoading(false);
-  };
-
-  useEffect(() => {
-    if (ttsProvider === "elevenlabs" && ttsCfg?.elevenlabs?.has_api_key) {
-      fetchElVoices();
-    }
+    let cancelled = false;
+    const fetchVoices = async () => {
+      if (ttsProvider === "edge") {
+        setEdgeVoicesLoading(true);
+        try {
+          const voices = await api<{ voice_id: string; name: string; locale: string }[]>("/api/tts/voices?provider=edge&lang=all");
+          if (!cancelled) setEdgeVoices(voices);
+        } catch {}
+        finally {
+          if (!cancelled) setEdgeVoicesLoading(false);
+        }
+      } else if (ttsProvider === "elevenlabs" && ttsCfg?.elevenlabs?.has_api_key) {
+        setElVoicesLoading(true);
+        try {
+          const voices = await api<ElevenLabsVoice[]>("/api/tts/voices?provider=elevenlabs");
+          if (!cancelled) setElVoices(voices);
+        } catch {}
+        finally {
+          if (!cancelled) setElVoicesLoading(false);
+        }
+      }
+    };
+    fetchVoices();
+    return () => { cancelled = true; };
   }, [ttsProvider, ttsCfg?.elevenlabs?.has_api_key]);
 
   const saveChannels = async () => {
     try {
       const body: Record<string, unknown> = {};
+
+      // Validate Telegram token if enabled and token provided
+      if (tgEnabled && tgToken) {
+        const tgResult = validateTelegramToken(tgToken);
+        if (!tgResult.valid) {
+          setMsg({ text: tgResult.error!, type: "error" });
+          return;
+        }
+      }
+
+      // Validate Discord token if enabled and token provided
+      if (dcEnabled && dcToken) {
+        const dcResult = validateDiscordToken(dcToken);
+        if (!dcResult.valid) {
+          setMsg({ text: dcResult.error!, type: "error" });
+          return;
+        }
+      }
+
+      // Validate Signal phone if enabled
+      if (sigEnabled && sigPhone) {
+        const sigResult = validatePhoneNumber(sigPhone.trim());
+        if (!sigResult.valid) {
+          setMsg({ text: sigResult.error!, type: "error" });
+          return;
+        }
+      }
+
+      // Validate Signal API URL if provided
+      if (sigApiUrl && sigApiUrl !== "http://localhost:8080") {
+        const urlResult = validateUrl(sigApiUrl.trim(), "Signal API URL");
+        if (!urlResult.valid) {
+          setMsg({ text: urlResult.error!, type: "error" });
+          return;
+        }
+      }
 
       body.telegram = {
         enabled: tgEnabled,
@@ -232,12 +304,23 @@ export function ChannelsPanel() {
     try {
       const body: Record<string, unknown> = { provider: sttProvider };
 
-      if (sttProvider === "openai" && sttKey) {
-        body.openai = { api_key: sttKey };
-      } else if (sttProvider === "groq" && sttKey) {
-        body.groq = { api_key: sttKey };
-      } else if (sttProvider === "local") {
-        body.local = { endpoint: sttEndpoint, server_type: sttServerType };
+      // Validate API key length
+      if ((sttProvider === "openai" || sttProvider === "groq") && sttKey) {
+        if (sttKey.length < 8) {
+          setMsg({ text: "API key must be at least 8 characters", type: "error" });
+          return;
+        }
+        body[sttProvider] = { api_key: sttKey };
+      }
+
+      // Validate local endpoint URL
+      if (sttProvider === "local" && sttEndpoint) {
+        const urlResult = validateUrl(sttEndpoint.trim(), "Whisper endpoint");
+        if (!urlResult.valid) {
+          setMsg({ text: urlResult.error!, type: "error" });
+          return;
+        }
+        body.local = { endpoint: sttEndpoint.trim(), server_type: sttServerType };
       }
 
       await api("/api/config/stt", {
@@ -253,6 +336,24 @@ export function ChannelsPanel() {
     }
   };
 
+  const testSTT = async () => {
+    try {
+      const body: Record<string, unknown> = { provider: sttProvider };
+      if (sttProvider === "openai" && sttKey) body.api_key = sttKey;
+      if (sttProvider === "groq" && sttKey) body.api_key = sttKey;
+      if (sttProvider === "local") body.endpoint = sttEndpoint;
+
+      const result = await api<{ ok: boolean; message: string }>("/api/config/stt/test", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+
+      setMsg({ text: result.message, type: result.ok ? "success" : "error" });
+    } catch (err) {
+      setMsg({ text: err instanceof Error ? err.message : "STT test failed", type: "error" });
+    }
+  };
+
   const saveTTS = async () => {
     try {
       const body: Record<string, unknown> = {
@@ -262,11 +363,45 @@ export function ChannelsPanel() {
         rate: ttsRate,
       };
 
-      if (ttsProvider === "elevenlabs") {
+      // Validate API keys before saving
+      if (ttsProvider === "elevenlabs" && elApiKey) {
+        if (elApiKey.length < 8) {
+          setMsg({ text: "ElevenLabs API key must be at least 8 characters", type: "error" });
+          return;
+        }
         body.elevenlabs = {
           ...(elApiKey ? { api_key: elApiKey } : {}),
           voice_id: elVoiceId || undefined,
           model: elModel,
+        };
+      } else if (ttsProvider === "azure" && azureApiKey) {
+        if (azureApiKey.length < 8) {
+          setMsg({ text: "Azure API key must be at least 8 characters", type: "error" });
+          return;
+        }
+        body.azure = {
+          ...(azureApiKey ? { api_key: azureApiKey } : {}),
+          region: azureRegion,
+          output_format: "audio-24khz-48kbitrate-mono-mp3",
+        };
+      } else if (ttsProvider === "google" && googleApiKey) {
+        if (googleApiKey.length < 8) {
+          setMsg({ text: "Google Cloud API key must be at least 8 characters", type: "error" });
+          return;
+        }
+        body.google = {
+          ...(googleApiKey ? { api_key: googleApiKey } : {}),
+          language_code: googleLanguage,
+        };
+      } else if (ttsProvider === "openai" && openaiApiKey) {
+        if (openaiApiKey.length < 8) {
+          setMsg({ text: "OpenAI API key must be at least 8 characters", type: "error" });
+          return;
+        }
+        body.openai = {
+          ...(openaiApiKey ? { api_key: openaiApiKey } : {}),
+          model: openaiModel,
+          voice: openaiVoice,
         };
       }
 
@@ -276,10 +411,59 @@ export function ChannelsPanel() {
       });
 
       setElApiKey("");
+      setAzureApiKey("");
+      setGoogleApiKey("");
+      setOpenaiApiKey("");
       setMsg({ text: "TTS config saved and applied.", type: "success" });
       refetchTts();
     } catch (err) {
       setMsg({ text: err instanceof Error ? err.message : "Failed to save", type: "error" });
+    }
+  };
+
+  const testTTS = async () => {
+    try {
+      const body: Record<string, unknown> = { provider: ttsProvider };
+      if (ttsProvider === "elevenlabs" && elApiKey) body.api_key = elApiKey;
+      if (ttsProvider === "azure" && azureApiKey) {
+        body.api_key = azureApiKey;
+        body.region = azureRegion;
+      }
+      if (ttsProvider === "google" && googleApiKey) body.api_key = googleApiKey;
+      if (ttsProvider === "openai" && openaiApiKey) body.api_key = openaiApiKey;
+
+      const result = await api<{ ok: boolean; message: string }>("/api/config/tts/test", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+
+      setMsg({ text: result.message, type: result.ok ? "success" : "error" });
+    } catch (err) {
+      setMsg({ text: err instanceof Error ? err.message : "TTS test failed", type: "error" });
+    }
+  };
+
+  const testChannel = async (channel: string, extraBody?: Record<string, unknown>) => {
+    try {
+      const body: Record<string, unknown> = { channel };
+      if (channel === "telegram" && tgToken) body.token = tgToken;
+      if (channel === "discord" && dcToken) body.token = dcToken;
+      if (channel === "whatsapp") {
+        if (waPhoneNumberId) body.phone_number_id = waPhoneNumberId;
+        if (waAccessToken) body.access_token = waAccessToken;
+      }
+      if (channel === "signal" && sigPhone) body.phone = sigPhone;
+
+      if (extraBody) Object.assign(body, extraBody);
+
+      const result = await api<{ ok: boolean; message: string }>("/api/config/channels/test", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+
+      setMsg({ text: result.message, type: result.ok ? "success" : "error" });
+    } catch (err) {
+      setMsg({ text: err instanceof Error ? err.message : `${channel} test failed`, type: "error" });
     }
   };
 
@@ -354,6 +538,11 @@ export function ChannelsPanel() {
           value={tgAllowed}
           onChange={e => setTgAllowed(e.target.value)}
         />
+        <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+          <button className="sp-btn-secondary" onClick={() => testChannel("telegram")} style={{ fontSize: "12px", padding: "6px 12px" }}>
+            Test Telegram Bot
+          </button>
+        </div>
       </div>
 
       {/* Discord Section */}
@@ -408,6 +597,11 @@ export function ChannelsPanel() {
           value={dcGuild}
           onChange={e => setDcGuild(e.target.value)}
         />
+        <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+          <button className="sp-btn-secondary" onClick={() => testChannel("discord")} style={{ fontSize: "12px", padding: "6px 12px" }}>
+            Test Discord Bot
+          </button>
+        </div>
       </div>
 
       {/* WhatsApp Section */}
@@ -506,11 +700,21 @@ export function ChannelsPanel() {
           value={sigAllowed}
           onChange={e => setSigAllowed(e.target.value)}
         />
+        <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+          <button className="sp-btn-secondary" onClick={() => testChannel("signal")} style={{ fontSize: "12px", padding: "6px 12px" }}>
+            Test Signal Connection
+          </button>
+        </div>
       </div>
 
-      <button className="sp-btn-primary" onClick={saveChannels}>
-        Save Channel Config
-      </button>
+      <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+        <button className="sp-btn-primary" onClick={saveChannels}>
+          Save Channel Config
+        </button>
+        <button className="sp-btn-secondary" onClick={() => testChannel("telegram")} style={{ fontSize: "12px", padding: "6px 12px" }}>
+          Test All Channels
+        </button>
+      </div>
 
       {/* STT Section */}
       <div className="sp-section" style={{ marginTop: "16px" }}>
@@ -571,9 +775,14 @@ export function ChannelsPanel() {
           </>
         )}
 
-        <button className="sp-btn-primary" style={{ marginTop: "8px" }} onClick={saveSTT}>
-          Save STT Config
-        </button>
+        <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+          <button className="sp-btn-primary" onClick={saveSTT}>
+            Save STT Config
+          </button>
+          <button className="sp-btn-secondary" onClick={testSTT} style={{ borderColor: "var(--j-primary)", color: "var(--j-primary)" }}>
+            Test Connection
+          </button>
+        </div>
       </div>
 
       {/* TTS Section */}
@@ -599,8 +808,11 @@ export function ChannelsPanel() {
             value={ttsProvider}
             onChange={e => setTtsProvider(e.target.value)}
           >
-            <option value="edge">Edge TTS (Free)</option>
-            <option value="elevenlabs">ElevenLabs (API Key)</option>
+            <option value="azure">Azure Speech (Recommended - Low Latency)</option>
+            <option value="elevenlabs">ElevenLabs (Premium Quality)</option>
+            <option value="google">Google Cloud TTS (WaveNet)</option>
+            <option value="openai">OpenAI TTS (Simple, Affordable)</option>
+            <option value="edge">Edge TTS (Free, No API Key)</option>
           </select>
         </div>
 
@@ -706,9 +918,201 @@ export function ChannelsPanel() {
           </>
         )}
 
-        <button className="sp-btn-primary" style={{ marginTop: "8px" }} onClick={saveTTS}>
-          Save TTS Config
-        </button>
+        {ttsProvider === "azure" && (
+          <>
+            <p className="sp-hint">
+              Get your API key from <strong>portal.azure.com</strong> → Create "Speech Service" → West Europe region.
+              First 500k characters/month free (~€5/month for moderate use).
+            </p>
+
+            <input
+              className="sp-input"
+              type="password"
+              placeholder="Azure Speech API Key (leave empty to keep existing)"
+              value={azureApiKey}
+              onChange={e => setAzureApiKey(e.target.value)}
+            />
+            {ttsCfg?.azure?.has_api_key && (
+              <span style={{ fontSize: "11px", color: "var(--j-text-muted)" }}>
+                API key configured
+              </span>
+            )}
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+              <span style={{ fontSize: "11px", color: "var(--j-text-muted)" }}>Region</span>
+              <select
+                className="sp-select"
+                value={azureRegion}
+                onChange={e => setAzureRegion(e.target.value)}
+              >
+                <option value="westeurope">West Europe (Recommended for Portugal)</option>
+                <option value="eastus">East US</option>
+                <option value="westus">West US</option>
+                <option value="eastus2">East US 2</option>
+                <option value="westus2">West US 2</option>
+                <option value="northeurope">North Europe</option>
+                <option value="uksouth">UK South</option>
+                <option value="japaneast">Japan East</option>
+                <option value="australiaeast">Australia East</option>
+              </select>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+              <span style={{ fontSize: "11px", color: "var(--j-text-muted)" }}>Voice</span>
+              <select
+                className="sp-select"
+                value={ttsVoice}
+                onChange={e => setTtsVoice(e.target.value)}
+              >
+                <optgroup label="Portuguese (Portugal)">
+                  <option value="pt-PT-DuarteNeural">Duarte (Male)</option>
+                  <option value="pt-PT-RaquelNeural">Raquel (Female)</option>
+                </optgroup>
+                <optgroup label="Portuguese (Brazil)">
+                  <option value="pt-BR-AntonioNeural">Antonio (Male)</option>
+                  <option value="pt-BR-FranciscaNeural">Francisca (Female)</option>
+                </optgroup>
+                <optgroup label="English (US)">
+                  <option value="en-US-AndrewNeural">Andrew (Male)</option>
+                  <option value="en-US-AriaNeural">Aria (Female)</option>
+                  <option value="en-US-GuyNeural">Guy (Male)</option>
+                  <option value="en-US-JennyNeural">Jenny (Female)</option>
+                </optgroup>
+                <optgroup label="English (UK)">
+                  <option value="en-GB-RyanNeural">Ryan (Male)</option>
+                  <option value="en-GB-SoniaNeural">Sonia (Female)</option>
+                </optgroup>
+              </select>
+            </div>
+          </>
+        )}
+
+        {ttsProvider === "google" && (
+          <>
+            <p className="sp-hint">
+              Get your API key from <strong>console.cloud.google.com</strong> → Text-to-Speech API.
+              Excellent WaveNet quality, first 1M characters/month free.
+            </p>
+
+            <input
+              className="sp-input"
+              type="password"
+              placeholder="Google Cloud API Key (leave empty to keep existing)"
+              value={googleApiKey}
+              onChange={e => setGoogleApiKey(e.target.value)}
+            />
+            {ttsCfg?.google?.has_api_key && (
+              <span style={{ fontSize: "11px", color: "var(--j-text-muted)" }}>
+                API key configured
+              </span>
+            )}
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+              <span style={{ fontSize: "11px", color: "var(--j-text-muted)" }}>Language Code</span>
+              <select
+                className="sp-select"
+                value={googleLanguage}
+                onChange={e => setGoogleLanguage(e.target.value)}
+              >
+                <option value="pt-PT">Portuguese (Portugal)</option>
+                <option value="pt-BR">Portuguese (Brazil)</option>
+                <option value="en-US">English (US)</option>
+                <option value="en-GB">English (UK)</option>
+                <option value="es-ES">Spanish (Spain)</option>
+                <option value="fr-FR">French (France)</option>
+                <option value="de-DE">German (Germany)</option>
+                <option value="it-IT">Italian (Italy)</option>
+              </select>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+              <span style={{ fontSize: "11px", color: "var(--j-text-muted)" }}>Voice</span>
+              <select
+                className="sp-select"
+                value={ttsVoice}
+                onChange={e => setTtsVoice(e.target.value)}
+              >
+                <optgroup label="Portuguese (Portugal)">
+                  <option value="pt-PT-Standard-C">Standard C (Female)</option>
+                  <option value="pt-PT-Standard-D">Standard D (Male)</option>
+                  <option value="pt-PT-Wavenet-C">WaveNet C (Female, Premium)</option>
+                  <option value="pt-PT-Wavenet-D">WaveNet D (Male, Premium)</option>
+                </optgroup>
+                <optgroup label="Portuguese (Brazil)">
+                  <option value="pt-BR-Standard-A">Standard A (Female)</option>
+                  <option value="pt-BR-Standard-B">Standard B (Male)</option>
+                  <option value="pt-BR-Wavenet-A">WaveNet A (Female, Premium)</option>
+                  <option value="pt-BR-Wavenet-B">WaveNet B (Male, Premium)</option>
+                </optgroup>
+                <optgroup label="English (US)">
+                  <option value="en-US-Standard-A">Standard A (Female)</option>
+                  <option value="en-US-Standard-B">Standard B (Male)</option>
+                  <option value="en-US-Wavenet-A">WaveNet A (Female, Premium)</option>
+                  <option value="en-US-Wavenet-B">WaveNet B (Male, Premium)</option>
+                </optgroup>
+              </select>
+            </div>
+          </>
+        )}
+
+        {ttsProvider === "openai" && (
+          <>
+            <p className="sp-hint">
+              Get your API key from <strong>platform.openai.com/api-keys</strong>.
+              Simple setup, affordable pricing ($15 per 1M characters).
+            </p>
+
+            <input
+              className="sp-input"
+              type="password"
+              placeholder="OpenAI API Key (leave empty to keep existing)"
+              value={openaiApiKey}
+              onChange={e => setOpenaiApiKey(e.target.value)}
+            />
+            {ttsCfg?.openai?.has_api_key && (
+              <span style={{ fontSize: "11px", color: "var(--j-text-muted)" }}>
+                API key configured
+              </span>
+            )}
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+              <span style={{ fontSize: "11px", color: "var(--j-text-muted)" }}>Model</span>
+              <select
+                className="sp-select"
+                value={openaiModel}
+                onChange={e => setOpenaiModel(e.target.value)}
+              >
+                <option value="tts-1">TTS-1 (Faster, lower cost)</option>
+                <option value="tts-1-hd">TTS-1-HD (Higher quality, slower)</option>
+              </select>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+              <span style={{ fontSize: "11px", color: "var(--j-text-muted)" }}>Voice</span>
+              <select
+                className="sp-select"
+                value={openaiVoice}
+                onChange={e => setOpenaiVoice(e.target.value)}
+              >
+                <option value="alloy">Alloy (Neutral)</option>
+                <option value="echo">Echo (Male)</option>
+                <option value="fable">Fable (Male, British)</option>
+                <option value="onyx">Onyx (Male, Deep)</option>
+                <option value="nova">Nova (Female, Warm)</option>
+                <option value="shimmer">Shimmer (Female, Soft)</option>
+              </select>
+            </div>
+          </>
+        )}
+
+        <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+          <button className="sp-btn-primary" onClick={saveTTS}>
+            Save TTS Config
+          </button>
+          <button className="sp-btn-secondary" onClick={testTTS} style={{ borderColor: "var(--j-primary)", color: "var(--j-primary)" }}>
+            Test Connection
+          </button>
+        </div>
       </div>
     </div>
   );

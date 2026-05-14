@@ -367,7 +367,9 @@ export class McpClient {
     });
 
     // Notify server we're initialized (fire-and-forget notification)
-    this.transport.send('notifications/initialized', {}).catch(() => {});
+    this.transport.send('notifications/initialized', {}).catch((err) => {
+      console.warn('[MCPClient] Failed to send initialized notification:', err);
+    });
 
     // Discover available tools
     const result = await this.transport.send('tools/list', {}) as { tools?: McpToolSchema[] };

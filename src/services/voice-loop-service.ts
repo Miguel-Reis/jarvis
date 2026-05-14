@@ -11,7 +11,7 @@
  * - Interruption handling (barge-in)
  */
 
-import type { Service, ServiceStatus } from '../daemon/services.ts';
+import type { Service, ServiceStatus } from '../daemon/types.ts';
 import type { STTProvider, TTSProvider } from '../comms/voice.ts';
 
 export interface VoiceSession {

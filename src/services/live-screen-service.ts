@@ -13,7 +13,7 @@
  * - Privacy mode to pause captures
  */
 
-import type { Service, ServiceStatus } from '../daemon/services.ts';
+import type { Service, ServiceStatus } from '../daemon/types.ts';
 import { getSidecarManager, resolveDefaultSidecar } from '../actions/tools/sidecar-route.ts';
 import type { SidecarInfo } from '../sidecar/types.ts';
 import { getDb, generateId } from '../vault/schema.ts';
@@ -77,8 +77,7 @@ export class LiveScreenService implements Service {
     }
 
     try {
-      const procVersion = Bun.file('/proc/version');
-      const version = (procVersion.text() as string).toLowerCase();
+      const version = Bun.file('/proc/version').text().catch(() => '').toLowerCase();
       if (version.includes('microsoft')) {
         return true;
       }

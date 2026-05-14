@@ -11,7 +11,7 @@
  * - Fix suggestions via LLM
  */
 
-import type { Service, ServiceStatus } from '../daemon/services.ts';
+import type { Service, ServiceStatus } from '../daemon/types.ts';
 import { watch, type FSWatcher } from 'node:fs';
 import { join, extname } from 'node:path';
 import type { InterruptManager } from '../agents/interrupt-manager.ts';

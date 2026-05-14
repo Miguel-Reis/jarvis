@@ -17,6 +17,7 @@ import { getActionForTool } from '../authority/tool-action-map.ts';
 import type { AgentInstance } from '../agents/agent.ts';
 import { detectOS, type OS } from '../actions/platform.ts';
 import { ToolRateLimiter } from './tool-rate-limiter.ts';
+import { storeResult } from './tool-result-store.ts';
 
 const MAX_TOOL_RESULT_CHARS = 6000;
 
@@ -183,9 +184,14 @@ export class ToolExecutor {
         // Plain text result
         let result = typeof raw === 'string' ? raw : JSON.stringify(raw);
 
-        // Cap tool result size to control context growth
+        // Cap tool result size to control context growth. Full text is persisted
+        // in the tool-result-store and the LLM can fetch later chunks via
+        // get_tool_result_chunk.
         if (result.length > MAX_TOOL_RESULT_CHARS) {
-          result = result.slice(0, MAX_TOOL_RESULT_CHARS) + `\n... (truncated, was ${result.length} chars)`;
+          const fullLen = result.length;
+          const chunkId = storeResult(toolCall.name, result);
+          const head = result.slice(0, MAX_TOOL_RESULT_CHARS);
+          result = `${head}\n... (truncated at ${MAX_TOOL_RESULT_CHARS}/${fullLen} chars — call get_tool_result_chunk(chunk_id="${chunkId}", offset=${MAX_TOOL_RESULT_CHARS}) to read the rest)`;
         }
 
         // Surface tool-level errors clearly so the LLM doesn't treat them as success.

@@ -27,6 +27,7 @@ export type UserProfileQuestion = {
 export type UserProfileRecord = {
   version: 1;
   answers: Partial<Record<UserProfileQuestionId, string>>;
+  qualities: string[];
   created_at: number;
   updated_at: number;
   completed_at: number | null;
@@ -169,6 +170,7 @@ export function createEmptyUserProfile(): UserProfileRecord {
   return {
     version: 1,
     answers: {},
+    qualities: [],
     created_at: now,
     updated_at: now,
     completed_at: null,
@@ -200,6 +202,76 @@ export function hasUserProfile(profile: UserProfileRecord | null): boolean {
   return countAnsweredUserProfileQuestions(profile) > 0;
 }
 
+/**
+ * Preset profiles for quick onboarding
+ */
+export const USER_PROFILE_PRESETS: Record<string, Partial<Record<UserProfileQuestionId, string>>> = {
+  coder: {
+    preferred_name: 'Developer',
+    pronouns: '',
+    location_timezone: '',
+    work_role: 'Full-stack software engineer / developer. I build web applications, APIs, and automation tools.',
+    interests: 'Software architecture, clean code, developer tools, AI/LLMs, automation, open source',
+    current_projects: 'Active development on web applications, backend services, and developer tooling',
+    goals_next_90_days: 'Ship clean, well-tested code. Reduce technical debt. Build scalable systems.',
+    communication_preferences: 'Direct, technical, and concise. Show code examples. Explain trade-offs briefly. Skip fluff.',
+    pet_peeves: 'Verbose explanations of obvious things. Magic abstractions without docs. Tests that dont test anything meaningful.',
+    routines_constraints: 'Deep work blocks of 90min. Prefer async communication. Available during typical dev hours.',
+    tools_stack: 'TypeScript, Bun, Node.js, React, Next.js, PostgreSQL, SQLite, Docker, Git, Linux, VS Code',
+    important_people: 'Development team, code reviewers, project stakeholders',
+    anything_else: 'I value: readability over cleverness, explicit over implicit, simple over complex. Security is non-negotiable.',
+  },
+  metin2_dev: {
+    preferred_name: 'Metin2 Developer',
+    pronouns: '',
+    location_timezone: '',
+    work_role: 'Metin2 private server developer. I compile, modify, and maintain Metin2 server sources (EPHY/MALENTENDED), create Lua quests, optimize databases, and deploy on FreeBSD.',
+    interests: 'Metin2 private servers, C++ game programming, reverse engineering, Lua quest scripting, MySQL optimization, FreeBSD server administration, EPHY/MALENTENDED sources, game file decryption (.dat/.epk)',
+    current_projects: 'Building a complete Metin2 private server from scratch - compiling Game99/DB/Channel sources, setting up FreeBSD VM, creating custom quests, configuring channels and server files',
+    goals_next_90_days: 'Have a fully functional Metin2 server running with custom features, stable database, working client-server connection, and beta-ready environment for testing',
+    communication_preferences: 'Direto e técnico. Ler os ficheiros das sources antes de sugerir soluções. Mostrar código real das minhas sources. Não explicar o óbvio.',
+    pet_peeves: 'Inventar código que não existe nas minhas sources. Dar respostas genéricas sem ler os ficheiros. Confundir structures do Metin2 com web development.',
+    routines_constraints: 'Compilações demoradas exigem paciência. Testar no FreeBSD após mudanças. Backup antes de modificar core files. Work sessions focused em compilação e debug.',
+    tools_stack: 'C++, Visual Studio 2015-2022, FreeBSD 12-14, MySQL/MariaDB, Python 3, Lua 5.1, EPHY Source v45/v55, MALENTENDED Source, Putty, WinSCP, Navicat, HeidiSQL, Metin2 Client, Git, WSL2, EterNix, ETER Manager',
+    important_people: 'Comunidade Metin2 PT/BR, contributors EPHY/MALENTENDED, beta testers, jogadores do servidor',
+    anything_else: 'Sempre verificar estrutura /usr/home/metin2/. Entender arquitetura: DBServer → Channel → Game99. Ler files antes de sugerir: /src/game, /src/db, /src/lib. Quests em /usr/home/metin2/quest. Scripts Python para automação de tasks.',
+  },
+  data_scientist: {
+    preferred_name: 'Data Scientist',
+    pronouns: '',
+    location_timezone: '',
+    work_role: 'Data scientist / ML engineer. I build models, analyze data, and create insights.',
+    interests: 'Machine learning, statistics, data visualization, Python, AI research',
+    current_projects: 'Model training, data pipelines, exploratory analysis, feature engineering',
+    goals_next_90_days: 'Deploy production ML models. Improve model accuracy. Build robust data pipelines.',
+    communication_preferences: 'Technical but accessible. Show data and evidence. Explain statistical concepts clearly.',
+    pet_peeves: 'Overpromising on model capabilities. Ignoring data quality issues. Poor documentation.',
+    routines_constraints: 'Need long focus blocks for model training. Flexible schedule.',
+    tools_stack: 'Python, Jupyter, pandas, scikit-learn, PyTorch, TensorFlow, SQL, AWS, Git',
+    important_people: 'Research team, data engineers, product managers',
+    anything_else: 'I value reproducibility, clear metrics, and honest uncertainty estimates.',
+  },
+  founder: {
+    preferred_name: 'Founder',
+    pronouns: '',
+    location_timezone: '',
+    work_role: 'Startup founder / entrepreneur. Building and scaling a business.',
+    interests: 'Product development, growth, fundraising, team building, strategy',
+    current_projects: 'Product launches, investor meetings, hiring, market validation',
+    goals_next_90_days: 'Achieve key milestones. Close funding round. Grow user base.',
+    communication_preferences: 'Executive summary style. Actionable insights. Flag risks early.',
+    pet_peeves: 'Long meetings without agenda. Optimism without data. Slow decision making.',
+    routines_constraints: 'Early mornings. Back-to-back meetings. Need focus time for strategy.',
+    tools_stack: 'Notion, Slack, Linear, GitHub, Figma, Google Workspace, Calendly',
+    important_people: 'Co-founders, investors, early customers, key hires',
+    anything_else: 'Speed matters. Perfect is enemy of good. Focus on what moves the needle.',
+  },
+};
+
+export function applyUserProfilePreset(presetId: string): Partial<Record<UserProfileQuestionId, string>> | null {
+  return USER_PROFILE_PRESETS[presetId] ?? null;
+}
+
 export function formatUserProfileForPrompt(profile: UserProfileRecord | null): string | undefined {
   if (!profile) return undefined;
 
@@ -209,6 +281,13 @@ export function formatUserProfileForPrompt(profile: UserProfileRecord | null): s
     if (!answer) continue;
     lines.push(`- ${question.label}: |`);
     lines.push(indentPromptValue(answer));
+  }
+
+  if (profile.qualities && profile.qualities.length > 0) {
+    lines.push('- Qualities & Specializations:');
+    for (const quality of profile.qualities) {
+      lines.push(`  - ${quality}`);
+    }
   }
 
   if (lines.length === 0) return undefined;

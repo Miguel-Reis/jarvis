@@ -11,6 +11,8 @@ import { SidecarPanel } from "../components/settings/SidecarPanel";
 import { UserProfilePanel } from "../components/settings/UserProfilePanel";
 import { ServicePanel, UpdatePanel } from "../components/settings/ServicePanel";
 import { MCPPanel } from "../components/settings/MCPPanel";
+import { BackupRestorePanel } from "../components/settings/BackupRestorePanel";
+import { SearchProviderPanel } from "../components/settings/SearchProviderPanel";
 
 const SECTION_META: Record<SettingsSection, { title: string; subtitle: string }> = {
   general: { title: "General", subtitle: "Personality, role, and heartbeat configuration" },
@@ -53,12 +55,18 @@ export default function SettingsPage({ section }: { section: SettingsSection }) 
               <PersonalityPanel />
               <RolePanel />
               <HeartbeatPanel />
+              <BackupRestorePanel />
             </>
           )}
           {section === "profile" && <UserProfilePanel />}
           {section === "llm" && <LLMPanel />}
           {section === "channels" && <ChannelsPanel />}
-          {section === "integrations" && <IntegrationsPanel />}
+          {section === "integrations" && (
+            <>
+              <SearchProviderPanel />
+              <IntegrationsPanel />
+            </>
+          )}
           {section === "sidecar" && <SidecarPanel />}
           {section === "mcp" && <MCPPanel />}
         </div>

@@ -10,8 +10,8 @@ import type {
 import { compactHistory, calculateHistoryBudget } from './history.ts';
 
 type GeminiPart =
-  | { text: string }
-  | { functionCall: { name: string; args: Record<string, unknown> } }
+  | { text: string; thoughtSignature?: string }
+  | { functionCall: { name: string; args: Record<string, unknown> }; thoughtSignature?: string }
   | { functionResponse: { name: string; response: Record<string, unknown> } };
 
 type GeminiContent = {
@@ -199,6 +199,7 @@ export class GeminiProvider implements LLMProvider {
                       id: `call_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
                       name: part.functionCall.name,
                       arguments: part.functionCall.args,
+                      ...(part.thoughtSignature ? { provider_meta: { thoughtSignature: part.thoughtSignature } } : {}),
                     };
                     toolCalls.push(toolCall);
                     yield { type: 'tool_call', tool_call: toolCall };
@@ -285,8 +286,10 @@ export class GeminiProvider implements LLMProvider {
 
         if (msg.tool_calls) {
           for (const tc of msg.tool_calls) {
+            const sig = tc.provider_meta?.thoughtSignature;
             parts.push({
               functionCall: { name: tc.name, args: tc.arguments },
+              ...(typeof sig === 'string' ? { thoughtSignature: sig } : {}),
             });
           }
         }
@@ -344,6 +347,7 @@ export class GeminiProvider implements LLMProvider {
             id: `call_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
             name: part.functionCall.name,
             arguments: part.functionCall.args,
+            ...(part.thoughtSignature ? { provider_meta: { thoughtSignature: part.thoughtSignature } } : {}),
           });
         }
       }

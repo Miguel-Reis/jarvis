@@ -14,6 +14,7 @@ import type { RoleDefinition } from '../../roles/types.ts';
 import type { ToolDefinition } from './registry.ts';
 import type { AgentTaskManager } from '../../agents/task-manager.ts';
 import { createScopedToolRegistry, type ProgressCallback } from '../../agents/sub-agent-runner.ts';
+import { buildParentContext } from './delegate.ts';
 
 export type AgentToolDeps = {
   orchestrator: AgentOrchestrator;
@@ -259,10 +260,15 @@ function handleSpawn(deps: AgentToolDeps, params: Record<string, unknown>): stri
 
 async function handleAssign(deps: AgentToolDeps, params: Record<string, unknown>): Promise<string> {
   try {
+    const callerContext = params.context as string | undefined;
+    const parentContext = buildParentContext();
+    const mergedContext = parentContext
+      ? `${parentContext}${callerContext ? `\n\n## Task context (from primary agent)\n${callerContext}` : ''}`
+      : callerContext;
     return JSON.stringify(await assignPersistentAgentTask(deps, {
       agentId: params.agent_id as string,
       task: params.task as string,
-      context: params.context as string | undefined,
+      context: mergedContext,
     }));
   } catch (err) {
     return `Error: ${err instanceof Error ? err.message : String(err)}`;

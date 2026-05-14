@@ -141,3 +141,34 @@ function validateSubRoleTemplate(template: unknown): template is SubRoleTemplate
     typeof t.max_budget_per_task === 'number'
   );
 }
+
+/**
+ * Load active role from config, trying multiple path locations.
+ * Works for both global installs (package-root) and local dev (CWD).
+ */
+export function loadActiveRoleFromConfig(activeRole: string): RoleDefinition {
+  // Package-root-relative paths for global install compatibility
+  const pkgRoot = join(import.meta.dir, "..");
+  const paths = [
+    join(pkgRoot, `roles/${activeRole}.yaml`),
+    join(pkgRoot, `roles/${activeRole}.yml`),
+    join(pkgRoot, `config/roles/${activeRole}.yaml`),
+    join(pkgRoot, `config/roles/${activeRole}.yml`),
+    // Also try CWD-relative for local dev
+    `roles/${activeRole}.yaml`,
+    `roles/${activeRole}.yml`,
+  ];
+
+  for (const rolePath of paths) {
+    try {
+      const role = loadRole(rolePath);
+      return role;
+    } catch {
+      // Try next path
+    }
+  }
+
+  throw new Error(
+    `Could not load role '${activeRole}'. Searched: ${paths.join(", ")}`
+  );
+}

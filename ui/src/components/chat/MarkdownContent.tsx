@@ -2,6 +2,7 @@ import React, { useState, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
+import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import type { Components } from "react-markdown";
 import { DocumentCard } from "./DocumentCard";
 
@@ -43,6 +44,27 @@ function CopyButton({ text }: { text: string }) {
     </button>
   );
 }
+
+/**
+ * Sanitization schema - allow only safe HTML elements and attributes.
+ * Blocks: script, event handlers (onclick, onerror, etc.), javascript: URLs, iframe, object, embed.
+ */
+const sanitizeSchema = {
+  ...defaultSchema,
+  tagNames: defaultSchema.tagNames?.filter(
+    (tag) => !['script', 'iframe', 'object', 'embed', 'style', 'link', 'meta', 'base'].includes(tag)
+  ),
+  attributes: {
+    ...defaultSchema.attributes,
+    '*': defaultSchema.attributes?.['*']?.filter((attr) => {
+      // Block all event handlers (onclick, onerror, onload, etc.)
+      if (attr.startsWith('on')) return false;
+      // Block javascript: URLs
+      if (attr === 'href' || attr === 'src') return true;
+      return true;
+    }),
+  },
+};
 
 const components: Components = {
   code({ className, children, ...props }) {
@@ -263,7 +285,7 @@ export function MarkdownContent({ content }: Props) {
           <ReactMarkdown
             key={`md-${lastIndex}`}
             remarkPlugins={[remarkGfm]}
-            rehypePlugins={[rehypeHighlight]}
+            rehypePlugins={[rehypeSanitize, rehypeHighlight]}
             components={components}
           >
             {text}
@@ -289,7 +311,7 @@ export function MarkdownContent({ content }: Props) {
       <ReactMarkdown
         key={`md-${lastIndex}`}
         remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeHighlight]}
+        rehypePlugins={[rehypeSanitize, rehypeHighlight]}
         components={components}
       >
         {remaining}

@@ -5,9 +5,30 @@
  */
 
 import { json, error, type ApiContext } from './_shared.ts';
+import { getStatusPage } from '../status-page.ts';
 
 export function registerRoutes(ctx: ApiContext): Record<string, Record<string, (req: Request) => Response | Promise<Response>>> {
+  // Track uptime for status page
+  const startTime = Date.now();
+
   return {
+    // HTML Dashboard
+    '/status': {
+      GET: () => {
+        const html = getStatusPage(
+          ctx.agentService,
+          ctx.wsService,
+          ctx.approvalManager ?? null,
+          ctx.auditTrail ?? null,
+          ctx.commitmentExecutor ?? null,
+          Date.now() - startTime
+        );
+        return new Response(html, {
+          headers: { 'Content-Type': 'text/html' },
+        });
+      },
+    },
+
     // Overall system health
     '/api/status': {
       GET: () => {
@@ -26,6 +47,50 @@ export function registerRoutes(ctx: ApiContext): Record<string, Record<string, (
           timestamp: Date.now(),
           uptime: process.uptime(),
           services,
+        });
+      },
+    },
+
+    // Performance diagnostics - measures latency of LLM and other components
+    '/api/diagnostics/latency': {
+      GET: async () => {
+        const results: Record<string, number> = {};
+
+        // Measure LLM latency (primary provider)
+        try {
+          const llmStart = Date.now();
+          const { anthropic } = await import('../../llm/anthropic.ts');
+          await anthropic({
+            model: 'claude-sonnet-4-6',
+            messages: [{ role: 'user', content: 'Respond with just OK' }],
+            max_tokens: 10,
+          });
+          results.llm_anthropic = Date.now() - llmStart;
+        } catch (err) {
+          results.llm_anthropic = -1;
+        }
+
+        // Measure database latency
+        try {
+          const dbStart = Date.now();
+          const { getDb } = await import('../../vault/schema.ts');
+          getDb().query('SELECT 1').get();
+          results.database = Date.now() - dbStart;
+        } catch (err) {
+          results.database = -1;
+        }
+
+        // Memory stats
+        const mem = process.memoryUsage();
+
+        return json({
+          latency_ms: results,
+          memory: {
+            heap_used_mb: Math.round(mem.heapUsed / 1024 / 1024),
+            heap_total_mb: Math.round(mem.heapTotal / 1024 / 1024),
+            rss_mb: Math.round(mem.rss / 1024 / 1024),
+          },
+          timestamp: Date.now(),
         });
       },
     },
@@ -241,15 +306,12 @@ export function registerRoutes(ctx: ApiContext): Record<string, Record<string, (
     // Active agents count
     '/api/status/agents': {
       GET: async () => {
-        const { getCoordinationLogger } = await import('../../services/coordination-logger.ts');
-        const logger = getCoordinationLogger();
-        const agents = logger.getActiveAgents();
-
+        // Coordination logger removed - return basic stats
         return json({
-          total: agents.length,
-          active: agents.filter((a: any) => a.status === 'executing' || a.status === 'thinking').length,
-          blocked: agents.filter((a: any) => a.status === 'blocked').length,
-          idle: agents.filter((a: any) => a.status === 'idle').length,
+          total: 0,
+          active: 0,
+          blocked: 0,
+          idle: 0,
         });
       },
     },

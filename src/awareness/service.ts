@@ -7,7 +7,7 @@
  * context_changed, idle_detected) instead of polling.
  */
 
-import type { Service, ServiceStatus } from '../daemon/services.ts';
+import type { Service, ServiceStatus } from '../daemon/types.ts';
 import type { JarvisConfig, AwarenessConfig } from '../config/types.ts';
 import type { LLMManager } from '../llm/manager.ts';
 import type { AwarenessEvent, LiveContext, DailyReport, Suggestion, SessionSummary, WeeklyReport, BehavioralInsight } from './types.ts';

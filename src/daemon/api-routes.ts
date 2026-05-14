@@ -47,6 +47,9 @@ import { registerRoutes as preferencesRoutes } from './routes/preferences.ts';
 import { registerRoutes as metricsRoutes } from './routes/metrics.ts';
 import { registerRoutes as coordinationRoutes } from './routes/coordination.ts';
 import { registerRoutes as statusRoutes } from './routes/status.ts';
+import { registerRoutes as graphifyRoutes } from './routes/graphify.ts';
+import { registerRoutes as vectorSearchRoutes } from './routes/vector-search.ts';
+import { registerRoutes as safeModeRoutes } from './routes/safe-mode.ts';
 
 // ── Shared helpers (also re-exported above for external use) ─────────────────────
 
@@ -74,8 +77,9 @@ export type ApiContext = {
   siteBuilderService?: import('../sites/service.ts').SiteBuilderService;
   mcpService?: import('./mcp-service.ts').McpService;
   observerService?: import('./observer-service.ts').ObserverService;
-  liveScreenService?: import('../services/live-screen.ts').LiveScreenService;
+  liveScreenService?: import('../services/live-screen-service.ts').LiveScreenService;
   llmManager?: import('../llm/manager.ts').LLMManager;
+  commitmentExecutor?: import('./commitment-executor.ts').CommitmentExecutor;
 };
 
 function mergeRoutes(...allRoutes: Array<Record<string, unknown>>): Record<string, unknown> {
@@ -110,5 +114,8 @@ export function createApiRoutes(ctx: ApiContext): Record<string, unknown> {
     metricsRoutes(ctx),
     coordinationRoutes(ctx),
     statusRoutes(ctx),
+    graphifyRoutes(ctx),
+    vectorSearchRoutes(ctx),
+    safeModeRoutes(ctx),
   );
 }

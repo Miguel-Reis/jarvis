@@ -8,6 +8,7 @@
 
 import type { ClassifiedEvent } from './event-classifier.ts';
 import type { IAgentService } from './agent-service-interface.ts';
+import { getDb } from '../vault/schema.ts';
 
 export type ReactorConfig = {
   /** Max reactions per event type within the cooldown window */
@@ -27,35 +28,29 @@ const DEFAULT_CONFIG: ReactorConfig = {
   globalWindowMs: 10 * 60_000,
 };
 
-type ReactionRecord = {
-  eventHash: string;
-  eventType: string;
-  timestamp: number;
-};
-
-// Simple LRU cache for deduplication with TTL
-type HashEntry = {
-  timestamp: number;
-  previous: string | null;
-  next: string | null;
-};
-
 export type ReactionCallback = (text: string, priority: 'urgent' | 'normal') => void;
 
-const MAX_QUEUE_SIZE = 100; // Prevent unbounded queue growth
+type QueueRow = {
+  id: number;
+  event_type: string;
+  priority: 'critical' | 'high' | 'normal' | 'low';
+  reason: string;
+  event_data: string;
+  event_hash: string;
+  status: 'pending' | 'processing' | 'done' | 'failed';
+  attempts: number;
+};
+
+function safeParse(json: string): unknown {
+  try { return JSON.parse(json); } catch { return {}; }
+}
 
 export class EventReactor {
   private agentService: IAgentService | null = null;
   private config: ReactorConfig;
-  private reactionLog: ReactionRecord[] = [];
-  // LRU-style doubly linked list for efficient O(1) access and pruning
-  private seenHashes = new Map<string, HashEntry>();
-  private seenHashHead: string | null = null;  // Most recently used
-  private seenHashTail: string | null = null;  // Least recently used
-  private maxHashes = 500;  // Max entries before pruning
   private onReaction: ReactionCallback | null = null;
-  private queue: ClassifiedEvent[] = [];
   private processing = false;
+  // All state persists in SQLite: event_queue, reaction_log, seen_hashes
 
   constructor(config?: Partial<ReactorConfig>) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -88,7 +83,7 @@ export class EventReactor {
     const hash = this.hashEvent(classified);
 
     // Deduplication: don't react to the exact same event twice
-    if (this.seenHashes.has(hash)) {
+    if (this.isHashSeen(hash)) {
       return false;
     }
 
@@ -104,19 +99,62 @@ export class EventReactor {
       return false;
     }
 
-    // If already processing, queue for later (with max size limit)
+    // If already processing, persist for later (queue lives in SQLite — survives restart).
     if (this.processing) {
-      if (this.queue.length >= MAX_QUEUE_SIZE) {
-        console.warn(`[EventReactor] Queue full (${MAX_QUEUE_SIZE}), dropping event: ${classified.reason}`);
-        return false; // Drop event if queue is full
-      }
-      console.log(`[EventReactor] Queuing event (${this.queue.length + 1} in queue): ${classified.reason}`);
-      this.queue.push(classified);
-      return true; // Will be processed later
+      this.enqueueEvent(classified, hash);
+      const pending = this.pendingCount();
+      console.log(`[EventReactor] Queued event (pending=${pending}): ${classified.reason}`);
+      return true;
     }
 
     await this.processEvent(classified, hash);
     return true;
+  }
+
+  private enqueueEvent(classified: ClassifiedEvent, hash: string): void {
+    try {
+      const now = Date.now();
+      getDb().prepare(`
+        INSERT INTO event_queue (event_type, priority, reason, event_data, event_hash, status, attempts, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, 'pending', 0, ?, ?)
+      `).run(
+        classified.event.type,
+        classified.priority,
+        classified.reason,
+        JSON.stringify(classified.event.data ?? {}),
+        hash,
+        now,
+        now,
+      );
+    } catch (err) {
+      console.error('[EventReactor] Failed to persist queued event:', err instanceof Error ? err.message : err);
+    }
+  }
+
+  private pendingCount(): number {
+    try {
+      const row = getDb().prepare(`SELECT COUNT(*) as c FROM event_queue WHERE status = 'pending'`).get() as { c: number } | undefined;
+      return row?.c ?? 0;
+    } catch { return 0; }
+  }
+
+  /**
+   * Recover any events left in 'processing' state from a previous run (daemon crash mid-react).
+   * Called once at startup by the daemon.
+   */
+  recoverInflight(): void {
+    try {
+      const now = Date.now();
+      const res = getDb().prepare(`
+        UPDATE event_queue SET status = 'pending', updated_at = ? WHERE status = 'processing'
+      `).run(now);
+      const changes = (res as { changes?: number }).changes ?? 0;
+      if (changes > 0) {
+        console.log(`[EventReactor] Recovered ${changes} in-flight event(s) from previous run`);
+      }
+    } catch (err) {
+      console.warn('[EventReactor] recoverInflight failed:', err instanceof Error ? err.message : err);
+    }
   }
 
   // --- Private helpers ---
@@ -152,21 +190,66 @@ export class EventReactor {
     const maxQueueDrain = 10; // Prevent runaway queue processing
     let drained = 0;
 
-    while (this.queue.length > 0 && !this.processing && drained < maxQueueDrain) {
-      const next = this.queue.shift()!;
-      const hash = this.hashEvent(next);
+    while (drained < maxQueueDrain && !this.processing) {
+      const next = this.dequeueNext();
+      if (!next) break;
+
+      const parsed = safeParse(next.event_data);
+      const classified: ClassifiedEvent = {
+        event: { type: next.event_type as ClassifiedEvent['event']['type'], data: (parsed ?? {}) as Record<string, unknown> } as ClassifiedEvent['event'],
+        priority: next.priority,
+        reason: next.reason,
+      };
 
       // Re-check dedup and cooldowns before processing queued event
-      if (this.seenHashes.has(hash)) continue;
-      if (!this.canReactForType(next.event.type)) continue;
-      if (!this.canReactGlobally()) break;
+      if (this.isHashSeen(next.event_hash)) { this.markQueueRow(next.id, 'done'); continue; }
+      if (!this.canReactForType(classified.event.type)) { this.markQueueRow(next.id, 'pending'); continue; }
+      if (!this.canReactGlobally()) { this.markQueueRow(next.id, 'pending'); break; }
 
-      await this.processEvent(next, hash);
+      try {
+        await this.processEvent(classified, next.event_hash);
+        this.markQueueRow(next.id, 'done');
+      } catch (err) {
+        this.markQueueRow(next.id, 'failed', err instanceof Error ? err.message : String(err));
+      }
       drained++;
     }
 
-    if (this.queue.length > 0 && drained >= maxQueueDrain) {
-      console.warn(`[EventReactor] Queue drain limit reached (${maxQueueDrain}), ${this.queue.length} events remaining`);
+    if (drained >= maxQueueDrain && this.pendingCount() > 0) {
+      console.warn(`[EventReactor] Queue drain limit reached (${maxQueueDrain}), ${this.pendingCount()} events remaining`);
+    }
+  }
+
+  private dequeueNext(): QueueRow | null {
+    try {
+      const db = getDb();
+      // Atomic-ish: pick oldest pending, mark processing.
+      const row = db.prepare(`
+        SELECT id, event_type, priority, reason, event_data, event_hash, status, attempts
+        FROM event_queue
+        WHERE status = 'pending'
+        ORDER BY
+          CASE priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
+          created_at
+        LIMIT 1
+      `).get() as QueueRow | undefined;
+      if (!row) return null;
+      const now = Date.now();
+      db.prepare(`UPDATE event_queue SET status = 'processing', attempts = attempts + 1, updated_at = ? WHERE id = ? AND status = 'pending'`).run(now, row.id);
+      return row;
+    } catch (err) {
+      console.error('[EventReactor] dequeueNext failed:', err instanceof Error ? err.message : err);
+      return null;
+    }
+  }
+
+  private markQueueRow(id: number, status: QueueRow['status'], lastError?: string): void {
+    try {
+      const now = Date.now();
+      getDb().prepare(`UPDATE event_queue SET status = ?, last_error = ?, updated_at = ? WHERE id = ?`)
+        .run(status, lastError ?? null, now, id);
+    } catch (err) {
+      console.error('[EventReactor] markQueueRow failed:', err instanceof Error ? err.message : err);
     }
   }
 
@@ -200,64 +283,145 @@ export class EventReactor {
     return hash.toString(36);
   }
 
-  // LRU cache helpers for seenHashes
-  private addHashEntry(hash: string): void {
-    const now = Date.now();
-    const entry: HashEntry = { timestamp: now, previous: this.seenHashHead, next: null };
-
-    if (this.seenHashHead) {
-      const headEntry = this.seenHashes.get(this.seenHashHead)!;
-      headEntry.next = hash;
+  // SQLite-backed deduplication check
+  private isHashSeen(hash: string): boolean {
+    try {
+      const row = getDb().prepare(`SELECT 1 FROM seen_hashes WHERE hash = ?`).get(hash);
+      return !!row;
+    } catch (err) {
+      console.warn('[EventReactor] isHashSeen failed:', err instanceof Error ? err.message : err);
+      return false;
     }
+  }
 
-    this.seenHashes.set(hash, entry);
-    this.seenHashHead = hash;
+  // Record hash in seen_hashes with LRU-style tracking
+  private recordHashSeen(hash: string, eventType: string): void {
+    try {
+      const db = getDb();
+      const now = Date.now();
 
-    if (!this.seenHashTail) {
-      this.seenHashTail = hash;
-    }
+      // Get current head (most recently used)
+      const headRow = db.prepare(`SELECT hash FROM seen_hashes WHERE next_hash IS NULL`).get() as { hash: string } | undefined;
+      const currentHead = headRow?.hash ?? null;
 
-    // Prune if over limit
-    while (this.seenHashes.size > this.maxHashes && this.seenHashTail) {
-      const tailHash: string = this.seenHashTail;
-      const tailEntry = this.seenHashes.get(tailHash)!;
-      this.seenHashes.delete(tailHash);
-      this.seenHashTail = tailEntry.previous;
-      if (this.seenHashTail) {
-        const newTailEntry = this.seenHashes.get(this.seenHashTail)!;
-        newTailEntry.next = null;
+      // Insert new hash as new head
+      db.prepare(`
+        INSERT INTO seen_hashes (hash, event_type, timestamp, previous_hash, next_hash)
+        VALUES (?, ?, ?, ?, NULL)
+      `).run(hash, eventType, now, currentHead);
+
+      // Update old head to point to new hash
+      if (currentHead) {
+        db.prepare(`UPDATE seen_hashes SET next_hash = ? WHERE hash = ?`).run(hash, currentHead);
       }
+
+      // Prune if over limit (500 entries)
+      this.pruneSeenHashes(500);
+    } catch (err) {
+      console.warn('[EventReactor] recordHashSeen failed:', err instanceof Error ? err.message : err);
+    }
+  }
+
+  // Prune oldest hashes when over limit
+  private pruneSeenHashes(maxEntries: number): void {
+    try {
+      const db = getDb();
+
+      // Find the tail that should become the new tail (maxEntries from head)
+      const tailRow = db.prepare(`
+        SELECT hash FROM seen_hashes
+        ORDER BY timestamp DESC
+        LIMIT 1 OFFSET ?
+      `).get(maxEntries) as { hash: string } | undefined;
+
+      if (tailRow) {
+        // Delete everything older than this tail
+        db.prepare(`
+          DELETE FROM seen_hashes
+          WHERE timestamp < (SELECT timestamp FROM seen_hashes WHERE hash = ?)
+        `).run(tailRow.hash);
+
+        // Clear the next_hash pointer of the new tail
+        db.prepare(`UPDATE seen_hashes SET next_hash = NULL WHERE hash = ?`).run(tailRow.hash);
+      }
+    } catch (err) {
+      console.warn('[EventReactor] pruneSeenHashes failed:', err instanceof Error ? err.message : err);
     }
   }
 
   private canReactForType(eventType: string): boolean {
-    const now = Date.now();
-    const cutoff = now - this.config.typeCooldownMs;
+    try {
+      const now = Date.now();
+      const cutoff = now - this.config.typeCooldownMs;
 
-    const recentForType = this.reactionLog.filter(
-      r => r.eventType === eventType && r.timestamp > cutoff
-    );
+      const row = getDb().prepare(`
+        SELECT COUNT(*) as c FROM reaction_log
+        WHERE event_type = ? AND timestamp > ?
+      `).get(eventType, cutoff) as { c: number } | undefined;
 
-    return recentForType.length < this.config.maxPerType;
+      return (row?.c ?? 0) < this.config.maxPerType;
+    } catch (err) {
+      console.warn('[EventReactor] canReactForType failed:', err instanceof Error ? err.message : err);
+      return false;
+    }
   }
 
   private canReactGlobally(): boolean {
-    const now = Date.now();
-    const cutoff = now - this.config.globalWindowMs;
+    try {
+      const now = Date.now();
+      const cutoff = now - this.config.globalWindowMs;
 
-    const recentGlobal = this.reactionLog.filter(r => r.timestamp > cutoff);
+      const row = getDb().prepare(`
+        SELECT COUNT(*) as c FROM reaction_log
+        WHERE timestamp > ?
+      `).get(cutoff) as { c: number } | undefined;
 
-    return recentGlobal.length < this.config.globalMax;
+      return (row?.c ?? 0) < this.config.globalMax;
+    } catch (err) {
+      console.warn('[EventReactor] canReactGlobally failed:', err instanceof Error ? err.message : err);
+      return false;
+    }
   }
 
   private recordReaction(hash: string, eventType: string): void {
-    const now = Date.now();
+    try {
+      const db = getDb();
+      const now = Date.now();
 
-    this.reactionLog.push({ eventHash: hash, eventType, timestamp: now });
-    this.addHashEntry(hash);
+      // Record reaction for rate limiting
+      db.prepare(`
+        INSERT INTO reaction_log (event_hash, event_type, timestamp)
+        VALUES (?, ?, ?)
+      `).run(hash, eventType, now);
 
-    // Prune old records (keep last hour)
-    const oneHourAgo = now - 60 * 60_000;
-    this.reactionLog = this.reactionLog.filter(r => r.timestamp > oneHourAgo);
+      // Record hash for deduplication
+      this.recordHashSeen(hash, eventType);
+
+      // Prune old reaction logs (keep last hour)
+      const oneHourAgo = now - 60 * 60_000;
+      db.prepare(`DELETE FROM reaction_log WHERE timestamp < ?`).run(oneHourAgo);
+    } catch (err) {
+      console.warn('[EventReactor] recordReaction failed:', err instanceof Error ? err.message : err);
+    }
+  }
+
+  /**
+   * Recover seen hashes from previous run (dedup cache warmup)
+   * Called once at startup.
+   */
+  recoverSeenHashes(): void {
+    try {
+      // Keep only hashes from last hour (matches in-memory pruning behavior)
+      const oneHourAgo = Date.now() - 60 * 60_000;
+      const deleted = getDb().prepare(`
+        DELETE FROM seen_hashes WHERE timestamp < ?
+      `).run(oneHourAgo);
+      const count = (deleted as { changes?: number }).changes ?? 0;
+      if (count > 0) {
+        console.log(`[EventReactor] Pruned ${count} expired seen hashes from previous run`);
+      }
+    } catch (err) {
+      console.warn('[EventReactor] recoverSeenHashes failed:', err instanceof Error ? err.message : err);
+    }
   }
 }

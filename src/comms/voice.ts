@@ -223,6 +223,103 @@ export class EdgeTTSProvider implements TTSProvider {
 }
 
 /**
+ * Azure Speech TTS Provider — Microsoft Azure Cognitive Services Speech.
+ * True streaming with low latency (100-300ms), excellent Portuguese voices.
+ * Supports SSML for fine-grained control.
+ */
+export class AzureSpeechTTSProvider implements TTSProvider {
+  private apiKey: string;
+  private region: string;
+  private voice: string;
+  private outputFormat: string;
+
+  constructor(
+    apiKey: string,
+    region: string = 'westeurope',
+    voice: string = 'pt-PT-DuarteNeural',
+    outputFormat: string = 'audio-24khz-48kbitrate-mono-mp3'
+  ) {
+    this.apiKey = apiKey;
+    this.region = region;
+    this.voice = voice;
+    this.outputFormat = outputFormat;
+  }
+
+  async synthesize(text: string): Promise<Buffer> {
+    const response = await fetch(
+      `https://${this.region}.tts.speech.microsoft.com/cognitiveservices/v1`,
+      {
+        method: 'POST',
+        headers: {
+          'Ocp-Apim-Subscription-Key': this.apiKey,
+          'Content-Type': 'application/ssml+xml',
+          'X-Microsoft-OutputFormat': this.outputFormat,
+        },
+        body: `<?xml version="1.0" encoding="UTF-8"?>
+<speak version="1.0" xml:lang="${this.voice.split('-')[0]}-${this.voice.split('-')[1]}">
+  <voice xml:lang="${this.voice.split('-')[0]}-${this.voice.split('-')[1]}" xml:name="${this.voice}">
+    ${text}
+  </voice>
+</speak>`,
+      }
+    );
+
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error(`Azure Speech TTS error (${response.status}): ${err}`);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+  }
+
+  async *synthesizeStream(text: string): AsyncIterable<Buffer> {
+    // Azure Speech streaming: send SSML with sentence-by-sentence breaks
+    // and yield audio chunks as they arrive
+    const response = await fetch(
+      `https://${this.region}.tts.speech.microsoft.com/cognitiveservices/v1`,
+      {
+        method: 'POST',
+        headers: {
+          'Ocp-Apim-Subscription-Key': this.apiKey,
+          'Content-Type': 'application/ssml+xml',
+          'X-Microsoft-OutputFormat': this.outputFormat,
+        },
+        body: `<?xml version="1.0" encoding="UTF-8"?>
+<speak version="1.0" xml:lang="${this.voice.split('-')[0]}-${this.voice.split('-')[1]}">
+  <voice xml:lang="${this.voice.split('-')[0]}-${this.voice.split('-')[1]}" xml:name="${this.voice}">
+    ${text}
+  </voice>
+</speak>`,
+      }
+    );
+
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error(`Azure Speech TTS error (${response.status}): ${err}`);
+    }
+
+    // Stream the response body
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('Azure Speech TTS: no response body');
+    }
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) {
+          yield Buffer.from(value);
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  }
+}
+
+/**
  * ElevenLabs TTS Provider — high-quality personalized voices via ElevenLabs API.
  * Supports true streaming (chunks are valid playable audio).
  */
@@ -306,6 +403,153 @@ export async function listElevenLabsVoices(apiKey: string): Promise<{
 }
 
 /**
+ * Google Cloud Text-to-Speech Provider — WaveNet voices with streaming.
+ * Excellent quality and natural sounding, supports many languages.
+ */
+export class GoogleCloudTTSProvider implements TTSProvider {
+  private apiKey: string;
+  private voiceName: string;
+  private languageCode: string;
+
+  constructor(
+    apiKey: string,
+    voiceName: string = 'pt-PT-Standard-C',
+    languageCode: string = 'pt-PT'
+  ) {
+    this.apiKey = apiKey;
+    this.voiceName = voiceName;
+    this.languageCode = languageCode;
+  }
+
+  async synthesize(text: string): Promise<Buffer> {
+    const response = await fetch(
+      `https://texttospeech.googleapis.com/v1/text:synthesize?key=${this.apiKey}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          input: { text },
+          voice: {
+            languageCode: this.languageCode,
+            name: this.voiceName,
+          },
+          audioConfig: {
+            audioEncoding: 'MP3',
+            speakingRate: 1.0,
+            pitch: 0.0,
+          },
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error(`Google Cloud TTS error (${response.status}): ${err}`);
+    }
+
+    const data = await response.json() as { audioContent: string };
+    return Buffer.from(data.audioContent, 'base64');
+  }
+
+  async *synthesizeStream(text: string): AsyncIterable<Buffer> {
+    // Google Cloud TTS doesn't support true streaming via REST API
+    // Synthesize complete audio and yield as single chunk
+    const audio = await this.synthesize(text);
+    if (audio.length > 0) {
+      yield audio;
+    }
+  }
+}
+
+/**
+ * OpenAI Text-to-Speech Provider — Simple API with 6 voices.
+ * Good quality, low cost, easy setup.
+ */
+export class OpenAITTSProvider implements TTSProvider {
+  private apiKey: string;
+  private voice: string;
+  private model: string;
+
+  constructor(
+    apiKey: string,
+    voice: string = 'alloy',
+    model: string = 'tts-1'
+  ) {
+    this.apiKey = apiKey;
+    this.voice = voice;
+    this.model = model;
+  }
+
+  async synthesize(text: string): Promise<Buffer> {
+    const response = await fetch('https://api.openai.com/v1/audio/speech', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: this.model,
+        input: text,
+        voice: this.voice,
+        response_format: 'mp3',
+        speed: 1.0,
+      }),
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error(`OpenAI TTS error (${response.status}): ${err}`);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+  }
+
+  async *synthesizeStream(text: string): AsyncIterable<Buffer> {
+    // OpenAI TTS streaming: the API returns a streaming response
+    const response = await fetch('https://api.openai.com/v1/audio/speech', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: this.model,
+        input: text,
+        voice: this.voice,
+        response_format: 'mp3',
+        speed: 1.0,
+      }),
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error(`OpenAI TTS error (${response.status}): ${err}`);
+    }
+
+    // Stream the response body
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('OpenAI TTS: no response body');
+    }
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) {
+          yield Buffer.from(value);
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  }
+}
+
+/**
  * Factory: create the right TTS provider from config.
  * Returns null if TTS is disabled.
  */
@@ -315,6 +559,34 @@ export function createTTSProvider(config: TTSConfig): TTSProvider | null {
   if (config.provider === 'elevenlabs') {
     if (!config.elevenlabs?.api_key) return null;
     return new ElevenLabsTTSProvider(config.elevenlabs);
+  }
+
+  if (config.provider === 'azure') {
+    if (!config.azure?.api_key) return null;
+    return new AzureSpeechTTSProvider(
+      config.azure.api_key,
+      config.azure.region ?? 'westeurope',
+      config.voice ?? 'pt-PT-DuarteNeural',
+      config.azure.output_format
+    );
+  }
+
+  if (config.provider === 'google') {
+    if (!config.google?.api_key) return null;
+    return new GoogleCloudTTSProvider(
+      config.google.api_key,
+      config.voice ?? 'pt-PT-Standard-C',
+      config.google.language_code ?? 'pt-PT'
+    );
+  }
+
+  if (config.provider === 'openai') {
+    if (!config.openai?.api_key) return null;
+    return new OpenAITTSProvider(
+      config.openai.api_key,
+      config.voice ?? 'alloy',
+      config.openai.model ?? 'tts-1'
+    );
   }
 
   // Default: Edge TTS
@@ -335,4 +607,21 @@ export function splitIntoSentences(text: string): string[] {
     .map(s => s.trim())
     .filter(s => s.length > 0);
   return sentences.length > 0 ? sentences : [text];
+}
+
+/**
+ * Strip markdown formatting from text for natural-sounding TTS output.
+ * Removes headers, bold, italic, code, links, and normalizes whitespace.
+ */
+export function stripMarkdownForTTS(text: string): string {
+  return text
+    .replace(/#{1,6}\s*/g, '')           // Remove headers
+    .replace(/\*{1,2}([^*]+)\*{1,2}/g, '$1')  // Remove bold/italic
+    .replace(/`([^`]+)`/g, '$1')          // Remove inline code
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')  // Remove links, keep text
+    .replace(/\n{2,}/g, '. ')             // Convert paragraph breaks to periods
+    .replace(/\n/g, ' ')                  // Convert newlines to spaces
+    .replace(/\s{2,}/g, ' ')              // Collapse multiple spaces
+    .trim()
+    .slice(0, 300);                       // Limit length for TTS
 }

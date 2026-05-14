@@ -7,7 +7,7 @@
  * - Maintains session history per project
  */
 
-import type { Service, ServiceStatus } from '../daemon/services.ts';
+import type { Service, ServiceStatus } from '../daemon/types.ts';
 import {
   initializeProjectContexts,
   getOrCreateCurrentProjectContext,

@@ -35,9 +35,6 @@ type MethodRoutes = { [method: string]: RouteHandler };
 /** 401 HTML page loaded from auth-error.html */
 const AUTH_ERROR_HTML = await Bun.file(path.join(import.meta.dir, 'auth-error.html')).text();
 
-/** Inline script injected into authed HTML pages — strips ?token= from the hash. */
-const TOKEN_STRIP_SCRIPT = `<script>(function(){var h=location.hash,i=h.indexOf('?');if(i===-1)return;var p=new URLSearchParams(h.slice(i));if(!p.has('token'))return;p.delete('token');var c=h.slice(0,i),r=p.toString();if(r)c+='?'+r;location.replace(location.pathname+location.search+c)})()</script>`;
-
 function getCookie(req: Request, name: string): string | null {
   const cookies = req.headers.get('Cookie');
   if (!cookies) return null;
@@ -178,25 +175,10 @@ export class WebSocketServer {
           return new Response('WebSocket upgrade failed', { status: 500 });
         }
 
-        // 1. Auth check (if configured)
+        // 1. Auth check (if configured) — token via cookie only, never via URL
         if (self.authToken && !isPublicRoute(pathname, req.method)) {
           const cookieToken = getCookie(req, 'token');
           if (!cookieToken || !safeCompare(cookieToken, self.authToken)) {
-            // Check ?token= query param — set cookie via Set-Cookie and redirect
-            const queryToken = url.searchParams.get('token');
-            if (queryToken && safeCompare(queryToken, self.authToken)) {
-              const cleanParams = new URLSearchParams(url.searchParams);
-              cleanParams.delete('token');
-              const qs = cleanParams.toString();
-              const redirectTo = pathname + (qs ? '?' + qs : '');
-              return new Response(null, {
-                status: 302,
-                headers: {
-                  'Location': redirectTo || '/',
-                  'Set-Cookie': `token=${queryToken}; Path=/; SameSite=Lax; HttpOnly`,
-                },
-              });
-            }
             // No valid auth — API & WebSocket get JSON 401; browsers get the auth error page
             if (pathname.startsWith('/api/') || pathname === '/ws') {
               return Response.json({ error: 'Unauthorized' }, { status: 401 });
@@ -593,20 +575,11 @@ export class WebSocketServer {
 
 /**
  * Inject the token-stripping script into an HTML page (right after <head>).
+ * Deprecated: token in URL is no longer supported, cookies only.
  */
 function injectTokenStrip(html: string): string {
-  const headIdx = html.indexOf('<head>');
-  if (headIdx !== -1) {
-    return html.slice(0, headIdx + 6) + TOKEN_STRIP_SCRIPT + html.slice(headIdx + 6);
-  }
-  const htmlIdx = html.indexOf('<html');
-  if (htmlIdx !== -1) {
-    const closeTag = html.indexOf('>', htmlIdx);
-    if (closeTag !== -1) {
-      return html.slice(0, closeTag + 1) + TOKEN_STRIP_SCRIPT + html.slice(closeTag + 1);
-    }
-  }
-  return TOKEN_STRIP_SCRIPT + html;
+  // No-op: token stripping no longer needed as URL tokens are not supported
+  return html;
 }
 
 /**

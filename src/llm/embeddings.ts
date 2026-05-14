@@ -8,7 +8,7 @@
 
 import type { JarvisConfig } from '../config/types.ts';
 
-type EmbeddingBackend = 'openai' | 'ollama' | 'none';
+type EmbeddingBackend = 'openai' | 'ollama' | 'gemini' | 'none';
 
 export class EmbeddingService {
   private backend: EmbeddingBackend;
@@ -25,7 +25,13 @@ export class EmbeddingService {
     this.backend = backend;
     this.apiKey = opts.apiKey ?? null;
     this.baseUrl = opts.baseUrl ?? 'http://localhost:11434';
-    this.model = opts.model ?? (backend === 'openai' ? 'text-embedding-3-small' : 'nomic-embed-text');
+    if (backend === 'openai') {
+      this.model = opts.model ?? 'text-embedding-3-small';
+    } else if (backend === 'gemini') {
+      this.model = opts.model ?? 'models/text-embedding-004';
+    } else {
+      this.model = opts.model ?? 'nomic-embed-text';
+    }
   }
 
   /**
@@ -35,7 +41,7 @@ export class EmbeddingService {
   async embed(text: string): Promise<Float32Array | null> {
     if (this.backend === 'none') {
       if (!this.warnedOnce) {
-        console.warn('[EmbeddingService] No embedding provider configured — semantic search disabled. Configure OpenAI or Ollama to enable it.');
+        console.warn('[EmbeddingService] No embedding provider configured — semantic search disabled.');
         this.warnedOnce = true;
       }
       return null;
@@ -47,6 +53,8 @@ export class EmbeddingService {
     try {
       if (this.backend === 'openai') {
         return await this._embedOpenAI(input);
+      } else if (this.backend === 'gemini') {
+        return await this._embedGemini(input);
       } else {
         return await this._embedOllama(input);
       }
@@ -81,7 +89,7 @@ export class EmbeddingService {
   }
 
   private async _embedOllama(text: string): Promise<Float32Array | null> {
-    const resp = await fetch(`${this.baseUrl}/api/embeddings`, {
+    const resp = await fetch(`${this.baseUrl}/api/embed`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ model: this.model, prompt: text }),
@@ -95,6 +103,35 @@ export class EmbeddingService {
     const data = await resp.json() as { embedding: number[] };
     if (!data.embedding) throw new Error('Ollama embeddings response missing embedding field');
     return new Float32Array(data.embedding);
+  }
+
+  private async _embedGemini(text: string): Promise<Float32Array | null> {
+    const apiKey = this.apiKey;
+    if (!apiKey) {
+      throw new Error('Gemini API key not configured');
+    }
+
+    const modelName = this.model.replace(/^models\//, '');
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:embedContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: `models/${modelName}`,
+          content: { parts: [{ text }] },
+        }),
+        signal: AbortSignal.timeout(30_000),
+      }
+    );
+
+    if (!resp.ok) {
+      throw new Error(`Gemini embeddings API returned ${resp.status}: ${await resp.text()}`);
+    }
+
+    const data = await resp.json() as { embedding: { values: number[] } };
+    if (!data.embedding?.values) throw new Error('Gemini embeddings response missing embedding.values');
+    return new Float32Array(data.embedding.values);
   }
 
   isAvailable(): boolean {
@@ -116,31 +153,77 @@ let _instance: EmbeddingService | null = null;
 
 /**
  * Initialize the embedding service from JARVIS config.
- * Priority: OpenAI (if api_key set) → Ollama (if configured) → none.
+ * Uses llm.embedding config if specified, otherwise auto-detects from available providers.
  */
 export function initEmbeddingService(config: JarvisConfig): void {
   const { llm } = config;
+  const embeddingConfig = llm.embedding;
 
-  if (llm.openai?.api_key && llm.openai.api_key.length > 10) {
-    _instance = new EmbeddingService('openai', {
-      apiKey: llm.openai.api_key,
-      model: 'text-embedding-3-small', // always use the embedding model, not the chat model
+  // Check for explicit embedding provider config
+  if (embeddingConfig?.provider) {
+    const provider = embeddingConfig.provider;
+    const model = embeddingConfig.model;
+
+    if (provider === 'gemini' && llm.gemini?.api_key) {
+      _instance = new EmbeddingService('gemini', {
+        apiKey: llm.gemini.api_key,
+        model: model ?? 'models/gemini-embedding-2',
+      });
+      console.log(`[EmbeddingService] Initialized with Gemini model ${model ?? 'models/gemini-embedding-2'}`);
+      return;
+    }
+
+    if (provider === 'openai' && llm.openai?.api_key) {
+      _instance = new EmbeddingService('openai', {
+        apiKey: llm.openai.api_key,
+        model: model ?? 'text-embedding-3-small',
+      });
+      console.log(`[EmbeddingService] Initialized with OpenAI model ${model ?? 'text-embedding-3-small'}`);
+      return;
+    }
+
+    if (provider === 'ollama' && llm.ollama?.base_url) {
+      _instance = new EmbeddingService('ollama', {
+        baseUrl: llm.ollama.base_url,
+        model: model ?? 'nomic-embed-text',
+      });
+      console.log(`[EmbeddingService] Initialized with Ollama model ${model ?? 'nomic-embed-text'}`);
+      return;
+    }
+  }
+
+  // Auto-detect: Try Gemini first
+  if (llm.gemini?.api_key && llm.gemini.api_key.length > 10) {
+    _instance = new EmbeddingService('gemini', {
+      apiKey: llm.gemini.api_key,
+      model: 'models/gemini-embedding-2',
     });
-    console.log(`[EmbeddingService] Initialized with OpenAI model text-embedding-3-small`);
+    console.log(`[EmbeddingService] Initialized with Gemini model models/gemini-embedding-2 (auto-detected)`);
     return;
   }
 
-  if (llm.ollama) {
+  // Fallback to OpenAI
+  if (llm.openai?.api_key && llm.openai.api_key.length > 10) {
+    _instance = new EmbeddingService('openai', {
+      apiKey: llm.openai.api_key,
+      model: 'text-embedding-3-small',
+    });
+    console.log(`[EmbeddingService] Initialized with OpenAI model text-embedding-3-small (auto-detected)`);
+    return;
+  }
+
+  // Fallback to Ollama
+  if (llm.ollama?.base_url && llm.ollama.base_url.trim().length > 0) {
     _instance = new EmbeddingService('ollama', {
-      baseUrl: llm.ollama.base_url ?? 'http://localhost:11434',
+      baseUrl: llm.ollama.base_url,
       model: 'nomic-embed-text',
     });
-    console.log(`[EmbeddingService] Initialized with Ollama model nomic-embed-text`);
+    console.log(`[EmbeddingService] Initialized with Ollama model nomic-embed-text (auto-detected)`);
     return;
   }
 
   _instance = new EmbeddingService('none');
-  console.warn('[EmbeddingService] No embedding-capable provider found. Semantic search will be disabled.');
+  console.warn('[EmbeddingService] No embedding provider configured. Semantic search will be disabled.');
 }
 
 /**

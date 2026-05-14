@@ -4,7 +4,7 @@
  * Loading placeholder for content.
  */
 
-import React, { HTMLAttributes, forwardRef } from 'react';
+import { forwardRef, type HTMLAttributes } from 'react';
 import './Skeleton.css';
 
 export type SkeletonVariant = 'text' | 'circular' | 'rectangular' | 'rounded';

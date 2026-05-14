@@ -10,10 +10,11 @@ export class LLMManager {
   private providers: Map<string, LLMProvider> = new Map();
   private primaryProvider = '';
   private fallbackChain: string[] = [];
-  private static readonly MAX_RETRIES_PER_PROVIDER = 3;
-  private static readonly REQUEST_TIMEOUT_MS = 90000; // 90 second timeout for LLM calls
-  private static readonly STREAM_CHUNK_TIMEOUT_MS = 60_000; // 60s between stream chunks
+  private static readonly MAX_RETRIES_PER_PROVIDER = 10;
+  private static readonly REQUEST_TIMEOUT_MS = 120000; // 120 second timeout for LLM calls
+  private static readonly STREAM_CHUNK_TIMEOUT_MS = 90_000; // 90s between stream chunks
   private static readonly isDebugging = process.env.JARVIS_LOG_LEVEL === 'debug' || process.env.DEBUG_LLM === 'true';
+  private _notifyCallback?: (text: string, priority: 'low' | 'normal' | 'high' | 'urgent') => void;
 
   /** Session-level token usage tracking */
   private sessionTokenCount = 0;
@@ -235,6 +236,20 @@ export class LLMManager {
   }
 
   /**
+   * Set callback to notify user on chat when retries happen
+   */
+  setNotifyCallback(fn: (text: string, priority: 'low' | 'normal' | 'high' | 'urgent') => void): void {
+    this._notifyCallback = fn;
+  }
+
+  private notifyRetry(provider: string, attempt: number, maxRetries: number, error: string): void {
+    if (!this._notifyCallback) return;
+
+    const text = `🔄 **LLM Retry**: ${provider} (attempt ${attempt}/${maxRetries})\n\`${error.slice(0, 100)}${error.length > 100 ? '...' : ''}\``;
+    this._notifyCallback(text, 'high');
+  }
+
+  /**
    * Classify error for better retry logic
    */
   private shouldRetry(error: unknown): boolean {
@@ -309,8 +324,11 @@ export class LLMManager {
 
           if (!shouldRetry || attempt === LLMManager.MAX_RETRIES_PER_PROVIDER) break;
 
-          // Exponential backoff: 1s, 2s, 4s
-          const backoffMs = Math.min(1000 * Math.pow(2, attempt - 1), 8000);
+          // Notify user on chat about retry
+          this.notifyRetry(providerName, attempt + 1, LLMManager.MAX_RETRIES_PER_PROVIDER, errorMsg);
+
+          // Exponential backoff: 1s, 2s, 4s, 8s, 16s, 32s, 64s, 128s, 256s, 512s (capped at 30s)
+          const backoffMs = Math.min(1000 * Math.pow(2, attempt - 1), 30000);
           await new Promise(r => setTimeout(r, backoffMs));
         }
       }

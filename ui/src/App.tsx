@@ -63,14 +63,11 @@ const GoalsPage = React.lazy(() => import("./pages/GoalsPage"));
 const DashboardPage = React.lazy(() => import("./pages/DashboardPage"));
 const SitesPage = React.lazy(() => import("./pages/SitesPage"));
 const ProjectsPage = React.lazy(() => import("./pages/ProjectsPage"));
-const SuperJarvisPage = React.lazy(() => import("./pages/SuperJarvisPage"));
-const ProgressDashboardPage = React.lazy(() => import("./pages/ProgressDashboardPage.tsx"));
-const WarRoomPage = React.lazy(() => import("./pages/WarRoomPage.tsx"));
+const AgentsPage = React.lazy(() => import("./pages/AgentsPage"));
 const SystemStatusPage = React.lazy(() => import("./pages/SystemStatusPage.tsx"));
 const HUDOverlayPage = React.lazy(() => import("./pages/HUDOverlayPage.tsx"));
-const LocalBrainDashboard = React.lazy(() => import("./pages/LocalBrainDashboard"));
 
-type Route = "dashboard" | "chat" | "tasks" | "pipeline" | "memory" | "calendar" | "office" | "knowledge" | "command" | "authority" | "awareness" | "workflows" | "goals" | "sites" | "projects" | "superjarvis" | "progress" | "warroom" | "systemstatus" | "hud" | "localbrain" | "settings";
+type Route = "dashboard" | "chat" | "tasks" | "pipeline" | "memory" | "calendar" | "office" | "knowledge" | "command" | "authority" | "awareness" | "workflows" | "goals" | "sites" | "projects" | "agents" | "systemstatus" | "hud" | "office" | "settings";
 
 export type SettingsSection = "general" | "profile" | "llm" | "channels" | "integrations" | "sidecar" | "mcp";
 
@@ -79,7 +76,7 @@ const SETTINGS_SECTIONS: SettingsSection[] = ["general", "profile", "llm", "chan
 function getRoute(): Route {
   const hash = window.location.hash.replace("#/", "");
   if (hash.startsWith("settings")) return "settings";
-  if (["dashboard", "chat", "tasks", "pipeline", "memory", "calendar", "office", "knowledge", "command", "authority", "awareness", "workflows", "goals", "sites", "projects", "progress", "warroom", "systemstatus", "hud", "superjarvis"].includes(hash)) {
+  if (["dashboard", "chat", "tasks", "pipeline", "memory", "calendar", "office", "knowledge", "command", "authority", "awareness", "workflows", "goals", "sites", "projects", "agents", "systemstatus", "hud", "office"].includes(hash)) {
     return hash as Route;
   }
   return "dashboard";
@@ -121,28 +118,21 @@ const NAV_CORE: NavEntry[] = [
   { icon: "\u25CE", label: "Chat",       route: "chat" },
   { icon: "\u25A3", label: "Projects",   route: "projects" },
   { icon: "\u25C6", label: "Goals",      route: "goals" },
-  { icon: "\uD83D\uDCCA", label: "Progress",   route: "progress" },
-  { icon: "\u2B21", label: "Workflows",  route: "workflows" },
   { icon: "\u25A0", label: "Sites",      route: "sites" },
-  { icon: "\uD83D\uDE80", label: "Super Jarvis", route: "superjarvis" },
 ];
 
 const NAV_INTEL: NavEntry[] = [
-  { icon: "\u25B3", label: "Agents",     route: "office" },
+  { icon: "\uD83E\uDD16", label: "Agents",     route: "agents" },
   { icon: "\u2726", label: "Tasks",      route: "tasks" },
-  { icon: "\uD83D\uDD0D", label: "War Room",  route: "warroom" },
   { icon: "\u25A3", label: "Authority",  route: "authority" },
   { icon: "\u25C8", label: "Memory",     route: "memory" },
+  { icon: "\u25B3", label: "Office",     route: "office" },
 ];
 
 const NAV_MORE: NavEntry[] = [
   { icon: "\u25B6", label: "Pipeline",   route: "pipeline" },
   { icon: "\u25A1", label: "Calendar",   route: "calendar" },
-  { icon: "\u25CB", label: "Knowledge",  route: "knowledge" },
-  { icon: "\u25A3", label: "Command",    route: "command" },
-  { icon: "\u25CE", label: "Awareness",  route: "awareness" },
-  { icon: "\uD83E\uDDE0", label: "Local Brain",  route: "localbrain" },
-  { icon: "\u25C9", label: "System Status", route: "systemstatus" },
+  { icon: "\u25C9", label: "System",     route: "systemstatus" },
 ];
 
 const SETTINGS_NAV: { section: SettingsSection; label: string }[] = [
@@ -533,12 +523,9 @@ export function App() {
           {route === "goals" && <GoalsPage goalEvents={ws.goalEvents} />}
           {route === "sites" && <SitesPage sendMessage={ws.sendMessage} isConnected={ws.isConnected} messages={ws.messages} />}
           {route === "projects" && <ProjectsPage />}
-          {route === "progress" && <ProgressDashboardPage />}
-          {route === "warroom" && <WarRoomPage />}
+          {route === "agents" && <AgentsPage />}
           {route === "systemstatus" && <SystemStatusPage />}
           {route === "hud" && <HUDOverlayPage />}
-          {route === "localbrain" && <LocalBrainDashboard />}
-          {route === "superjarvis" && <SuperJarvisPage />}
           {route === "authority" && <AuthorityPage />}
           {route === "settings" && <SettingsPage section={settingsSection} />}
         </React.Suspense>
@@ -585,7 +572,7 @@ const MOBILE_NAV: NavEntry[] = [
   { icon: "\u25CE", label: "Chat",      route: "chat" },
   { icon: "\u25C6", label: "Goals",     route: "goals" },
   { icon: "\u2726", label: "Tasks",     route: "tasks" },
-  { icon: "\u2B21", label: "Flows",     route: "workflows" },
+  { icon: "\uD83E\uDD16", label: "Agents",   route: "agents" },
   { icon: "\u25A0", label: "Sites",     route: "sites" },
 ];
 

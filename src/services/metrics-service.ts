@@ -6,7 +6,7 @@
  */
 
 import { getDb } from '../vault/schema.ts';
-import { getTimeTracker } from './time-tracker.ts';
+import { getTimeTracker } from './time-tracker-service.ts';
 
 export interface DailyMetrics {
   date: string;

@@ -24,6 +24,9 @@ export function getUserProfile(): UserProfileRecord | null {
     return {
       version: 1,
       answers: normalizeUserProfileAnswers((parsed.answers ?? {}) as Record<string, unknown>),
+      qualities: Array.isArray(parsed.qualities)
+        ? parsed.qualities.filter((q): q is string => typeof q === 'string' && q.trim().length > 0)
+        : base.qualities,
       created_at: typeof parsed.created_at === 'number' ? parsed.created_at : base.created_at,
       updated_at: typeof parsed.updated_at === 'number' ? parsed.updated_at : base.updated_at,
       completed_at: typeof parsed.completed_at === 'number' ? parsed.completed_at : null,
@@ -37,14 +40,19 @@ export function saveUserProfile(input: Record<string, unknown>): UserProfileReco
   const existing = getUserProfile();
   const now = Date.now();
   const answers = normalizeUserProfileAnswers(input);
+  const qualities = Array.isArray(input.qualities)
+    ? input.qualities.filter((q): q is string => typeof q === 'string' && q.trim().length > 0)
+    : existing?.qualities ?? [];
   const profile: UserProfileRecord = {
     version: 1,
     answers,
+    qualities,
     created_at: existing?.created_at ?? now,
     updated_at: now,
     completed_at: countAnsweredUserProfileQuestions({
       version: 1,
       answers,
+      qualities,
       created_at: existing?.created_at ?? now,
       updated_at: now,
       completed_at: null,
@@ -63,7 +71,7 @@ export function clearUserProfile(): void {
 }
 
 function syncUserProfileKnowledge(profile: UserProfileRecord): void {
-  if (countAnsweredUserProfileQuestions(profile) === 0) {
+  if (countAnsweredUserProfileQuestions(profile) === 0 && profile.qualities.length === 0) {
     clearUserProfileKnowledge();
     return;
   }
@@ -74,6 +82,7 @@ function syncUserProfileKnowledge(profile: UserProfileRecord): void {
     is_current_user: true,
     profile_version: profile.version,
     profile_updated_at: profile.updated_at,
+    qualities: profile.qualities.join(', '),
   };
 
   const entityRow = db.prepare(
@@ -123,6 +132,12 @@ function getDerivedUserProfileFacts(profile: UserProfileRecord): Array<{ predica
   const preferredName = profile.answers.preferred_name?.trim();
   if (preferredName) {
     pushFact(facts, seen, 'name', preferredName);
+  }
+
+  for (const quality of profile.qualities) {
+    if (quality.trim()) {
+      pushFact(facts, seen, 'has_quality', quality.trim());
+    }
   }
 
   const aliasSources = [

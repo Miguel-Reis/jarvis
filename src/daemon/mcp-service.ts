@@ -6,7 +6,7 @@
  * Servers connect asynchronously — failures don't block startup.
  */
 
-import type { Service, ServiceStatus } from './services.ts';
+import type { Service, ServiceStatus } from './types.ts';
 import type { JarvisConfig } from '../config/types.ts';
 import type { ToolRegistry } from '../actions/tools/registry.ts';
 import { McpClient, mcpToolsToDefinitions } from '../llm/mcp-client.ts';

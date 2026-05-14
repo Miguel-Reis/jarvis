@@ -15,9 +15,16 @@ type UserProfileQuestion = {
 type UserProfileRecord = {
   version: 1;
   answers: Record<string, string>;
+  qualities: string[];
   created_at: number;
   updated_at: number;
   completed_at: number | null;
+};
+
+type UserProfilePreset = {
+  id: string;
+  name: string;
+  description: string;
 };
 
 type UserProfileResponse = {
@@ -28,17 +35,48 @@ type UserProfileResponse = {
   has_profile: boolean;
 };
 
+type PresetsResponse = {
+  presets: UserProfilePreset[];
+};
+
+const PREDEFINED_QUALITIES = [
+  "Pensamento Crítico",
+  "Criatividade",
+  "Atenção a Detalhes",
+  "Comunicação Clara",
+  "Foco em Resultados",
+  "Colaboração",
+  "Adaptabilidade",
+  "Liderança",
+  "Empatia",
+  "Inovação",
+  "Persistência",
+  "Curiosidade Intelectual",
+];
+
 export function UserProfilePanel() {
   const { data, loading, error, refetch } = useApiData<UserProfileResponse>("/api/user-profile", []);
+  const [presets, setPresets] = useState<UserProfilePreset[]>([]);
   const [editing, setEditing] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [qualities, setQualities] = useState<string[]>([]);
+  const [customQuality, setCustomQuality] = useState("");
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [loadingPreset, setLoadingPreset] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/user-profile/presets")
+      .then(r => r.json())
+      .then((data: PresetsResponse) => setPresets(data.presets))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!data) return;
     setAnswers(data.profile?.answers ?? {});
+    setQualities(data.profile?.qualities ?? []);
   }, [data]);
 
   useEffect(() => {
@@ -77,7 +115,7 @@ export function UserProfilePanel() {
     try {
       const resp = await api<{ message: string }>("/api/user-profile", {
         method: "POST",
-        body: JSON.stringify({ answers }),
+        body: JSON.stringify({ answers, qualities }),
       });
       setMessage({ text: resp.message, type: "success" });
       setEditing(false);
@@ -100,6 +138,25 @@ export function UserProfilePanel() {
       refetch();
     } catch (err) {
       setMessage({ text: err instanceof Error ? err.message : "Failed to clear user profile", type: "error" });
+    }
+  };
+
+  const applyPreset = async (presetId: string) => {
+    setLoadingPreset(presetId);
+    setMessage(null);
+    try {
+      const resp = await api<{ message: string }>("/api/user-profile/presets", {
+        method: "POST",
+        body: JSON.stringify({ presetId }),
+      });
+      setMessage({ text: resp.message, type: "success" });
+      setEditing(false);
+      setStepIndex(0);
+      refetch();
+    } catch (err) {
+      setMessage({ text: err instanceof Error ? err.message : "Failed to apply preset", type: "error" });
+    } finally {
+      setLoadingPreset(null);
     }
   };
 
@@ -165,6 +222,51 @@ export function UserProfilePanel() {
         </div>
       )}
 
+      {presets.length > 0 && (
+        <div className="sp-card">
+          <h3 className="sp-card-title" style={{ margin: 0 }}>Quick Start Profiles</h3>
+          <p style={{ fontSize: "13px", color: "var(--j-text-muted)", margin: "8px 0 16px 0", lineHeight: 1.6 }}>
+            Choose a preset profile to quickly configure JARVIS with a professional persona.
+          </p>
+          <div style={{ display: "grid", gap: "12px", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))" }}>
+            {presets.map((preset) => (
+              <div
+                key={preset.id}
+                style={{
+                  border: "1px solid var(--j-border)",
+                  borderRadius: "8px",
+                  padding: "16px",
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                  background: "var(--j-bg-secondary)",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = "var(--j-accent)";
+                  e.currentTarget.style.transform = "translateY(-2px)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = "var(--j-border)";
+                  e.currentTarget.style.transform = "translateY(0)";
+                }}
+                onClick={() => applyPreset(preset.id)}
+              >
+                <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--j-text)", marginBottom: "6px" }}>
+                  {preset.name}
+                </div>
+                <div style={{ fontSize: "12px", color: "var(--j-text-muted)", lineHeight: 1.5 }}>
+                  {preset.description}
+                </div>
+                {loadingPreset === preset.id && (
+                  <div style={{ marginTop: "10px", fontSize: "12px", color: "var(--j-accent)" }}>
+                    Applying...
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {editing && currentStep ? (
         <div className="sp-card">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", marginBottom: "20px", flexWrap: "wrap" }}>
@@ -207,6 +309,115 @@ export function UserProfilePanel() {
             ))}
           </div>
 
+          {stepIndex === steps.length - 1 && (
+            <div style={{ marginTop: "24px", paddingTop: "24px", borderTop: "1px solid var(--j-border)" }}>
+              <h4 style={{ margin: "0 0 16px 0", fontSize: "14px", color: "var(--j-text)" }}>Qualidades & Especializações</h4>
+              <p style={{ fontSize: "12px", color: "var(--j-text-muted)", marginBottom: "16px", lineHeight: 1.5 }}>
+                Selecione qualidades adicionais para complementar seu profile. Estas serão usadas para dar mais contexto ao JARVIS sobre como você pensa e trabalha.
+              </p>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "10px", marginBottom: "16px" }}>
+                {PREDEFINED_QUALITIES.map((quality) => (
+                  <label
+                    key={quality}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      padding: "10px 12px",
+                      background: qualities.includes(quality) ? "rgba(139, 92, 246, 0.15)" : "rgba(255,255,255,0.02)",
+                      border: qualities.includes(quality) ? "1px solid var(--j-accent)" : "1px solid var(--j-border)",
+                      borderRadius: "8px",
+                      cursor: "pointer",
+                      transition: "all 0.2s",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={qualities.includes(quality)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setQualities([...qualities, quality]);
+                        } else {
+                          setQualities(qualities.filter((q) => q !== quality));
+                        }
+                      }}
+                      style={{ accentColor: "var(--j-accent)" }}
+                    />
+                    <span style={{ fontSize: "12px", color: "var(--j-text)" }}>{quality}</span>
+                  </label>
+                ))}
+              </div>
+
+              <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                <input
+                  className="sp-input"
+                  placeholder="Adicionar qualidade personalizada..."
+                  value={customQuality}
+                  onChange={(e) => setCustomQuality(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && customQuality.trim()) {
+                      e.preventDefault();
+                      if (!qualities.includes(customQuality.trim())) {
+                        setQualities([...qualities, customQuality.trim()]);
+                      }
+                      setCustomQuality("");
+                    }
+                  }}
+                  style={{ flex: 1 }}
+                />
+                <button
+                  className="sp-btn-secondary"
+                  onClick={() => {
+                    if (customQuality.trim() && !qualities.includes(customQuality.trim())) {
+                      setQualities([...qualities, customQuality.trim()]);
+                      setCustomQuality("");
+                    }
+                  }}
+                >
+                  Adicionar
+                </button>
+              </div>
+
+              {qualities.length > 0 && (
+                <div style={{ marginTop: "16px", display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                  {qualities.map((q) => (
+                    <span
+                      key={q}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        padding: "4px 10px",
+                        background: "rgba(139, 92, 246, 0.2)",
+                        border: "1px solid rgba(139, 92, 246, 0.4)",
+                        borderRadius: "12px",
+                        fontSize: "11px",
+                        color: "var(--j-text)",
+                      }}
+                    >
+                      {q}
+                      <button
+                        onClick={() => setQualities(qualities.filter((item) => item !== q))}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: "var(--j-text-muted)",
+                          cursor: "pointer",
+                          padding: 0,
+                          display: "flex",
+                          alignItems: "center",
+                        }}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", marginTop: "24px", flexWrap: "wrap" }}>
             <button
               className="sp-btn-secondary"
@@ -231,6 +442,34 @@ export function UserProfilePanel() {
       ) : data.has_profile ? (
         <div className="sp-card">
           <h3 className="sp-card-title">Saved Context</h3>
+
+          {data.profile?.qualities && data.profile.qualities.length > 0 && (
+            <div style={{ marginBottom: "20px" }}>
+              <div style={{ fontSize: "11px", letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--j-text-muted)", marginBottom: "10px" }}>
+                Qualidades & Especializações
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                {data.profile.qualities.map((q) => (
+                  <span
+                    key={q}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      padding: "6px 12px",
+                      background: "rgba(139, 92, 246, 0.2)",
+                      border: "1px solid rgba(139, 92, 246, 0.4)",
+                      borderRadius: "12px",
+                      fontSize: "12px",
+                      color: "var(--j-text)",
+                    }}
+                  >
+                    {q}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div style={{ display: "grid", gap: "14px" }}>
             {steps.map((step) => {
               const answeredQuestions = step.questions.filter((question) => {

@@ -9,7 +9,7 @@
  * - Multi-channel delivery (desktop, voice, WebSocket)
  */
 
-import type { Service, ServiceStatus } from '../daemon/services.ts';
+import type { Service, ServiceStatus } from '../daemon/types.ts';
 import { sendDesktopNotification } from '../comms/desktop-notify.ts';
 
 export type NotificationPriority = 'critical' | 'high' | 'normal' | 'low';

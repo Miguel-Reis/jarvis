@@ -4,7 +4,7 @@
  * Reusable button with variants and sizes.
  */
 
-import React, { ButtonHTMLAttributes, forwardRef } from 'react';
+import { forwardRef, type ButtonHTMLAttributes } from 'react';
 import './Button.css';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'icon';

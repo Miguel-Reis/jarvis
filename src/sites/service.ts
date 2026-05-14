@@ -5,7 +5,7 @@
  * Implements the Service interface for daemon integration.
  */
 
-import type { Service, ServiceStatus } from '../daemon/services.ts';
+import type { Service, ServiceStatus } from '../daemon/types.ts';
 import type { SiteBuilderConfig, Project } from './types.ts';
 import { ProjectManager } from './project-manager.ts';
 import { GitManager } from './git-manager.ts';

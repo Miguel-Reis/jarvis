@@ -6,8 +6,7 @@
  * commitments, and observations.
  */
 
-import { join } from 'node:path';
-import type { Service, ServiceStatus } from './services.ts';
+import type { Service, ServiceStatus } from './types.ts';
 import type { JarvisConfig } from '../config/types.ts';
 import type { LLMStreamEvent, ContentBlock } from '../llm/provider.ts';
 import type { RoleDefinition } from '../roles/types.ts';
@@ -22,7 +21,6 @@ import { OllamaProvider } from '../llm/ollama.ts';
 import { OpenRouterProvider } from '../llm/openrouter.ts';
 import { LiteLLMProvider } from '../llm/litellm.ts';
 import { AgentOrchestrator } from '../agents/orchestrator.ts';
-import { loadRole } from '../roles/loader.ts';
 import { ToolRegistry } from '../actions/tools/registry.ts';
 import { BUILTIN_TOOLS, browser } from '../actions/tools/builtin.ts';
 import { createDelegateTool, type DelegateToolDeps } from '../actions/tools/delegate.ts';
@@ -34,7 +32,7 @@ import { documentTool } from '../actions/tools/documents.ts';
 import { webSearchTool, setSearchConfig } from '../actions/tools/search.ts';
 import { AgentTaskManager } from '../agents/task-manager.ts';
 import { discoverSpecialists, formatSpecialistList } from '../agents/role-discovery.ts';
-import { buildSystemPrompt, type PromptContext } from '../roles/prompt-builder.ts';
+import type { PromptContext } from '../roles/prompt-builder.ts';
 import type { ProgressCallback } from '../agents/sub-agent-runner.ts';
 import {
   getPersonality,
@@ -49,27 +47,20 @@ import {
   applySignals,
   recordInteraction,
 } from '../personality/learner.ts';
-import { getDueCommitments, getUpcoming } from '../vault/commitments.ts';
-import { getActiveProjectId, getProject } from '../vault/projects.ts';
-import { findContent } from '../vault/content-pipeline.ts';
-import { getRecentObservations } from '../vault/observations.ts';
-import { extractAndStore } from '../vault/extractor.ts';
-import { getKnowledgeForMessage, getActiveGoalsSummary } from '../vault/retrieval.ts';
-import { formatUserProfileForPrompt } from '../user/profile.ts';
-import { getUserProfile } from '../vault/user-profile.ts';
-import { getWebappInstructionsForMessage } from '../vault/webapp-templates.ts';
+import { getKnowledgeForMessage } from '../vault/retrieval.ts';
 import type { ResearchQueue } from './research-queue.ts';
 import type { IAgentService } from './agent-service-interface.ts';
 import type { AuthorityEngine } from '../authority/engine.ts';
 import { getSidecarManager } from '../actions/tools/sidecar-route.ts';
+import { withRetry, parallelRetry } from '../utils/retry.ts';
+import { BaseAgentService } from './base-agent-service.ts';
+import { eventBus, DaemonEvents } from '../events/bus.ts';
 
-export class AgentService implements Service, IAgentService {
+export class AgentService extends BaseAgentService implements Service, IAgentService {
   name = 'agent';
   private _status: ServiceStatus = 'stopped';
-  private config: JarvisConfig;
   private llmManager: LLMManager;
   private orchestrator: AgentOrchestrator;
-  private role: RoleDefinition | null = null;
   private personality: PersonalityModel | null = null;
   private specialists: Map<string, RoleDefinition> = new Map();
   private specialistListText: string = '';
@@ -78,11 +69,19 @@ export class AgentService implements Service, IAgentService {
   private researchQueue: ResearchQueue | null = null;
   private taskManager: AgentTaskManager | null = null;
   private authorityEngine: AuthorityEngine | null = null;
+  private wsBroadcastCallback?: (msg: { type: string; [key: string]: unknown }) => void;
 
   constructor(config: JarvisConfig) {
-    this.config = config;
+    super(config);
     this.llmManager = new LLMManager();
     this.orchestrator = new AgentOrchestrator();
+  }
+
+  /**
+   * Set WebSocket broadcast callback for LLM retry notifications
+   */
+  setWSBroadcastCallback(fn: (msg: { type: string; [key: string]: unknown }) => void): void {
+    this.wsBroadcastCallback = fn;
   }
 
   /**
@@ -142,6 +141,16 @@ export class AgentService implements Service, IAgentService {
       // 3. Wire LLM manager to orchestrator
       this.orchestrator.setLLMManager(this.llmManager);
 
+      // 4. Wire LLM retry notifications to WebSocket
+      this.llmManager.setNotifyCallback((text, priority) => {
+        if (this.wsBroadcastCallback) {
+          this.wsBroadcastCallback({
+            type: 'notification',
+            payload: { text, priority },
+          });
+        }
+      });
+
       // 4. Discover specialist roles
       this.specialists = discoverSpecialists('roles/specialists');
       if (this.specialists.size > 0) {
@@ -178,11 +187,17 @@ export class AgentService implements Service, IAgentService {
           llmManager: this.llmManager,
           specialists: this.specialists,
           onProgress: (event) => {
+            // Emit to event bus for decoupled listeners
+            eventBus.emit(DaemonEvents.AGENT_PROGRESS, event);
+            // Legacy callback for backward compatibility
             if (this.delegationProgressCallback) {
               this.delegationProgressCallback(event);
             }
           },
           onDelegation: (specialistName, task) => {
+            // Emit to event bus for decoupled listeners
+            eventBus.emit(DaemonEvents.AGENT_DELEGATION, specialistName, task);
+            // Legacy callback for backward compatibility
             if (this.delegationCallback) {
               this.delegationCallback(specialistName, task);
             }
@@ -200,6 +215,9 @@ export class AgentService implements Service, IAgentService {
           specialists: this.specialists,
           taskManager: this.taskManager,
           onProgress: (event) => {
+            // Emit to event bus for decoupled listeners
+            eventBus.emit(DaemonEvents.AGENT_PROGRESS, event);
+            // Legacy callback for backward compatibility
             if (this.delegationProgressCallback) {
               this.delegationProgressCallback(event);
             }
@@ -273,28 +291,13 @@ export class AgentService implements Service, IAgentService {
     const onComplete = async (fullText: string): Promise<void> => {
       // Note: orchestrator already adds assistant response to history
       // Run extraction and learning in parallel with retry logic
-      const maxRetries = 2;
-      const runWithRetry = async (fn: () => Promise<void>, name: string): Promise<void> => {
-        let lastErr: Error | null = null;
-        for (let attempt = 0; attempt <= maxRetries; attempt++) {
-          try {
-            await fn();
-            return;
-          } catch (err) {
-            lastErr = err instanceof Error ? err : new Error(String(err));
-            if (attempt < maxRetries) {
-              console.warn(`[AgentService] ${name} failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying...`, lastErr.message);
-              await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
-            }
-          }
-        }
-        console.error(`[AgentService] ${name} failed after ${maxRetries + 1} attempts:`, lastErr?.message);
-      };
-
-      await Promise.all([
-        runWithRetry(() => this.extractKnowledge(text, fullText), 'Knowledge extraction'),
-        runWithRetry(() => this.learnFromInteraction(text, fullText, channel), 'Learning'),
-      ]);
+      await parallelRetry(
+        [
+          () => this.extractKnowledge(text, fullText),
+          () => this.learnFromInteraction(text, fullText, channel),
+        ],
+        ['Knowledge extraction', 'Learning']
+      );
     };
 
     return { stream, onComplete };
@@ -309,34 +312,14 @@ export class AgentService implements Service, IAgentService {
 
     const response = await this.orchestrator.processMessage(systemPrompt, text);
 
-    // Run extraction and learning in parallel with retry logic (non-blocking but tracked)
-    const maxRetries = 2;
-    const runWithRetry = async (fn: () => Promise<void>, name: string): Promise<void> => {
-      let lastErr: Error | null = null;
-      for (let attempt = 0; attempt <= maxRetries; attempt++) {
-        try {
-          await fn();
-          return;
-        } catch (err) {
-          lastErr = err instanceof Error ? err : new Error(String(err));
-          if (attempt < maxRetries) {
-            console.warn(`[AgentService] ${name} failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying...`, lastErr.message);
-            await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
-          }
-        }
-      }
-      console.error(`[AgentService] ${name} failed after ${maxRetries + 1} attempts:`, lastErr?.message);
-    };
-
-    // Run background tasks with error handling to prevent unhandled rejections
-    Promise.all([
-      runWithRetry(() => this.extractKnowledge(text, response), 'Knowledge extraction').catch(err => {
-        console.error('[AgentService] Background knowledge extraction failed:', err instanceof Error ? err.message : err);
-      }),
-      runWithRetry(() => this.learnFromInteraction(text, response, channel), 'Learning').catch(err => {
-        console.error('[AgentService] Background learning failed:', err instanceof Error ? err.message : err);
-      }),
-    ]).catch(err => {
+    // Run extraction and learning in parallel with retry (non-blocking, errors logged)
+    parallelRetry(
+      [
+        () => this.extractKnowledge(text, response),
+        () => this.learnFromInteraction(text, response, channel),
+      ],
+      ['Knowledge extraction', 'Learning']
+    ).catch(err => {
       console.error('[AgentService] Background tasks failed:', err instanceof Error ? err.message : err);
     });
 
@@ -437,7 +420,7 @@ export class AgentService implements Service, IAgentService {
     }
 
     // Register Ollama
-    if (llm.ollama) {
+    if (llm.ollama?.base_url && llm.ollama.base_url.trim().length > 0) {
       const provider = new OllamaProvider(
         llm.ollama.base_url,
         llm.ollama.model,
@@ -482,72 +465,21 @@ export class AgentService implements Service, IAgentService {
     }
   }
 
-  private loadActiveRole(): RoleDefinition {
-    const roleName = this.config.active_role;
-
-    // Try multiple locations for role YAML (package-root-relative for global install)
-    const pkgRoot = join(import.meta.dir, '../..');
-    const paths = [
-      join(pkgRoot, `roles/${roleName}.yaml`),
-      join(pkgRoot, `roles/${roleName}.yml`),
-      join(pkgRoot, `config/roles/${roleName}.yaml`),
-      join(pkgRoot, `config/roles/${roleName}.yml`),
-      // Also try CWD-relative for local dev
-      `roles/${roleName}.yaml`,
-      `roles/${roleName}.yml`,
-    ];
-
-    for (const rolePath of paths) {
-      try {
-        const role = loadRole(rolePath);
-        console.log(`[AgentService] Loaded role '${role.name}' from ${rolePath}`);
-        return role;
-      } catch {
-        // Try next path
-      }
-    }
-
-    // Fatal — cannot start without a role
-    throw new Error(
-      `[AgentService] Could not load role '${roleName}'. Searched: ${paths.join(', ')}`
-    );
-  }
-
-  private buildFullSystemPrompt(channel: string, userMessage?: string, precomputedKnowledge?: string): string {
+  protected override buildFullSystemPrompt(channel: string, userMessage?: string, precomputedKnowledge?: string): string {
     if (!this.role) return '';
-
-    // Build prompt context with live data + vault knowledge
-    const context = this.buildPromptContext(userMessage, precomputedKnowledge);
-
-    // Build base system prompt from role + context
-    const rolePrompt = buildSystemPrompt(this.role, context);
-
-    // Build personality prompt for this channel
+    const basePrompt = super.buildFullSystemPrompt(channel, userMessage, precomputedKnowledge);
     const personality = this.personality ?? getPersonality();
     const channelPersonality = getChannelPersonality(personality, channel);
     const personalityPrompt = personalityToPrompt(channelPersonality);
-
-    return `${rolePrompt}\n\n${personalityPrompt}`;
+    return `${basePrompt}\n\n${personalityPrompt}`;
   }
 
-  private buildHeartbeatPrompt(coalescedEvents?: string): string {
+  protected override buildHeartbeatPrompt(coalescedEvents?: string): string {
     if (!this.role) return '';
+    const basePrompt = super.buildHeartbeatPrompt(coalescedEvents);
+    const parts = [basePrompt];
 
-    const context = this.buildPromptContext();
-    const rolePrompt = buildSystemPrompt(this.role, context);
-
-    const parts = [rolePrompt, '', '# Heartbeat Check', this.role.heartbeat_instructions];
-
-    if (coalescedEvents) {
-      parts.push('', '# Recent System Events', coalescedEvents);
-    }
-
-    // Inject commitment execution instructions
-    parts.push('', '# COMMITMENT EXECUTION');
-    parts.push('If any commitments are overdue or due soon, EXECUTE them now using your tools.');
-    parts.push('Do not just mention them — actually perform the work. Use browse, terminal, file operations as needed.');
-
-    // Inject background research instructions when idle
+    // Inject background research instructions when idle (AgentService-specific)
     if (this.researchQueue && this.researchQueue.queuedCount() > 0) {
       const next = this.researchQueue.getNext();
       if (next) {
@@ -571,8 +503,10 @@ export class AgentService implements Service, IAgentService {
     return parts.join('\n');
   }
 
-  private buildPromptContext(userMessage?: string, precomputedKnowledge?: string): PromptContext {
-    // Check if any sidecars are enrolled (cheap DB query, controls tool guide content)
+  protected override buildPromptContext(userMessage?: string, precomputedKnowledge?: string): PromptContext {
+    const baseContext = super.buildPromptContext(userMessage, precomputedKnowledge);
+
+    // Add AgentService-specific context
     let hasSidecars = false;
     try {
       const mgr = getSidecarManager();
@@ -581,9 +515,10 @@ export class AgentService implements Service, IAgentService {
 
     const osPlatform = process.platform;
     const osName = osPlatform === 'win32' ? 'Windows' : osPlatform === 'darwin' ? 'macOS' : 'Linux';
+
+    // Merge with base context
     const context: PromptContext = {
-      userName: this.config.user?.name || undefined,
-      currentTime: new Date().toISOString(),
+      ...baseContext,
       availableSpecialists: this.specialistListText || undefined,
       hasSidecars,
       systemEnvironment: {
@@ -592,106 +527,6 @@ export class AgentService implements Service, IAgentService {
         arch: process.arch,
       },
     };
-
-    try {
-      const activeProjectId = getActiveProjectId();
-      if (activeProjectId) {
-        const project = getProject(activeProjectId);
-        if (project) {
-          context.currentProject = { name: project.name, description: project.description || undefined, path: project.path || undefined };
-        }
-      }
-    } catch (err) {
-      console.error('[AgentService] Error loading active project:', err);
-    }
-
-    try {
-      const profile = getUserProfile();
-      const preferredName = profile?.answers.preferred_name?.trim();
-      if (preferredName) {
-        context.userName = preferredName;
-      }
-
-      const profileContext = formatUserProfileForPrompt(profile);
-      if (profileContext) {
-        context.userProfile = profileContext;
-      }
-    } catch (err) {
-      console.error('[AgentService] Error loading user profile:', err);
-    }
-
-    // Inject pre-fetched vault knowledge (fetched asynchronously before this sync call)
-    if (userMessage) {
-      if (precomputedKnowledge) {
-        context.knowledgeContext = precomputedKnowledge;
-      }
-
-      // Retrieve webapp-specific browser instructions if message mentions a known app
-      try {
-        const webappInstructions = getWebappInstructionsForMessage(userMessage);
-        if (webappInstructions) {
-          context.webappInstructions = webappInstructions;
-        }
-      } catch (err) {
-        console.error('[AgentService] Error retrieving webapp instructions:', err);
-      }
-    }
-
-    // Get due commitments
-    try {
-      const due = getDueCommitments();
-      const upcoming = getUpcoming(5);
-      const allCommitments = [...due, ...upcoming];
-
-      if (allCommitments.length > 0) {
-        context.activeCommitments = allCommitments.map((c) => {
-          const dueStr = c.when_due
-            ? ` (due: ${new Date(c.when_due).toLocaleString()})`
-            : '';
-          return `[${c.priority}] ${c.what}${dueStr} — ${c.status}`;
-        });
-      }
-    } catch (err) {
-      console.error('[AgentService] Error loading commitments:', err);
-    }
-
-    // Get active content pipeline items (not published)
-    try {
-      const activeContent = findContent({}).filter(
-        (c) => c.stage !== 'published'
-      ).slice(0, 10);
-      if (activeContent.length > 0) {
-        context.contentPipeline = activeContent.map((c) => {
-          const tags = c.tags.length > 0 ? ` [${c.tags.join(', ')}]` : '';
-          return `"${c.title}" (${c.content_type}) — ${c.stage}${tags}`;
-        });
-      }
-    } catch (err) {
-      console.error('[AgentService] Error loading content pipeline:', err);
-    }
-
-    // Get recent observations
-    try {
-      const observations = getRecentObservations(undefined, 10);
-      if (observations.length > 0) {
-        context.recentObservations = observations.map((o) => {
-          const time = new Date(o.created_at).toLocaleTimeString();
-          return `[${time}] ${o.type}: ${JSON.stringify(o.data).slice(0, 200)}`;
-        });
-      }
-    } catch (err) {
-      console.error('[AgentService] Error loading observations:', err);
-    }
-
-    // Active goals context for the system prompt
-    try {
-      const goalsSummary = getActiveGoalsSummary();
-      if (goalsSummary) {
-        context.activeGoals = goalsSummary;
-      }
-    } catch {
-      // Goals module may not be available — ignore
-    }
 
     // Authority rules for the system prompt
     if (this.authorityEngine && this.role) {
@@ -710,16 +545,7 @@ export class AgentService implements Service, IAgentService {
     return context;
   }
 
-  private async extractKnowledge(userMessage: string, assistantResponse: string): Promise<void> {
-    // Get the primary provider for extraction
-    const provider = this.llmManager.getProvider(this.config.llm.primary)
-      ?? this.llmManager.getProvider('anthropic')
-      ?? this.llmManager.getProvider('openai');
-
-    await extractAndStore(userMessage, assistantResponse, provider);
-  }
-
-  private async learnFromInteraction(
+  protected override async learnFromInteraction(
     userMessage: string,
     assistantResponse: string,
     _channel: string

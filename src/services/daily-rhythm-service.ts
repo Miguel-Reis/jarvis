@@ -11,7 +11,7 @@
  * - Time-based reminders and nudges
  */
 
-import type { Service, ServiceStatus } from '../daemon/services.ts';
+import type { Service, ServiceStatus } from '../daemon/types.ts';
 import { getDb } from '../vault/schema.ts';
 
 export interface DailyRhythmConfig {

@@ -13,6 +13,28 @@ import type { LLMManager } from '../../llm/manager.ts';
 import type { RoleDefinition } from '../../roles/types.ts';
 import type { ToolDefinition } from './registry.ts';
 import { runSubAgent, createScopedToolRegistry, type ProgressCallback } from '../../agents/sub-agent-runner.ts';
+import { getActiveGoalsSummary } from '../../vault/retrieval.ts';
+import { getPreferencesForPrompt } from '../../vault/user-preferences.ts';
+
+export function buildParentContext(): string {
+  // Snapshot relevant parent state so the specialist sees the same goals/preferences
+  // the primary agent operates under. Without this, specialists run "context-blind"
+  // and can produce work that conflicts with active priorities.
+  const sections: string[] = [];
+  try {
+    const goalsSummary = getActiveGoalsSummary();
+    if (goalsSummary.trim()) {
+      sections.push(`## Parent agent's active goals\n${goalsSummary}`);
+    }
+  } catch { /* best-effort */ }
+  try {
+    const prefs = getPreferencesForPrompt();
+    if (prefs && prefs.trim()) {
+      sections.push(`## User preferences (learned)\n${prefs.trim()}`);
+    }
+  } catch { /* best-effort */ }
+  return sections.join('\n\n');
+}
 
 export type DelegateToolDeps = {
   orchestrator: AgentOrchestrator;
@@ -57,7 +79,11 @@ export function createDelegateTool(deps: DelegateToolDeps): ToolDefinition {
     execute: async (params) => {
       const specialistId = params.specialist as string;
       const task = params.task as string;
-      const context = params.context as string;
+      const callerContext = params.context as string;
+      const parentContext = buildParentContext();
+      const context = parentContext
+        ? `${parentContext}\n\n## Task context (from primary agent)\n${callerContext}`
+        : callerContext;
 
       // Validate specialist exists
       const specialistRole = deps.specialists.get(specialistId);

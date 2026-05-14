@@ -49,8 +49,40 @@ interface LiveScreenStatus {
   privacyMode: boolean;
 }
 
+interface LocalBrainMetrics {
+  metrics: {
+    totalRequests: number;
+    localMatches: number;
+    llmFallbacks: number;
+    localRate: number;
+  };
+  skills: Array<{
+    id: string;
+    name: string;
+    description: string;
+  }>;
+  estimatedSavings: {
+    llmCallsSaved: number;
+    estimatedCostSavings: string;
+    latencyReduction: string;
+  };
+}
+
+interface OllamaStats {
+  totalCalls: number;
+  localCalls: number;
+  cloudCalls: number;
+  tokensUsed: number;
+  estimatedCost: number;
+}
+
+type Tab = 'health' | 'local-brain';
+
 export function SystemStatusPage() {
+  const [activeTab, setActiveTab] = useState<Tab>('health');
   const [services, setServices] = useState<ServiceHealth[]>([]);
+  const [localBrainMetrics, setLocalBrainMetrics] = useState<LocalBrainMetrics | null>(null);
+  const [ollamaStats, setOllamaStats] = useState<OllamaStats | null>(null);
 
   function formatMB(mb: number): string {
     if (mb === 0) return '0 MB';
@@ -87,6 +119,30 @@ export function SystemStatusPage() {
   useEffect(() => {
     loadStatus();
     const interval = setInterval(loadStatus, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Load Local Brain metrics
+  useEffect(() => {
+    const fetchLocalBrainMetrics = async () => {
+      try {
+        const localBrainRes = await fetch('/api/status/local-brain');
+
+        if (localBrainRes.ok) {
+          const data = await localBrainRes.json();
+          setLocalBrainMetrics(data);
+          // ollamaStats vem dentro da resposta do local-brain
+          if (data.ollamaStats) {
+            setOllamaStats(data.ollamaStats);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch Local Brain metrics:', err);
+      }
+    };
+
+    fetchLocalBrainMetrics();
+    const interval = setInterval(fetchLocalBrainMetrics, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -182,6 +238,22 @@ export function SystemStatusPage() {
             <span className={`system-status__dot system-status__dot--${overallStatus}`} />
             {overallStatus.charAt(0).toUpperCase() + overallStatus.slice(1)}
           </div>
+        </div>
+
+        {/* Tab Navigation */}
+        <div className="system-status-tabs">
+          <button
+            className={`system-status-tab ${activeTab === 'health' ? 'active' : ''}`}
+            onClick={() => setActiveTab('health')}
+          >
+            Service Health
+          </button>
+          <button
+            className={`system-status-tab ${activeTab === 'local-brain' ? 'active' : ''}`}
+            onClick={() => setActiveTab('local-brain')}
+          >
+            🧠 Local Brain
+          </button>
         </div>
 
         {loading ? (
@@ -366,6 +438,107 @@ export function SystemStatusPage() {
                   </div>
                 </div>
               </div>
+            )}
+
+            {/* Local Brain Tab Content */}
+            {activeTab === 'local-brain' && (
+              <>
+                {/* Key Metrics Cards */}
+                <div className="system-status__section">
+                  <h2 className="system-status__section-title">Local Brain Metrics</h2>
+                  <div className="metrics-grid">
+                    <div className="metric-card primary">
+                      <div className="metric-value">
+                        {localBrainMetrics ? ((localBrainMetrics.metrics.localRate * 100).toFixed(1)) : '0'}%
+                      </div>
+                      <div className="metric-label">Local Resolution Rate</div>
+                      <div className="metric-trend positive">
+                        {localBrainMetrics && localBrainMetrics.metrics.localRate >= 0.8
+                          ? '✓ Target achieved (≥80%)'
+                          : '○ Below target (≥80%)'}
+                      </div>
+                    </div>
+
+                    <div className="metric-card">
+                      <div className="metric-value">{localBrainMetrics?.metrics.localMatches ?? 0}</div>
+                      <div className="metric-label">Local Matches</div>
+                      <div className="metric-detail">Requests handled without LLM</div>
+                    </div>
+
+                    <div className="metric-card">
+                      <div className="metric-value">{localBrainMetrics?.metrics.llmFallbacks ?? 0}</div>
+                      <div className="metric-label">LLM Fallbacks</div>
+                      <div className="metric-detail">Requests sent to Ollama Cloud</div>
+                    </div>
+
+                    <div className="metric-card savings">
+                      <div className="metric-value">${localBrainMetrics?.estimatedSavings.estimatedCostSavings ?? '0.00'}</div>
+                      <div className="metric-label">Estimated Savings</div>
+                      <div className="metric-detail">vs LLM-only approach</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Ollama Usage Stats */}
+                {ollamaStats && (
+                  <div className="system-status__section">
+                    <h2 className="system-status__section-title">Ollama Cloud Usage</h2>
+                    <div className="stats-grid">
+                      <div className="stat-item">
+                        <span className="stat-label">Total API Calls:</span>
+                        <span className="stat-value">{ollamaStats.totalCalls}</span>
+                      </div>
+                      <div className="stat-item">
+                        <span className="stat-label">Local (no API):</span>
+                        <span className="stat-value local">{ollamaStats.localCalls}</span>
+                      </div>
+                      <div className="stat-item">
+                        <span className="stat-label">Cloud (API calls):</span>
+                        <span className="stat-value cloud">{ollamaStats.cloudCalls}</span>
+                      </div>
+                      <div className="stat-item">
+                        <span className="stat-label">Tokens Used:</span>
+                        <span className="stat-value">{ollamaStats.tokensUsed.toLocaleString()}</span>
+                      </div>
+                      <div className="stat-item highlight">
+                        <span className="stat-label">API Cost Savings:</span>
+                        <span className="stat-value">
+                          {((ollamaStats.localCalls / Math.max(ollamaStats.totalCalls, 1)) * 100).toFixed(1)}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Skills List */}
+                <div className="system-status__section">
+                  <h2 className="system-status__section-title">Registered Skills ({localBrainMetrics?.skills.length ?? 0})</h2>
+                  <div className="skills-list">
+                    {localBrainMetrics?.skills.map((skill) => (
+                      <div key={skill.id} className="skill-item">
+                        <div className="skill-header">
+                          <span className="skill-name">{skill.name}</span>
+                          <span className="skill-id">{skill.id}</span>
+                        </div>
+                        <p className="skill-description">{skill.description}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Info Box */}
+                <div className="system-status__section">
+                  <div className="info-box">
+                    <h3>How Local Brain Works</h3>
+                    <ul>
+                      <li><strong>Pattern Matching:</strong> Regex + keyword matching for known commands</li>
+                      <li><strong>Confidence Scoring:</strong> Only matches above threshold (default 60%)</li>
+                      <li><strong>Auto Fallback:</strong> Complex requests go to Ollama Cloud automatically</li>
+                      <li><strong>Cost Savings:</strong> ~80% reduction in API calls for simple tasks</li>
+                    </ul>
+                  </div>
+                </div>
+              </>
             )}
           </>
         )}

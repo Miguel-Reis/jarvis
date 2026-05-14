@@ -8,7 +8,7 @@
  * or EventCoalescer (batched for heartbeat).
  */
 
-import type { Service, ServiceStatus } from './services.ts';
+import type { Service, ServiceStatus } from './types.ts';
 import type { ObserverEvent } from '../observers/index.ts';
 import type { ObservationType } from '../vault/observations.ts';
 import type { EventReactor } from './event-reactor.ts';

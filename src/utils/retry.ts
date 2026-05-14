@@ -135,3 +135,59 @@ export async function retryOnRetryableError<T>(
     shouldRetry: (error) => isRetryableError(error),
   });
 }
+
+/**
+ * Simple retry utility matching the pattern used in agent-service.ts.
+ * Use for background tasks where failure is logged but not thrown.
+ */
+export async function withRetry<T>(
+  fn: () => Promise<T>,
+  name: string,
+  maxRetries = 2,
+  baseDelayMs = 1000
+): Promise<T> {
+  let lastErr: Error | null = null;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err instanceof Error ? err : new Error(String(err));
+      if (attempt < maxRetries) {
+        console.warn(`[${name}] failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying...`, lastErr.message);
+        await new Promise(r => setTimeout(r, baseDelayMs * (attempt + 1)));
+      }
+    }
+  }
+
+  throw lastErr;
+}
+
+/**
+ * Execute async operations in parallel with retry, swallowing errors.
+ * Use for background tasks like knowledge extraction and learning.
+ */
+export async function parallelRetry<T extends (() => Promise<void>)[]>(
+  fns: T,
+  names: { [K in keyof T]: string },
+  maxRetries = 2
+): Promise<void> {
+  const runWithRetry = async (fn: () => Promise<void>, name: string): Promise<void> => {
+    let lastErr: Error | null = null;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        await fn();
+        return;
+      } catch (err) {
+        lastErr = err instanceof Error ? err : new Error(String(err));
+        if (attempt < maxRetries) {
+          console.warn(`[${name}] failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying...`, lastErr.message);
+          await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+        }
+      }
+    }
+    console.error(`[${name}] failed after ${maxRetries + 1} attempts:`, lastErr?.message);
+  };
+
+  await Promise.all(fns.map((fn, i) => runWithRetry(fn, names[i])));
+}

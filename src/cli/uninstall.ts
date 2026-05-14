@@ -74,13 +74,16 @@ const payload = ${payload};
 function removePath(path) {
   try {
     rmSync(path, { recursive: true, force: true });
-  } catch {}
+  } catch (err) {
+    console.warn('[Cleanup] Failed to remove:', path, err);
+  }
 }
 
 function unlinkPath(path) {
   try {
     unlinkSync(path);
-  } catch {
+  } catch (err) {
+    console.warn('[Cleanup] Failed to unlink:', path, err);
     removePath(path);
   }
 }
@@ -96,7 +99,9 @@ try {
     stdio: 'ignore',
     env: { ...process.env },
   });
-} catch {}
+} catch (err) {
+  console.warn('[Cleanup] Failed to uninstall global package:', err);
+}
 
 for (const target of payload.removablePaths) {
   removePath(target);
@@ -126,9 +131,13 @@ async function stopDaemonIfRunning(): Promise<void> {
     if (alive) {
       try {
         process.kill(pid, 'SIGKILL');
-      } catch {}
+      } catch (err) {
+        console.warn('[Uninstall] Failed to kill daemon:', err);
+      }
     }
-  } catch {}
+  } catch (err) {
+    console.warn('[Uninstall] Failed to stop daemon:', err);
+  }
 
   releaseLock();
 }

@@ -52,3 +52,5 @@ sidecar/desktop-bridge/bin/
 sidecar/desktop-bridge/obj/
 
 eng.traineddata
+# user runtime config (contains real API keys)
+config.yaml

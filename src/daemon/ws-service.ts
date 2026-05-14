@@ -6,7 +6,7 @@
  */
 
 import type { ServerWebSocket } from 'bun';
-import type { Service, ServiceStatus } from './services.ts';
+import type { Service, ServiceStatus } from './types.ts';
 import type { AgentService } from './agent-service.ts';
 import type { CommitmentExecutor } from './commitment-executor.ts';
 import type { ChannelService } from './channel-service.ts';
@@ -24,18 +24,33 @@ import { StreamRelay } from '../comms/streaming.ts';
 import { getOrCreateConversation, addMessage } from '../vault/conversations.ts';
 import { createThread, saveMessage as saveThreadMessage, updateThreadTitle, getThread } from '../vault/threads.ts';
 import { maybeCreateUserProfileFollowupPrompt, recordUserProfileTurn } from '../user/profile-followup.ts';
+import { eventBus, DaemonEvents } from '../events/bus.ts';
+
+/**
+ * Escape HTML to prevent XSS attacks
+ */
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 
 type VoiceSession = {
   requestId: string;
   chunks: Buffer[];
   startedAt: number;
+  maxBytes: number;  // 5MB limit to prevent DoS
+  timeoutMs: number; // 30s timeout
 };
 
 /**
  * Wake-word detection hook for browser-based clients.
  * This is called when a client connects and requests wake-word activation.
  */
-async function activateClientWakeWord(ws: ServerWebSocket<unknown>, interruptManager?: any): Promise<void> {
+async function activateClientWakeWord(): Promise<void> {
   // In a browser context, the client would use the WakeWordService class
   // This is a server-side stub - actual wake-word runs in the dashboard
   console.log('[WSService] Client requested wake-word activation (browser handles detection)');
@@ -71,9 +86,9 @@ export class WebSocketService implements Service {
     this.wsServer = new WebSocketServer(port);
     this.streamRelay = new StreamRelay(this.wsServer);
 
-    // Wire delegation callback: when PA delegates to a specialist,
+    // Wire delegation callback via event bus: when PA delegates to a specialist,
     // update the active task's assigned_to on the task board
-    this.agentService.setDelegationCallback((specialistName) => {
+    eventBus.on(DaemonEvents.AGENT_DELEGATION, (specialistName, task) => {
       if (!this.activeTaskId) return;
       try {
         const updated = updateCommitmentAssignee(this.activeTaskId, specialistName);
@@ -81,6 +96,11 @@ export class WebSocketService implements Service {
       } catch (err) {
         console.error('[WSService] Failed to update task assignee:', err);
       }
+    });
+
+    // Legacy callback for backward compatibility
+    this.agentService.setDelegationCallback((specialistName) => {
+      eventBus.emit(DaemonEvents.AGENT_DELEGATION, specialistName, '');
     });
   }
 
@@ -131,7 +151,7 @@ export class WebSocketService implements Service {
   /**
    * Set the voice loop service for low-latency voice interaction.
    */
-  setVoiceLoopService(service: import('../services/voice-loop.ts').VoiceLoopService): void {
+  setVoiceLoopService(service: import('../services/voice-loop-service.ts').VoiceLoopService): void {
     // Wire STT/TTS providers to voice loop
     if (this.sttProvider) {
       service.setSTTProvider(this.sttProvider);
@@ -147,6 +167,13 @@ export class WebSocketService implements Service {
    */
   getServer(): WebSocketServer {
     return this.wsServer;
+  }
+
+  /**
+   * Get the number of connected WebSocket clients.
+   */
+  getClientCount(): number {
+    return this.wsServer.getClientCount();
   }
 
   /**
@@ -248,10 +275,11 @@ export class WebSocketService implements Service {
    * and external channels.
    */
   broadcastHeartbeat(text: string): void {
+    const escapedText = escapeHtml(text);
     const message: WSMessage = {
       type: 'chat',
       payload: {
-        text,
+        text: escapedText,
         source: 'heartbeat',
       },
       priority: 'normal',
@@ -261,7 +289,7 @@ export class WebSocketService implements Service {
 
     // Also push to external channels
     if (this.channelService) {
-      this.channelService.broadcastToAll(text).catch(err =>
+      this.channelService.broadcastToAll(escapedText).catch(err =>
         console.error('[WSService] Channel heartbeat broadcast error:', err)
       );
     }
@@ -273,10 +301,11 @@ export class WebSocketService implements Service {
    * Urgent notifications are also pushed to all external channels.
    */
   broadcastNotification(text: string, priority: 'urgent' | 'normal' | 'low'): void {
+    const escapedText = escapeHtml(text);
     const message: WSMessage = {
       type: 'chat',
       payload: {
-        text,
+        text: escapedText,
         source: 'proactive',
       },
       priority,
@@ -284,7 +313,7 @@ export class WebSocketService implements Service {
     };
     this.wsServer.broadcast(message);
 
-    // Persist to notification history
+    // Persist to notification history (raw text for storage)
     const firstLine = text.split('\n')[0]?.slice(0, 100) ?? '';
     const rest = text.length > firstLine.length ? text.slice(firstLine.length + 1).slice(0, 500) : '';
     try {
@@ -297,7 +326,7 @@ export class WebSocketService implements Service {
 
     // Push urgent notifications to external channels (Telegram, Discord)
     if (priority === 'urgent' && this.channelService) {
-      this.channelService.broadcastToAll(`[URGENT] ${text}`).catch(err =>
+      this.channelService.broadcastToAll(`[URGENT] ${escapedText}`).catch(err =>
         console.error('[WSService] Channel broadcast error:', err)
       );
     }
@@ -325,7 +354,7 @@ export class WebSocketService implements Service {
       type: 'notification',
       payload: {
         source: 'assistant_message',
-        text,
+        text: escapeHtml(text),
       },
       id: requestId,
       timestamp: Date.now(),
@@ -353,6 +382,7 @@ export class WebSocketService implements Service {
   /**
    * Broadcast sub-agent progress events to all connected clients.
    * Used by the delegation system for real-time visibility.
+   * Only broadcasts 'done' events to avoid chat spam.
    */
   broadcastSubAgentProgress(event: {
     type: 'text' | 'tool_call' | 'done';
@@ -360,6 +390,15 @@ export class WebSocketService implements Service {
     agentId: string;
     data: unknown;
   }): void {
+    // Emit to event bus for decoupled listeners (internal tracking)
+    eventBus.emit(DaemonEvents.AGENT_PROGRESS, event);
+
+    // Only broadcast 'done' events to chat to avoid spam
+    // 'text' and 'tool_call' events are too verbose for chat
+    if (event.type !== 'done') {
+      return;
+    }
+
     const message: WSMessage = {
       type: 'stream',
       payload: {
@@ -616,7 +655,13 @@ export class WebSocketService implements Service {
 
       case 'voice_start': {
         const { requestId } = msg.payload as { requestId: string };
-        this.voiceSessions.set(ws, { requestId, chunks: [], startedAt: Date.now() });
+        this.voiceSessions.set(ws, {
+          requestId,
+          chunks: [],
+          startedAt: Date.now(),
+          maxBytes: 5 * 1024 * 1024,  // 5MB limit
+          timeoutMs: 30_000,  // 30s timeout
+        });
         return undefined;
       }
 
@@ -979,6 +1024,7 @@ If the user wants to create a new project, tell them to use the Site Builder pag
   /**
    * Handle binary audio data from voice recording.
    * Accumulates chunks into the active voice session for this client.
+   * Enforces size limit and timeout to prevent DoS attacks.
    */
   private async handleVoiceAudio(data: Buffer, ws: ServerWebSocket<unknown>): Promise<void> {
     const session = this.voiceSessions.get(ws);
@@ -986,17 +1032,55 @@ If the user wants to create a new project, tell them to use the Site Builder pag
       console.warn('[WSService] Binary audio received with no active voice session');
       return;
     }
+
+    // Check timeout
+    const elapsed = Date.now() - session.startedAt;
+    if (elapsed > session.timeoutMs) {
+      this.voiceSessions.delete(ws);
+      this.wsServer.sendToClient(ws, {
+        type: 'error',
+        payload: { message: 'Voice session timeout. Please try again.' },
+        timestamp: Date.now(),
+      });
+      return;
+    }
+
+    // Check size limit
+    const totalSize = session.chunks.reduce((sum, b) => sum + b.length, 0) + data.length;
+    if (totalSize > session.maxBytes) {
+      this.voiceSessions.delete(ws);
+      this.wsServer.sendToClient(ws, {
+        type: 'error',
+        payload: { message: 'Voice audio too large. Please send shorter messages.' },
+        timestamp: Date.now(),
+      });
+      console.warn('[WSService] Voice buffer overflow - rejected chunk');
+      return;
+    }
+
     session.chunks.push(data);
   }
 
   /**
    * Process a completed voice session: STT → chat → TTS response.
+   * Validates session timeout before processing.
    */
   private async handleVoiceSession(session: VoiceSession, ws: ServerWebSocket<unknown>): Promise<void> {
     if (!this.sttProvider) {
       this.wsServer.sendToClient(ws, {
         type: 'error',
         payload: { message: 'STT not configured. Enable it in Settings > Channels.' },
+        timestamp: Date.now(),
+      });
+      return;
+    }
+
+    // Validate timeout before processing
+    const elapsed = Date.now() - session.startedAt;
+    if (elapsed > session.timeoutMs) {
+      this.wsServer.sendToClient(ws, {
+        type: 'error',
+        payload: { message: 'Voice session expired. Please try again.' },
         timestamp: Date.now(),
       });
       return;

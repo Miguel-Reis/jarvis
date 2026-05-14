@@ -4,7 +4,6 @@
  */
 
 import type { AgentOrchestrator } from './orchestrator.ts';
-import { EventEmitter } from 'node:events';
 import { watch, type FSWatcher } from 'node:fs';
 
 export type InterruptSeverity = 'low' | 'medium' | 'high' | 'critical';
@@ -296,7 +295,7 @@ export class ErrorMonitorObserver implements SystemObserver {
     const { getUnprocessed } = await import('../vault/observations.ts');
 
     const observations = getUnprocessed().filter(
-      (obs: any) => obs.created_at > this.lastCheckTime
+      (obs) => obs.created_at > this.lastCheckTime
     );
 
     for (const obs of observations) {
@@ -325,14 +324,14 @@ export class ErrorMonitorObserver implements SystemObserver {
 
     // Update last check time
     if (observations.length > 0) {
-      this.lastCheckTime = Math.max(...observations.map((o: any) => o.created_at));
+      this.lastCheckTime = Math.max(...observations.map((o) => o.created_at));
     }
   }
 
   /**
    * Extract error text from observation data
    */
-  private extractErrorText(obs: any): string | null {
+  private extractErrorText(obs: { data?: Record<string, unknown> }): string | null {
     const data = obs.data;
     if (!data) return null;
 
@@ -378,14 +377,10 @@ export class ErrorMonitorObserver implements SystemObserver {
  */
 export class ScreenObserver implements SystemObserver {
   name = 'screen-observer';
-  private interruptManager: InterruptManager;
   private stopCapturing = false;
   private captureInterval: Timer | null = null;
-  private lastAnalysis: string | null = null;
 
-  constructor(interruptManager: InterruptManager) {
-    this.interruptManager = interruptManager;
-  }
+  constructor() {}
 
   observe(): void {
     console.log('[ScreenObserver] Starting visual context analysis (60s interval)');
@@ -403,40 +398,8 @@ export class ScreenObserver implements SystemObserver {
   }
 
   private async captureAndAnalyze(): Promise<void> {
-    // Dynamic import to avoid circular dependency
-    const { VLMAnalyzer } = await import('../services/vlm-analyzer.ts');
-    const { ScreenCaptureService } = await import('../services/screen-capture.ts');
-
-    const captureService = new ScreenCaptureService({ captureIntervalMs: 0 });
-    const analyzer = new VLMAnalyzer();
-
-    // Capture screen
-    const capture = await captureService.captureScreen();
-    if (!capture) return;
-
-    // Analyze with VLM
-    const context = await analyzer.analyzeCapture(capture);
-    if (!context) return;
-
-    // Only trigger interrupt if something significant changed
-    const analysisKey = `${context.application}-${context.activityType}-${context.errorsVisible}`;
-    if (this.lastAnalysis !== analysisKey && context.errorsVisible) {
-      this.lastAnalysis = analysisKey;
-
-      await this.interruptManager.triggerInterrupt({
-        type: 'visual_context_change',
-        severity: context.errorsVisible ? 'high' : 'low',
-        data: {
-          application: context.application,
-          activity: context.activityType,
-          errorsVisible: context.errorsVisible,
-          errorsDescription: context.errorsDescription,
-        },
-        message: context.errorsVisible
-          ? `Error detected in ${context.application}: ${context.errorsDescription}`
-          : `Context changed to ${context.application} (${context.activityType})`,
-      });
-    }
+    // VLM analyzer removed - WSL2 does not support screen capture
+    // Screen observer kept for future sidecar-based implementation
   }
 
   stop(): void {

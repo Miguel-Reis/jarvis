@@ -19,12 +19,13 @@ export type LLMToolCall = {
   id: string;
   name: string;
   arguments: Record<string, unknown>;
+  provider_meta?: Record<string, unknown>;
 };
 
 export type LLMResponse = {
   content: string;
   tool_calls: LLMToolCall[];
-  usage: { input_tokens: number; output_tokens: number };
+  usage: { input_tokens: number; output_tokens: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number };
   model: string;
   finish_reason: 'stop' | 'tool_use' | 'length' | 'error';
 };

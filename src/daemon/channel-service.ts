@@ -7,7 +7,7 @@
  * proactive broadcasts to all connected channels.
  */
 
-import type { Service, ServiceStatus } from './services.ts';
+import type { Service, ServiceStatus } from './types.ts';
 import type { AgentService } from './agent-service.ts';
 import type { JarvisConfig } from '../config/types.ts';
 import type { ChannelMessage } from '../comms/channels/telegram.ts';

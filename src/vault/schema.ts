@@ -137,8 +137,7 @@ function createTables(db: Database): void {
     CREATE INDEX IF NOT EXISTS idx_entities_project ON entities(project_id)
   `);
 
-  // Idempotent migration: add project_id column if not already present (SQLite 3.35+)
-  try { db.run('ALTER TABLE entities ADD COLUMN IF NOT EXISTS project_id TEXT'); } catch (err) { console.warn('[Schema] entities.project_id migration warning:', err instanceof Error ? err.message : String(err)); }
+  // Note: project_id column already defined in CREATE TABLE (line 120)
 
   // Facts table: atomic pieces of knowledge with confidence
   db.run(`
@@ -207,8 +206,7 @@ function createTables(db: Database): void {
     )
   `);;
 
-  // Idempotent migration: add project_id column if not already present (SQLite 3.35+)
-  try { db.run('ALTER TABLE commitments ADD COLUMN IF NOT EXISTS project_id TEXT'); } catch (err) { console.warn('[Schema] commitments.project_id migration warning:', err instanceof Error ? err.message : String(err)); }
+  // Note: project_id column already defined in CREATE TABLE (line 202)
 
   db.run(`
     CREATE INDEX IF NOT EXISTS idx_commitments_status ON commitments(status)
@@ -245,6 +243,50 @@ function createTables(db: Database): void {
   db.run(`
     CREATE INDEX IF NOT EXISTS idx_obs_processed ON observations(processed)
   `);
+
+  // Event queue: persistent backlog for EventReactor.
+  // Survives daemon restarts and never silently drops events.
+  db.run(`
+    CREATE TABLE IF NOT EXISTS event_queue (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      event_type TEXT NOT NULL,
+      priority TEXT NOT NULL CHECK(priority IN ('critical','high','normal','low')),
+      reason TEXT NOT NULL,
+      event_data TEXT NOT NULL,
+      event_hash TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','processing','done','failed')),
+      attempts INTEGER NOT NULL DEFAULT 0,
+      last_error TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_event_queue_status ON event_queue(status, created_at)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_event_queue_hash ON event_queue(event_hash)`);
+
+  // Reaction log: persistent rate limiting history for EventReactor
+  db.run(`
+    CREATE TABLE IF NOT EXISTS reaction_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      event_hash TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      timestamp INTEGER NOT NULL
+    )
+  `);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_reaction_log_type ON reaction_log(event_type, timestamp)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_reaction_log_timestamp ON reaction_log(timestamp)`);
+
+  // Seen hashes: persistent deduplication cache for EventReactor (LRU-style)
+  db.run(`
+    CREATE TABLE IF NOT EXISTS seen_hashes (
+      hash TEXT PRIMARY KEY,
+      event_type TEXT NOT NULL,
+      timestamp INTEGER NOT NULL,
+      previous_hash TEXT,
+      next_hash TEXT
+    )
+  `);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_seen_hashes_next ON seen_hashes(next_hash)`);
 
   // Vectors table: embeddings for semantic search
   db.run(`
@@ -324,8 +366,7 @@ function createTables(db: Database): void {
 
   // Migration: add title column for threaded chat display
   try { db.run('ALTER TABLE conversations ADD COLUMN title TEXT'); } catch { /* column already exists */ }
-  // Idempotent migration: add project_id column if not already present (SQLite 3.35+)
-  try { db.run('ALTER TABLE conversations ADD COLUMN IF NOT EXISTS project_id TEXT'); } catch (err) { console.warn('[Schema] conversations.project_id migration warning:', err instanceof Error ? err.message : String(err)); }
+  // Note: project_id column already defined in CREATE TABLE (line 304)
 
   // Conversation messages table: individual chat messages
   db.run(`
@@ -477,6 +518,8 @@ function createTables(db: Database): void {
       session_id TEXT,
       image_path TEXT,
       thumbnail_path TEXT,
+      width INTEGER,
+      height INTEGER,
       pixel_change_pct REAL,
       ocr_text TEXT,
       app_name TEXT,
@@ -671,10 +714,8 @@ function createTables(db: Database): void {
   db.run(`CREATE INDEX IF NOT EXISTS idx_goals_deadline ON goals(deadline)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_goals_project ON goals(project_id)`);
 
-  // Idempotent migration: add project_id column if not already present (SQLite 3.35+)
-  try { db.run('ALTER TABLE goals ADD COLUMN IF NOT EXISTS project_id TEXT'); } catch (err) { console.warn('[Schema] goals.project_id migration warning:', err instanceof Error ? err.message : String(err)); }
-  // Idempotent migration: add execution_state column
-  try { db.run("ALTER TABLE goals ADD COLUMN IF NOT EXISTS execution_state TEXT"); } catch (err) { console.warn('[Schema] goals.execution_state migration warning:', err instanceof Error ? err.message : String(err)); }
+  // Note: project_id column already defined in CREATE TABLE (line 641)
+  // Note: execution_state column already defined in CREATE TABLE (line 657)
 
   db.run(`
     CREATE TABLE IF NOT EXISTS goal_progress (
@@ -874,4 +915,17 @@ function createTables(db: Database): void {
   db.run(`CREATE INDEX IF NOT EXISTS idx_task_goal ON task_history(goal_id)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_task_status ON task_history(status)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_task_created ON task_history(created_at)`);
+
+  // === Migrations: Add project_id to existing tables ===
+  try { db.run('ALTER TABLE facts ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE SET NULL'); } catch { /* column already exists */ }
+  try { db.run('ALTER TABLE relationships ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE SET NULL'); } catch { /* column already exists */ }
+  try { db.run('ALTER TABLE observations ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE SET NULL'); } catch { /* column already exists */ }
+  try { db.run('ALTER TABLE vectors ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE SET NULL'); } catch { /* column already exists */ }
+  try { db.run('ALTER TABLE agent_messages ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE SET NULL'); } catch { /* column already exists */ }
+  try { db.run('ALTER TABLE personality_state ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE SET NULL'); } catch { /* column already exists */ }
+  try { db.run('ALTER TABLE conversation_messages ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE SET NULL'); } catch { /* column already exists */ }
+  try { db.run('ALTER TABLE content_items ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE SET NULL'); } catch { /* column already exists */ }
+  try { db.run('ALTER TABLE workflows ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE SET NULL'); } catch { /* column already exists */ }
+  try { db.run('ALTER TABLE goals ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE SET NULL'); } catch { /* column already exists */ }
+  try { db.run('ALTER TABLE time_entries ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE SET NULL'); } catch { /* column already exists */ }
 }

@@ -33,27 +33,41 @@ const MIGRATIONS: Array<{
     up: () => {},
   },
 
-  // v2: add project_id to entities
+  // v2: add project_id to entities (if not exists)
   {
     version: 2,
     name: 'add project_id to entities',
     up: () => {
-      getDb().run(
-        'ALTER TABLE entities ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE SET NULL'
-      );
+      try {
+        getDb().run(
+          'ALTER TABLE entities ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE SET NULL'
+        );
+      } catch (err) {
+        // Column may already exist in newer schema versions
+        if (!(err as Error).message.includes('duplicate column')) {
+          throw err;
+        }
+      }
     },
   },
 
-  // v3: add project_id to commitments, conversations, goals
+  // v3: add project_id to commitments, conversations, goals (if not exists)
   {
     version: 3,
     name: 'add project_id to commitments, conversations, goals',
     up: () => {
       const db = getDb();
       withTransaction(() => {
-        db.run('ALTER TABLE commitments ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE SET NULL');
-        db.run('ALTER TABLE conversations ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE SET NULL');
-        db.run('ALTER TABLE goals ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE SET NULL');
+        const tables = ['commitments', 'conversations', 'goals'];
+        for (const table of tables) {
+          try {
+            db.run(`ALTER TABLE ${table} ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE SET NULL`);
+          } catch (err) {
+            if (!(err as Error).message.includes('duplicate column')) {
+              throw err;
+            }
+          }
+        }
       });
     },
   },

@@ -30,6 +30,8 @@ export { CalendarSync } from './calendar';
 export { EmailSync } from './email';
 export { NetworkMonitor } from './network';
 export { BatteryMonitor } from './battery';
+export { EditorActivityObserver } from './editor-activity';
+export { BrowserActivityObserver } from './browser-activity';
 
 /**
  * ObserverManager - Centralized coordinator for all observers

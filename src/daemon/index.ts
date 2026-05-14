@@ -11,12 +11,15 @@ import path from "node:path";
 import os from "node:os";
 import { initDatabase, closeDb } from "../vault/schema.ts";
 import { runMigrations } from "../vault/migrations.ts";
-import { ServiceRegistry } from "./services.ts";
+import { logger, enableDebugFor } from "../logger.ts";
+import { eventBus, DaemonEvents } from "../events/bus.ts";
+// ServiceRegistry removed — using simple array for sequential startup/shutdown
 import { HealthMonitor } from "./health.ts";
-import { loadConfig } from "../config/loader.ts";
+import { loadConfig, saveConfig, validateConfig } from "../config/loader.ts";
 import { AgentService } from "./agent-service.ts";
 import { ObserverService } from "./observer-service.ts";
 import { WebSocketService } from "./ws-service.ts";
+import type { WSMessage } from "../comms/websocket.ts";
 import { EventReactor } from "./event-reactor.ts";
 import { EventCoalescer } from "./event-coalescer.ts";
 import { CommitmentExecutor } from "./commitment-executor.ts";
@@ -28,6 +31,30 @@ import { ResearchQueue } from "./research-queue.ts";
 import { researchQueueTool, setResearchQueueRef } from "../actions/tools/research.ts";
 import { ChannelService } from "./channel-service.ts";
 import { McpService } from "./mcp-service.ts";
+// Static imports migrated from dynamic imports
+import { seedWebappTemplates } from "../vault/webapp-template-seeds.ts";
+import { mergeLLMSettingsIntoConfig } from "./llm-settings.ts";
+import { createTTSProvider, createSTTProvider } from "../comms/voice.ts";
+import { setNoLocalTools } from "../actions/tools/builtin.ts";
+import { AwarenessService } from "../awareness/service.ts";
+import { SiteBuilderService } from "../sites/service.ts";
+import { createSiteBuilderTools } from "../sites/builder-tools.ts";
+import { NodeRegistry } from "../workflows/nodes/registry.ts";
+import { registerBuiltinNodes } from "../workflows/nodes/builtin.ts";
+import { WorkflowEngine } from "../workflows/engine.ts";
+import { TriggerManager } from "../workflows/triggers/manager.ts";
+import { NLWorkflowBuilder } from "../workflows/nl-builder.ts";
+import { WorkflowAutoSuggest } from "../workflows/auto-suggest.ts";
+import { ToolRegistry } from "../actions/tools/registry.ts";
+import { createManageWorkflowTool } from "../actions/tools/workflows.ts";
+import { GoalService } from "../goals/service.ts";
+import { generateRhythmWorkflows, registerGoalWorkflows } from "../goals/workflow-bridge.ts";
+import { createManageGoalsTool } from "../actions/tools/goals.ts";
+import { NLGoalBuilder } from "../goals/nl-builder.ts";
+import { GoalEstimator } from "../goals/estimator.ts";
+import { DailyRhythm } from "../goals/rhythm.ts";
+import { AccountabilityEngine } from "../goals/accountability.ts";
+import { setSidecarManagerRef } from "../actions/tools/sidecar-route.ts";
 import { BackgroundAgentService } from "./background-agent-service.ts";
 import { AuthorityEngine } from "../authority/engine.ts";
 import { ApprovalManager } from "../authority/approval.ts";
@@ -36,7 +63,9 @@ import { AuthorityLearner } from "../authority/learning.ts";
 import { EmergencyController } from "../authority/emergency.ts";
 import { ApprovalDelivery } from "../authority/approval-delivery.ts";
 import { DeferredExecutor } from "../authority/deferred-executor.ts";
+import type { ActionCategory } from "../roles/authority.ts";
 import { sendDesktopNotification } from "../comms/desktop-notify.ts";
+import { stripMarkdownForTTS } from "../comms/voice.ts";
 import { SidecarManager } from "../sidecar/manager.ts";
 import { createUpdater, type Updater } from "./updater.ts";
 import { InterruptManager, FileWatcherObserver, ProcessMonitorObserver, ErrorMonitorObserver, ScreenObserver } from "../agents/interrupt-manager.ts";
@@ -44,17 +73,17 @@ import { WakeWordService } from "../services/wake-word.ts";
 import { PreferenceLearnerService } from "../services/preference-learner.ts";
 import { ProjectContextService } from "../services/project-context-service.ts";
 import { NotificationService } from "../services/notification-service.ts";
-import { ScreenCaptureService } from "../services/screen-capture.ts";
-import { VLMAnalyzer } from "../services/vlm-analyzer.ts";
+import { ScreenCaptureService } from "../services/screen-capture-service.ts";
+import { VLMAnalyzer } from "../services/vlm-analyzer-service.ts";
 import { AutoTestService } from "../services/auto-test-service.ts";
-import { LiveScreenService } from "../services/live-screen.ts";
-import { getTimeTracker } from "../services/time-tracker.ts";
+import { LiveScreenService } from "../services/live-screen-service.ts";
+import { getTimeTracker } from "../services/time-tracker-service.ts";
 import { getMetricsService } from "../services/metrics-service.ts";
 import { getPredictionEngine } from "../services/prediction-engine.ts";
-import { getCoordinationLogger } from "../services/coordination-logger.ts";
-import { getDeepMemorySynthesisService } from "../services/deep-memory-synthesis.ts";
-import { getVoiceLoopService } from "../services/voice-loop.ts";
-import { getDailyRhythmService } from "../services/daily-rhythm.ts";
+import { getCoordinationLogger } from "../services/coordination-logger-service.ts";
+import { getDeepMemorySynthesisService } from "../services/deep-memory-synthesis-service.ts";
+import { getVoiceLoopService } from "../services/voice-loop-service.ts";
+import { getDailyRhythmService } from "../services/daily-rhythm-service.ts";
 
 // Constants
 const DEFAULT_PORT = 3142;  // JARVIS port
@@ -69,7 +98,8 @@ export interface DaemonConfig {
 }
 
 let shutdownInProgress = false;
-let registry: ServiceRegistry | null = null;
+// Simple service array — startup in order, shutdown in reverse
+const services: { name: string; start(): Promise<void>; stop(): Promise<void> }[] = [];
 let healthMonitor: HealthMonitor | null = null;
 let heartbeatTimer: Timer | null = null;
 let commitmentExecutor: CommitmentExecutor | null = null;
@@ -90,9 +120,9 @@ let timeTracker = getTimeTracker();
 let metricsService = getMetricsService();
 let predictionEngine = getPredictionEngine();
 let coordinationLogger = getCoordinationLogger();
-let deepMemoryService: import('../services/deep-memory-synthesis.ts').DeepMemorySynthesisService | null = null;
-let voiceLoopService: import('../services/voice-loop.ts').VoiceLoopService | null = null;
-let dailyRhythmService: import('../services/daily-rhythm.ts').DailyRhythmService | null = null;
+let deepMemoryService: import('../services/deep-memory-synthesis-service.ts').DeepMemorySynthesisService | null = null;
+let voiceLoopService: import('../services/voice-loop-service.ts').VoiceLoopService | null = null;
+let dailyRhythmService: import('../services/daily-rhythm-service.ts').DailyRhythmService | null = null;
 let updater: Updater | null = null;
 
 /**
@@ -120,6 +150,10 @@ function parseArgs(): Partial<DaemonConfig> {
       case '--no-local-tools':
         config.noLocalTools = true;
         break;
+      case '--debug':
+        // Enable debug logging for all modules
+        enableDebugFor('DAEMON', 'AGENT', 'BGAGENT', 'WS', 'OBSERVER', 'CHANNEL', 'SIDECAR', 'HEALTH', 'LLM', 'TOOL', 'VAULT', 'PERSONALITY', 'AWARENESS', 'AUTHORITY', 'WORKFLOW', 'MCP', 'RESEARCH');
+        break;
       case '--help':
       case '-h':
         console.log(`
@@ -135,6 +169,7 @@ Options:
   --health-interval <ms>   Health check interval in ms (default: 30000)
   --no-local-tools         Disable local tool execution (run_command, read_file, etc).
                            Tools will only work when routed to a sidecar via target param.
+  --debug                  Enable debug logging for all modules
   --help, -h               Show this help message
 
 Example:
@@ -294,9 +329,9 @@ async function handleShutdown(signal: string): Promise<void> {
       healthMonitor.stop();
     }
 
-    // Stop all services (reverse order: websocket -> observers -> agent)
-    if (registry) {
-      await registry.stopAll();
+    // Stop all services in reverse order (websocket -> observers -> agent)
+    for (const service of services.reverse()) {
+      await service.stop();
     }
 
     // Close database
@@ -315,7 +350,7 @@ async function handleShutdown(signal: string): Promise<void> {
  * Print startup banner
  */
 function printBanner(config: DaemonConfig): void {
-  console.log(`
+  logger.daemon.info(`
      ██╗ █████╗ ██████╗ ██╗   ██╗██╗███████╗
      ██║██╔══██╗██╔══██╗██║   ██║██║██╔════╝
      ██║███████║██████╔╝██║   ██║██║███████╗
@@ -325,11 +360,10 @@ function printBanner(config: DaemonConfig): void {
 
 Just A Rather Very Intelligent System
   `);
-  console.log('[Daemon] Configuration:');
-  console.log(`  Port:      ${config.port}`);
-  console.log(`  Data Dir:  ${config.dataDir}`);
-  console.log(`  DB Path:   ${config.dbPath}`);
-  console.log('');
+  logger.daemon.info('Configuration:');
+  logger.daemon.info(`  Port:      ${config.port}`);
+  logger.daemon.info(`  Data Dir:  ${config.dataDir}`);
+  logger.daemon.info(`  DB Path:   ${config.dbPath}`);
 }
 
 /**
@@ -344,6 +378,15 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
     const message = err instanceof Error ? err.message : String(err);
     console.error(`\n[Daemon] Failed to parse config file: ${message}`);
     console.error('[Daemon] Fix the YAML syntax in ~/.jarvis/config.yaml or delete it to use defaults.\n');
+    process.exit(1);
+  }
+
+  // Validate configuration before starting
+  try {
+    validateConfig(jarvisConfig);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`\n[Daemon] ${message}\n`);
     process.exit(1);
   }
 
@@ -381,19 +424,16 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
     logWithTimestamp('Database initialized successfully');
 
     // 2a. Seed webapp templates (upserts, safe to run every startup)
-    const { seedWebappTemplates } = await import('../vault/webapp-template-seeds.ts');
     seedWebappTemplates();
 
     // 2b. Load LLM settings from DB + encrypted keychain, merge into config
-    const { mergeLLMSettingsIntoConfig } = await import('./llm-settings.ts');
     mergeLLMSettingsIntoConfig(jarvisConfig);
     logWithTimestamp('LLM settings loaded from database');
 
     // 2c. Initialize embedding service for semantic search (uses same LLM config)
     initEmbeddingService(jarvisConfig);
 
-    // 3. Create service registry
-    registry = new ServiceRegistry();
+    // 3. Initialize service array for sequential startup/shutdown
 
     // 4. Create proactive modules
     const heartbeatConfig = jarvisConfig.heartbeat;
@@ -431,15 +471,46 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
     const aggressiveness = heartbeatConfig?.aggressiveness ?? 'moderate';
     const executor = new CommitmentExecutor(aggressiveness as any);
 
-    // 6. Wire reactor callback for WebSocket notifications
-    reactor.setReactionCallback((text, priority) => {
-      wsService.broadcastNotification(text, priority);
-    });
-    // Note: reactor.setAgentService + executor.setAgentService wired to bgAgent after startAll (step 10c)
+    // 6. Wire event bus subscriptions (decoupled service communication)
 
-    // 6b. Wire delegation progress to WebSocket for sub-agent visibility
+    // Command output streaming → WebSocket broadcast for real-time terminal output
+    eventBus.on(DaemonEvents.OBSERVER_EVENT, (event: unknown) => {
+      const ev = event as { type?: string; data?: Record<string, unknown> } | undefined;
+      if (ev?.type === 'command_output') {
+        wsService.getServer().broadcast({
+          type: 'stream',
+          payload: {
+            kind: 'command_output',
+            chunk: ev.data?.chunk,
+            command: ev.data?.command,
+          },
+          timestamp: Date.now(),
+        });
+      }
+    });
+
+    // Reactor notifications → WebSocket broadcast
+    eventBus.on(DaemonEvents.NOTIFICATION, (text: unknown, priority: unknown) => {
+      wsService.broadcastNotification(String(text), priority as 'urgent' | 'normal' | 'low');
+    });
+
+    // Agent delegation progress → WebSocket broadcast
+    eventBus.on(DaemonEvents.AGENT_PROGRESS, (event: unknown) => {
+      wsService.broadcastSubAgentProgress(event as {
+        type: 'text' | 'tool_call' | 'done';
+        agentName: string;
+        agentId: string;
+        data: unknown;
+      });
+    });
+
+    // Legacy callback wiring for backward compatibility
+    reactor.setReactionCallback((text, priority) => {
+      eventBus.emit(DaemonEvents.NOTIFICATION, text, priority);
+    });
+
     agentService.setDelegationProgressCallback((event) => {
-      wsService.broadcastSubAgentProgress(event);
+      eventBus.emit(DaemonEvents.AGENT_PROGRESS, event);
     });
 
     // 6c. Create sidecar manager
@@ -452,21 +523,20 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
 
     // 7. Register services in startup order
     //    Agent first (needs DB), Observers second, Channels third, Sidecar, WebSocket last (needs Agent)
-    registry.register(agentService);
-    if (observerService) registry.register(observerService);
-    registry.register(channelService);
-    registry.register(sidecarManager);
-    registry.register(wsService);
+    services.push(agentService);
+    if (observerService) services.push(observerService);
+    services.push(channelService);
+    services.push(sidecarManager);
+    services.push(wsService);
 
     // 8. Start health monitor (before services, so API routes can reference it)
-    healthMonitor = new HealthMonitor(registry, config.dbPath);
+    healthMonitor = new HealthMonitor(services, config.dbPath);
 
     // 8b. Wire channel service to WebSocket for cross-channel broadcasts
     wsService.setChannelService(channelService);
 
     // 8c. Wire TTS provider if configured
     if (jarvisConfig.tts?.enabled) {
-      const { createTTSProvider } = await import('../comms/voice.ts');
       const ttsProvider = createTTSProvider(jarvisConfig.tts);
       if (ttsProvider) {
         wsService.setTTSProvider(ttsProvider);
@@ -476,7 +546,6 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
 
     // 8d. Wire STT provider for voice input via dashboard
     if (jarvisConfig.stt) {
-      const { createSTTProvider } = await import('../comms/voice.ts');
       const sttProvider = createSTTProvider(jarvisConfig.stt);
       if (sttProvider) {
         wsService.setSTTProvider(sttProvider);
@@ -511,11 +580,10 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
     emergencyController.setStateChangeCallback(async (state) => {
       wsService.broadcastEmergencyState(state);
       try {
-        const { loadConfig: reloadConfig, saveConfig: resaveConfig } = await import('../config/loader.ts');
-        const fresh = await reloadConfig();
+        const fresh = await loadConfig();
         if (!fresh.authority) fresh.authority = { default_level: 3 } as any;
         fresh.authority.emergency_state = state;
-        await resaveConfig(fresh);
+        await saveConfig(fresh);
       } catch (err) {
         console.error('[Daemon] Failed to persist emergency state:', err);
       }
@@ -538,6 +606,16 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
     // Wire authority engine into agent-service for prompt context
     agentService.setAuthorityEngine(authorityEngine);
 
+    // Wire LLM retry notifications to WebSocket
+    agentService.setWSBroadcastCallback((msg) => {
+      const m = msg as { type: string; payload?: unknown };
+      wsService.getServer().broadcast({
+        type: m.type as WSMessage['type'],
+        payload: m.payload ?? null,
+        timestamp: Date.now(),
+      });
+    });
+
     // Wire deferred executor tool registry (after start, tools are registered)
     // Note: toolRegistry set after startAll() below
 
@@ -549,6 +627,12 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
       if (action === 'approve') {
         const approved = approvalManager.approve(request.id, channel);
         if (!approved) return 'Request already decided';
+        // Grant temporary permission to BOTH orchestrators (main + background heartbeat)
+        // so subsequent calls don't trigger new approvals
+        orchestrator.grantTemporary(request.agent_id, request.action_category as ActionCategory);
+        if (bgAgent) {
+          bgAgent.getOrchestrator().grantTemporary(request.agent_id, request.action_category as ActionCategory);
+        }
         const result = await deferredExecutor.executeApproved(request.id);
         const updated = approvalManager.getRequest(request.id);
         if (updated) wsService.broadcastApprovalUpdate(updated);
@@ -602,6 +686,7 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
       observerService: observerService ?? undefined,
       liveScreenService: null as any,
       llmManager: agentService.getLLMManager(),
+      commitmentExecutor,
     };
     setCorsOrigin(jarvisConfig.daemon.port);
     const apiRoutes = createApiRoutes(apiContext);
@@ -625,12 +710,13 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
 
     // 9b. Apply --no-local-tools flag if set
     if (config.noLocalTools) {
-      const { setNoLocalTools } = await import('../actions/tools/builtin.ts');
       setNoLocalTools(true);
     }
 
-    // 10. Start all services
-    await registry.startAll();
+    // 10. Start all services (simple array — startup in order)
+    for (const svc of services) {
+      await svc.start();
+    }
 
     // 10a-post. Wire authority components that need running services
     const toolRegistry = orchestrator.getToolRegistry();
@@ -642,6 +728,7 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
     const mcpService = new McpService(jarvisConfig);
     if (toolRegistry) mcpService.setToolRegistry(toolRegistry);
     await mcpService.start();
+    services.push(mcpService);
     mcpServiceInstance = mcpService;
     apiContext.mcpService = mcpService;
     approvalDelivery.setBroadcaster(wsService);
@@ -651,11 +738,20 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
       const text = `[EXECUTED] ${request.tool_name}: ${result.slice(0, 200)}`;
       wsService.broadcastNotification(text, 'normal');
     });
+    // FIX: Wire grant temporary callback to apply grants to BOTH orchestrators
+    // This ensures approvals persist for both main agent and background heartbeat agent
+    deferredExecutor.setGrantTemporaryCallback((agentId, action) => {
+      orchestrator.grantTemporary(agentId, action);
+      if (bgAgent) {
+        bgAgent.getOrchestrator().grantTemporary(agentId, action);
+      }
+    });
 
     // 10b. Create and start background agent (needs LLM providers from agentService.start())
     const bgAgentService = new BackgroundAgentService(jarvisConfig, agentService.getLLMManager());
     bgAgentService.setResearchQueue(researchQueue);
     await bgAgentService.start();
+    services.push(bgAgentService);
     bgAgent = bgAgentService;
     console.log('[Daemon] Background agent started (separate browser for heartbeat/reactions)');
 
@@ -690,6 +786,8 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
 
     // 10c. Wire reactor + executor to background agent (separate browser, no chat contention)
     reactor.setAgentService(bgAgentService);
+    reactor.recoverInflight();
+    reactor.recoverSeenHashes();
     executor.setAgentService(bgAgentService);
 
     // 10d. Wire executor broadcast (needs wsServer running) and start
@@ -702,7 +800,6 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
     //       Skipped when --no-local-tools is set (headless / Docker)
     if (jarvisConfig.awareness?.enabled !== false && !config.noLocalTools) {
       try {
-        const { AwarenessService } = await import('../awareness/service.ts');
         const svc = new AwarenessService(
           jarvisConfig,
           agentService.getLLMManager(),
@@ -765,17 +862,7 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
                     const solutionText = `**Fix for error in ${appName}:**\n${solution.slice(0, 500)}`;
                     wsService.broadcastNotification(solutionText, 'urgent');
                     sendDesktopNotification(`JARVIS: Fix for ${appName}`, solution.slice(0, 200), { urgency: 'critical', expireMs: 15000 });
-                    // Strip markdown for TTS — voice should sound natural
-                    const voiceText = solution
-                      .replace(/#{1,6}\s*/g, '')
-                      .replace(/\*{1,2}([^*]+)\*{1,2}/g, '$1')
-                      .replace(/`([^`]+)`/g, '$1')
-                      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-                      .replace(/\n{2,}/g, '. ')
-                      .replace(/\n/g, ' ')
-                      .replace(/\s{2,}/g, ' ')
-                      .trim()
-                      .slice(0, 300);
+                    const voiceText = stripMarkdownForTTS(solution);
                     console.log(`[Daemon] Speaking error solution (${voiceText.length} chars): "${voiceText.slice(0, 80)}..."`);
                     wsService.broadcastProactiveVoice(
                       `I found a fix for the error in ${appName}. ${voiceText}`
@@ -811,16 +898,7 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
                     const solutionText = `**Help for ${sAppName}:**\n${solution.slice(0, 500)}`;
                     wsService.broadcastNotification(solutionText, 'urgent');
                     sendDesktopNotification(`JARVIS: Help for ${sAppName}`, solution.slice(0, 200), { urgency: 'critical', expireMs: 15000 });
-                    const voiceText = solution
-                      .replace(/#{1,6}\s*/g, '')
-                      .replace(/\*{1,2}([^*]+)\*{1,2}/g, '$1')
-                      .replace(/`([^`]+)`/g, '$1')
-                      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-                      .replace(/\n{2,}/g, '. ')
-                      .replace(/\n/g, ' ')
-                      .replace(/\s{2,}/g, ' ')
-                      .trim()
-                      .slice(0, 300);
+                    const voiceText = stripMarkdownForTTS(solution);
                     wsService.broadcastProactiveVoice(
                       `I found something that might help with what you're working on in ${sAppName}. ${voiceText}`
                     ).catch(err =>
@@ -849,6 +927,7 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
           googleAuth
         );
         await svc.start();
+        services.push(svc);
         awarenessService = svc;
         apiContext.awarenessService = svc;
         console.log('[Daemon] Awareness service started (event-driven OCR + context tracking)');
@@ -896,6 +975,7 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
     try {
       const prefService = new PreferenceLearnerService();
       await prefService.start();
+      services.push(prefService);
       preferenceLearnerService = prefService;
       console.log('[Daemon] Preference Learner Service started (User Persona Synthesis)');
     } catch (err) {
@@ -907,6 +987,7 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
     try {
       const projService = new ProjectContextService();
       await projService.start();
+      services.push(projService);
       projectContextService = projService;
       console.log('[Daemon] Project Context Service started (Multi-Project Switching)');
     } catch (err) {
@@ -918,6 +999,7 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
     try {
       const notifService = new NotificationService();
       await notifService.start();
+      services.push(notifService);
       notificationService = notifService;
 
       // Wire notification callback to WebSocket
@@ -949,6 +1031,7 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
         privacyMode: false,
       });
       await screenCap.start();
+      services.push(screenCap);
       screenCaptureService = screenCap;
 
       const vlm = new VLMAnalyzer({
@@ -956,6 +1039,7 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
         maxTokens: 500,
       });
       await vlm.start();
+      services.push(vlm);
       vlmAnalyzer = vlm;
 
       // Wire capture to VLM analyzer
@@ -1009,6 +1093,7 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
       }
 
       await liveScreen.start();
+      services.push(liveScreen);
       liveScreenService = liveScreen;
       apiContext.liveScreenService = liveScreen;
 
@@ -1043,6 +1128,7 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
       });
 
       await autoTest.start();
+      services.push(autoTest);
       autoTestService = autoTest;
 
       console.log('[Daemon] Automated Testing Service started (watch mode active)');
@@ -1092,6 +1178,7 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
 
       await voiceLoop.start();
       voiceLoopService = voiceLoop;
+      services.push(voiceLoop);
 
       // Wire voice loop to WebSocket service
       wsService.setVoiceLoopService(voiceLoop);
@@ -1129,6 +1216,7 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
 
       await dailyRhythm.start();
       dailyRhythmService = dailyRhythm;
+      services.push(dailyRhythm);
 
       console.log('[Daemon] Daily Rhythm Service started (morning/evening windows, accountability)');
     } catch (err) {
@@ -1139,7 +1227,6 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
     // 10a-2. Site Builder Service
     if (jarvisConfig.sites?.enabled !== false) {
       try {
-        const { SiteBuilderService } = await import('../sites/service.ts');
         const sitesConfig = jarvisConfig.sites ?? {
           enabled: true,
           projects_dir: '~/.jarvis/projects',
@@ -1149,15 +1236,14 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
           max_concurrent_servers: 3,
         };
         const siteBuilderService = new SiteBuilderService(sitesConfig);
-        registry.register(siteBuilderService);
-        await registry.startService('site-builder');
+        await siteBuilderService.start();
+        services.push(siteBuilderService);
         apiContext.siteBuilderService = siteBuilderService;
 
         // Wire proxy into WebSocket server for dev server HTTP/WS forwarding
         wsService.getServer().setSiteProxy(siteBuilderService.proxy);
 
         // Register builder tools into the agent's tool registry
-        const { createSiteBuilderTools } = await import('../sites/builder-tools.ts');
         const builderTools = createSiteBuilderTools(siteBuilderService.projectManager, siteBuilderService.gitManager, siteBuilderService.githubManager);
         const toolReg = orchestrator.getToolRegistry();
         if (toolReg) {
@@ -1178,13 +1264,6 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
     const workflowConfig = jarvisConfig.workflows;
     if (workflowConfig?.enabled !== false) {
       try {
-        const { NodeRegistry } = await import('../workflows/nodes/registry.ts');
-        const { registerBuiltinNodes } = await import('../workflows/nodes/builtin.ts');
-        const { WorkflowEngine } = await import('../workflows/engine.ts');
-        const { TriggerManager } = await import('../workflows/triggers/manager.ts');
-        const { NLWorkflowBuilder } = await import('../workflows/nl-builder.ts');
-        const { WorkflowAutoSuggest } = await import('../workflows/auto-suggest.ts');
-
         // Create node registry and register all built-in nodes
         const nodeRegistry = new NodeRegistry();
         registerBuiltinNodes(nodeRegistry);
@@ -1194,7 +1273,7 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
         const wfToolRegistry = orchestrator.getToolRegistry();
         const workflowEngine = new WorkflowEngine(
           nodeRegistry,
-          wfToolRegistry ?? new (await import('../actions/tools/registry.ts')).ToolRegistry(),
+          wfToolRegistry ?? new ToolRegistry(),
           agentService.getLLMManager(),
         );
         workflowEngine.setEventCallback((event) => {
@@ -1217,7 +1296,6 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
         }
 
         // Register manage_workflow tool so primary agent can create/run workflows from chat
-        const { createManageWorkflowTool } = await import('../actions/tools/workflows.ts');
         const manageWorkflowTool = createManageWorkflowTool({ workflowEngine, nlBuilder, triggerManager });
         if (wfToolRegistry) {
           wfToolRegistry.register(manageWorkflowTool);
@@ -1245,7 +1323,6 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
     const goalsConfig = jarvisConfig.goals;
     if (goalsConfig?.enabled !== false) {
       try {
-        const { GoalService } = await import('../goals/service.ts');
         const goalSvc = new GoalService(goalsConfig ?? {
           enabled: true,
           morning_window: { start: 7, end: 9 },
@@ -1264,7 +1341,6 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
 
         // Wire workflow bridge for daily rhythm
         try {
-          const { generateRhythmWorkflows, registerGoalWorkflows } = await import('../goals/workflow-bridge.ts');
           const effectiveConfig = goalsConfig ?? {
             enabled: true,
             morning_window: { start: 7, end: 9 },
@@ -1284,11 +1360,6 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
         try {
           const goalToolRegistry = orchestrator.getToolRegistry();
           if (goalToolRegistry) {
-            const { createManageGoalsTool } = await import('../actions/tools/goals.ts');
-            const { NLGoalBuilder } = await import('../goals/nl-builder.ts');
-            const { GoalEstimator } = await import('../goals/estimator.ts');
-            const { DailyRhythm } = await import('../goals/rhythm.ts');
-            const { AccountabilityEngine } = await import('../goals/accountability.ts');
             const llm = agentService.getLLMManager();
             const style = goalsConfig?.accountability_style ?? 'drill_sergeant';
             const escWeeks = goalsConfig?.escalation_weeks ?? { pressure: 1, root_cause: 3, suggest_kill: 4 };
@@ -1324,7 +1395,6 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
 
     // 10g. Inject sidecar manager into tool routing layer
     {
-      const { setSidecarManagerRef } = await import('../actions/tools/sidecar-route.ts');
       setSidecarManagerRef(sidecarManager);
       console.log('[Daemon] Sidecar routing enabled for run_command, read_file, write_file, list_directory');
 
@@ -1376,7 +1446,37 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
     console.log(`[Daemon] Heartbeat interval: ${heartbeatConfig?.interval_minutes ?? 15} min, active hours: ${activeHours.start}:00-${activeHours.end}:00`);
 
     const HEARTBEAT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minute timeout for heartbeat
+    const HEARTBEAT_RETRY_DELAYS_MS = [2000, 5000, 10000]; // backoff between in-cycle retries
     let heartbeatBusy = false;
+    let heartbeatConsecutiveFailures = 0;
+
+    const runHeartbeatWithRetry = async (coalescedSummary: string): Promise<{ response: string | null; attempts: number; lastError?: string }> => {
+      let lastError: string | undefined;
+      for (let attempt = 1; attempt <= HEARTBEAT_RETRY_DELAYS_MS.length + 1; attempt++) {
+        try {
+          const heartbeatPromise = bgAgentService.handleHeartbeat(coalescedSummary || undefined);
+          const timeoutPromise = new Promise<null>((resolve) =>
+            setTimeout(() => {
+              console.error(`[Daemon] Heartbeat timed out after 5 minutes (attempt ${attempt})`);
+              resolve(null);
+            }, HEARTBEAT_TIMEOUT_MS)
+          );
+          const response = await Promise.race([heartbeatPromise, timeoutPromise]);
+          if (response) return { response, attempts: attempt };
+          lastError = 'null response (busy or timed out)';
+        } catch (err) {
+          lastError = err instanceof Error ? err.message : String(err);
+          console.error(`[Daemon] Heartbeat attempt ${attempt} failed:`, lastError);
+        }
+        const delay = HEARTBEAT_RETRY_DELAYS_MS[attempt - 1];
+        if (delay !== undefined) {
+          console.log(`[Daemon] Retrying heartbeat in ${delay}ms (attempt ${attempt + 1})`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+      return { response: null, attempts: HEARTBEAT_RETRY_DELAYS_MS.length + 1, lastError };
+    };
+
     heartbeatTimer = setInterval(async () => {
       if (heartbeatBusy) {
         console.log('[Daemon] Skipping heartbeat — previous still running');
@@ -1405,26 +1505,34 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
         }
 
         // Flush coalesced events for heartbeat
-        const coalescedSummary = coalescer.flush();
+        const coalescedSummary = coalescer.flush() || '';
 
-        // Run heartbeat on BACKGROUND agent with timeout to prevent stuck busy lock
-        const heartbeatPromise = bgAgentService.handleHeartbeat(
-          coalescedSummary || undefined
-        );
-        const timeoutPromise = new Promise<null>((resolve) =>
-          setTimeout(() => {
-            console.error('[Daemon] Heartbeat timed out after 5 minutes');
-            resolve(null);
-          }, HEARTBEAT_TIMEOUT_MS)
-        );
+        // Run heartbeat with retry/backoff on background agent
+        const { response, attempts, lastError } = await runHeartbeatWithRetry(coalescedSummary);
 
-        const heartbeatResponse = await Promise.race([heartbeatPromise, timeoutPromise]);
-
-        if (heartbeatResponse) {
-          console.log('[Daemon] Heartbeat response:', heartbeatResponse.slice(0, 200));
-          wsService.broadcastHeartbeat(heartbeatResponse);
+        if (response) {
+          if (heartbeatConsecutiveFailures > 0) {
+            console.log(`[Daemon] Heartbeat recovered after ${heartbeatConsecutiveFailures} failed cycle(s)`);
+          }
+          heartbeatConsecutiveFailures = 0;
+          console.log(`[Daemon] Heartbeat response (attempts=${attempts}):`, response.slice(0, 200));
+          wsService.broadcastHeartbeat(response);
         } else {
-          console.log('[Daemon] Heartbeat returned no response (busy or timed out)');
+          heartbeatConsecutiveFailures++;
+          console.warn(`[Daemon] Heartbeat returned no response after ${attempts} attempt(s). Consecutive failed cycles: ${heartbeatConsecutiveFailures}`);
+          eventBus.emit(DaemonEvents.HEARTBEAT_FAILURE, { attempts, lastError, consecutiveFailures: heartbeatConsecutiveFailures });
+
+          if (heartbeatConsecutiveFailures >= 3) {
+            console.error('[Daemon] 3 consecutive heartbeat failures — re-initializing BackgroundAgentService');
+            try {
+              await bgAgentService.stop();
+              await bgAgentService.start();
+              console.log('[Daemon] BackgroundAgentService re-initialized');
+              heartbeatConsecutiveFailures = 0;
+            } catch (reinitErr) {
+              console.error('[Daemon] BackgroundAgentService re-init failed:', reinitErr instanceof Error ? reinitErr.message : reinitErr);
+            }
+          }
         }
       } catch (err) {
         console.error('[Daemon] Heartbeat error:', err);

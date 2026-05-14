@@ -12,7 +12,7 @@
  */
 
 import { getDb, generateId } from '../vault/schema.ts';
-import type { Service, ServiceStatus } from '../daemon/services.ts';
+import type { Service, ServiceStatus } from '../daemon/types.ts';
 
 export interface SynthesizedPattern {
   id: string;

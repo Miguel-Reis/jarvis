@@ -90,6 +90,75 @@ function applyEnvOverrides(config: JarvisConfig): void {
   }
 }
 
+/**
+ * Validate configuration and throw clear errors for missing required fields.
+ */
+export function validateConfig(config: JarvisConfig): void {
+  const errors: string[] = [];
+
+  // Check LLM providers
+  const hasAnthropic = !!config.llm.anthropic?.api_key;
+  const hasOpenAI = !!config.llm.openai?.api_key;
+  const hasGroq = !!config.llm.groq?.api_key;
+  const hasGemini = !!config.llm.gemini?.api_key;
+  const hasOpenRouter = !!config.llm.openrouter?.api_key;
+  const hasOllama = !!config.llm.ollama?.base_url;
+  const hasLiteLLM = !!config.llm.litellm?.base_url;
+
+  const hasAnyProvider = hasAnthropic || hasOpenAI || hasGroq || hasGemini || hasOpenRouter || hasOllama || hasLiteLLM;
+
+  if (!hasAnyProvider) {
+    errors.push(
+      'No LLM provider configured. Set at least one of:\n' +
+      '  - llm.anthropic.api_key (Anthropic Claude)\n' +
+      '  - llm.openai.api_key (OpenAI GPT)\n' +
+      '  - llm.groq.api_key (Groq)\n' +
+      '  - llm.gemini.api_key (Google Gemini)\n' +
+      '  - llm.openrouter.api_key (OpenRouter)\n' +
+      '  - llm.ollama.base_url (Ollama local)\n' +
+      '  - llm.litellm.base_url (LiteLLM proxy)'
+    );
+  }
+
+  // Check primary provider matches configured provider
+  const primary = config.llm.primary;
+  if (primary === 'anthropic' && !hasAnthropic) {
+    errors.push(`Primary provider is '${primary}' but no API key configured`);
+  }
+  if (primary === 'openai' && !hasOpenAI) {
+    errors.push(`Primary provider is '${primary}' but no API key configured`);
+  }
+  if (primary === 'groq' && !hasGroq) {
+    errors.push(`Primary provider is '${primary}' but no API key configured`);
+  }
+  if (primary === 'gemini' && !hasGemini) {
+    errors.push(`Primary provider is '${primary}' but no API key configured`);
+  }
+  if (primary === 'openrouter' && !hasOpenRouter) {
+    errors.push(`Primary provider is '${primary}' but no API key configured`);
+  }
+  if (primary === 'ollama' && !hasOllama) {
+    errors.push(`Primary provider is '${primary}' but no base_url configured`);
+  }
+  if (primary === 'litellm' && !hasLiteLLM) {
+    errors.push(`Primary provider is '${primary}' but no base_url configured`);
+  }
+
+  // Check data directory
+  if (!config.daemon.data_dir) {
+    errors.push('daemon.data_dir is not configured');
+  }
+
+  // Check database path
+  if (!config.daemon.db_path) {
+    errors.push('daemon.db_path is not configured');
+  }
+
+  if (errors.length > 0) {
+    throw new Error(`Invalid JARVIS configuration:\n\n  - ${errors.join('\n  - ')}`);
+  }
+}
+
 export async function loadConfig(configPath?: string): Promise<JarvisConfig> {
   const path = configPath || expandTilde('~/.jarvis/config.yaml');
 

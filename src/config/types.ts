@@ -45,8 +45,8 @@ export type STTConfig = {
 
 export type TTSConfig = {
   enabled: boolean;
-  provider?: 'edge' | 'elevenlabs';  // default: 'edge'
-  voice?: string;       // e.g. 'en-US-AriaNeural' (edge)
+  provider?: 'edge' | 'elevenlabs' | 'azure' | 'google' | 'openai';  // default: 'edge'
+  voice?: string;       // e.g. 'en-US-AriaNeural' (edge), 'pt-PT-DuarteNeural' (azure)
   rate?: string;        // e.g. '+0%', '+10%' (edge)
   volume?: string;      // e.g. '+0%' (edge)
   elevenlabs?: {
@@ -55,6 +55,19 @@ export type TTSConfig = {
     model?: string;           // 'eleven_flash_v2_5' | 'eleven_multilingual_v2'
     stability?: number;       // 0-1
     similarity_boost?: number; // 0-1
+  };
+  azure?: {
+    api_key: string;
+    region?: string;          // 'westeurope', 'eastus', etc.
+    output_format?: string;   // 'audio-24khz-48kbitrate-mono-mp3'
+  };
+  google?: {
+    api_key: string;
+    language_code?: string;   // 'pt-PT', 'pt-BR', 'en-US'
+  };
+  openai?: {
+    api_key: string;
+    model?: string;           // 'tts-1' | 'tts-1-hd'
   };
 };
 
@@ -191,6 +204,10 @@ export type JarvisConfig = {
     ollama?: { base_url?: string; model?: string; api_key?: string };
     openrouter?: { api_key: string; model?: string };
     litellm?: { base_url: string; model?: string; api_key?: string };
+    embedding?: {
+      provider?: 'gemini' | 'openai' | 'ollama';
+      model?: string;
+    };
   };
   personality: {
     core_traits: string[];
@@ -235,8 +252,15 @@ export const DEFAULT_CONFIG: JarvisConfig = {
   },
   tts: {
     enabled: false,
-    provider: 'edge',
-    voice: 'en-US-AriaNeural',
+    provider: 'azure',  // Recommended: azure, elevenlabs, google, openai, edge
+    voice: 'pt-PT-DuarteNeural',  // Portuguese voice (pt-PT or pt-BR)
+    // Azure config (uncomment and add your key)
+    // azure: {
+    //   api_key: 'YOUR_AZURE_SPEECH_KEY',
+    //   region: 'westeurope',
+    //   output_format: 'audio-24khz-48kbitrate-mono-mp3',
+    // },
+    // Edge config (fallback, free)
     rate: '+0%',
     volume: '+0%',
   },

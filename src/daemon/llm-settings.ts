@@ -411,7 +411,7 @@ export function hotReloadLLMProviders(config: JarvisConfig, llmManager: LLMManag
     providers.push(new OpenRouterProvider(llm.openrouter.api_key, llm.openrouter.model));
     console.log('[LLM] Hot-reloaded OpenRouter provider');
   }
-  if (llm.ollama) {
+  if (llm.ollama?.base_url && llm.ollama.base_url.trim().length > 0) {
     providers.push(new OllamaProvider(llm.ollama.base_url, llm.ollama.model, llm.ollama.api_key));
     console.log('[LLM] Hot-reloaded Ollama provider');
   }

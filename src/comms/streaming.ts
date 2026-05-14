@@ -2,6 +2,18 @@ import type { LLMStreamEvent } from '../llm/provider.ts';
 import type { WebSocketServer, WSMessage } from './websocket.ts';
 import { estimateCost } from '../llm/pricing.ts';
 
+/**
+ * Escape HTML to prevent XSS attacks
+ */
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 export type RelayOptions = {
   /** Called each time a complete sentence is available during streaming. */
   onSentence?: (sentence: string) => void;
@@ -35,11 +47,13 @@ export class StreamRelay {
     try {
       for await (const event of stream) {
         if (event.type === 'text') {
-          fullText += event.text;
+          // Escape for XSS prevention before accumulating and broadcasting
+          const escapedText = escapeHtml(event.text);
+          fullText += escapedText;
 
-          // Sentence-level TTS callback
+          // Sentence-level TTS callback (use escaped text for safety)
           if (options?.onSentence) {
-            sentenceBuffer += event.text;
+            sentenceBuffer += escapedText;
             // Flush complete sentences from the buffer
             let match: RegExpExecArray | null;
             while ((match = SENTENCE_END_RE.exec(sentenceBuffer)) !== null) {
@@ -52,11 +66,12 @@ export class StreamRelay {
             }
           }
 
-          // Broadcast chunk to all connected clients
+          // Broadcast chunk to all connected clients (escaped for XSS prevention)
+
           const message: WSMessage = {
             type: 'stream',
             payload: {
-              text: event.text,
+              text: escapedText,
               requestId,
               accumulated: fullText,
             },

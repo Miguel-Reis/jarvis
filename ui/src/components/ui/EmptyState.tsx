@@ -4,7 +4,7 @@
  * Reusable empty state display for lists and panels.
  */
 
-import React, { forwardRef, HTMLAttributes } from 'react';
+import { forwardRef, type HTMLAttributes } from 'react';
 import './EmptyState.css';
 
 interface EmptyStateProps extends HTMLAttributes<HTMLDivElement> {

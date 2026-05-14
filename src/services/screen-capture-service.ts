@@ -10,7 +10,7 @@
  * - Redaction de dados sensíveis via VLM
  */
 
-import type { Service, ServiceStatus } from '../daemon/services.ts';
+import type { Service, ServiceStatus } from '../daemon/types.ts';
 import { getDb, generateId } from '../vault/schema.ts';
 
 export interface ScreenCaptureConfig {
@@ -67,8 +67,7 @@ export class ScreenCaptureService implements Service {
 
     // Check /proc/version for Microsoft
     try {
-      const procVersion = Bun.file('/proc/version');
-      const version = (procVersion.text() as string).toLowerCase();
+      const version = Bun.file('/proc/version').text().catch(() => '').toLowerCase();
       if (version.includes('microsoft')) {
         return true;
       }

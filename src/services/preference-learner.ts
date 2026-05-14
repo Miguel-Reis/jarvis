@@ -7,14 +7,19 @@
  * - PromptBuilder: Injects preferences into agent system prompts
  */
 
-import type { Service, ServiceStatus } from '../daemon/services.ts';
-import { globalPatternObserver, observeUserAction, type ObservedAction } from './pattern-observer.ts';
+import type { Service, ServiceStatus } from '../daemon/types.ts';
+import { globalPatternObserver, observeUserAction, type ObservedAction } from './pattern-observer-service.ts';
 import {
   initializePreferences,
   getPreferencesForPrompt,
   getHighConfidencePreferences,
+  exportAllPreferences,
+  updatePreferenceConfidence,
   type PreferenceCategory,
 } from '../vault/user-preferences.ts';
+
+const DECAY_AFTER_MS = 24 * 60 * 60 * 1000;
+const DECAY_AMOUNT = 0.05;
 
 export class PreferenceLearnerService implements Service {
   name = 'preference-learner';
@@ -78,6 +83,21 @@ export class PreferenceLearnerService implements Service {
 
     if (activePatterns.length > 0) {
       console.log(`[PreferenceLearner] Active patterns: ${activePatterns.length}`);
+    }
+
+    const now = Date.now();
+    let decayed = 0;
+    for (const pref of exportAllPreferences()) {
+      if (pref.source === 'explicit') continue;
+      const lastSeen = pref.last_observed_at ?? pref.updated_at ?? pref.created_at ?? 0;
+      if (now - lastSeen < DECAY_AFTER_MS) continue;
+      const next = Math.max(0, pref.confidence - DECAY_AMOUNT);
+      if (next === pref.confidence) continue;
+      updatePreferenceConfidence(pref.category, pref.name, next);
+      decayed++;
+    }
+    if (decayed > 0) {
+      console.log(`[PreferenceLearner] Decayed confidence on ${decayed} stale preference(s)`);
     }
   }
 

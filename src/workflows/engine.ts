@@ -2,7 +2,7 @@
  * Workflow Engine — Service that orchestrates workflow execution
  */
 
-import type { Service, ServiceStatus } from '../daemon/services.ts';
+import type { Service, ServiceStatus } from '../daemon/types.ts';
 import type { NodeRegistry, ExecutionContext, StepLogger, NodeInput } from './nodes/registry.ts';
 import type { ToolRegistry } from '../actions/tools/registry.ts';
 import type { WorkflowDefinition, WorkflowExecution, ExecutionStatus } from './types.ts';

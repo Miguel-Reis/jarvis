@@ -7,6 +7,58 @@
 import { getDb, generateId } from '../vault/schema.ts';
 import type { ActionCategory } from '../roles/authority.ts';
 
+// Fields that should be redacted from audit logs and approval requests
+const SENSITIVE_FIELDS = [
+  'password',
+  'passphrase',
+  'secret',
+  'token',
+  'api_key',
+  'apikey',
+  'api-key',
+  'credential',
+  'private_key',
+  'privatekey',
+  'authorization',
+  'auth_token',
+  'access_token',
+  'refresh_token',
+  'bearer',
+];
+
+/**
+ * Redact sensitive fields from an object to prevent credential leakage in logs.
+ * Recursively processes nested objects and arrays.
+ */
+function redactSensitiveData(obj: Record<string, unknown>): Record<string, unknown> {
+  const redacted: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(obj)) {
+    const keyLower = key.toLowerCase();
+
+    // Check if this key matches a sensitive field
+    const isSensitive = SENSITIVE_FIELDS.some(field => keyLower.includes(field));
+
+    if (isSensitive) {
+      redacted[key] = '[REDACTED]';
+    } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+      // Recursively redact nested objects
+      redacted[key] = redactSensitiveData(value as Record<string, unknown>);
+    } else if (Array.isArray(value)) {
+      // Process arrays
+      redacted[key] = value.map(item =>
+        typeof item === 'object' && item !== null
+          ? redactSensitiveData(item as Record<string, unknown>)
+          : item
+      );
+    } else {
+      redacted[key] = value;
+    }
+  }
+
+  return redacted;
+}
+
 export type ApprovalStatus = 'pending' | 'approved' | 'denied' | 'expired' | 'executed';
 export type ApprovalUrgency = 'urgent' | 'normal';
 
@@ -45,7 +97,9 @@ export class ApprovalManager {
     const db = getDb();
     const id = generateId();
     const now = Date.now();
-    const toolArgs = JSON.stringify(params.toolArguments);
+    // Redact sensitive fields before persisting to prevent credential leakage
+    const redactedArgs = redactSensitiveData(params.toolArguments);
+    const toolArgs = JSON.stringify(redactedArgs);
 
     db.run(
       `INSERT INTO approval_requests (id, agent_id, agent_name, tool_name, tool_arguments, action_category, urgency, reason, context, status, created_at)

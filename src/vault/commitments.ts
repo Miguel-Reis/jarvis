@@ -176,7 +176,7 @@ export function findCommitments(query: {
 export function getUpcoming(limit: number = 10): Commitment[] {
   const db = getDb();
   const stmt = db.prepare(
-    "SELECT * FROM commitments WHERE status IN ('pending', 'active') AND when_due IS NOT NULL ORDER BY when_due ASC LIMIT ?"
+    "SELECT * FROM commitments WHERE status IN ('pending', 'active') AND when_due IS NOT NULL AND CAST(when_due AS INTEGER) > 0 ORDER BY when_due ASC LIMIT ?"
   );
   const rows = stmt.all(limit) as CommitmentRow[];
 

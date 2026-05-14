@@ -66,10 +66,11 @@
     "react-markdown": "^10.1.0",
     "recharts": "^3.8.1",
     "rehype-highlight": "^7.0.2",
+    "rehype-sanitize": "^6.0.0",
     "remark-gfm": "^4.0.1",
+    "ruvector": "^0.2.25",
     "screenshot-desktop": "^1.15.4",
     "sharp": "^0.34.5",
-    "tailwindcss": "^4.2.1",
     "tesseract.js": "^7.0.0",
     "yaml": "^2.7.0"
   },

@@ -9,7 +9,7 @@
  *   - Manual triggers (fired externally via fireTrigger)
  */
 
-import type { Service, ServiceStatus } from '../../daemon/services.ts';
+import type { Service, ServiceStatus } from '../../daemon/types.ts';
 import type { WorkflowEngine } from '../engine.ts';
 import type { WorkflowDefinition, WorkflowNode } from '../types.ts';
 import { CronScheduler } from './cron.ts';

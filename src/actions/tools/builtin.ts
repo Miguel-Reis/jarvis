@@ -5,21 +5,44 @@
  * run_command, read_file, write_file, list_directory
  */
 
-import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, existsSync, unlinkSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, existsSync, unlinkSync, realpathSync } from 'node:fs';
 import { resolve, dirname, join, normalize } from 'node:path';
 import { homedir } from 'node:os';
 
 /**
  * Validate that a resolved path doesn't escape the allowed base directory.
- * Prevents path traversal attacks via ../../../etc/passwd style inputs.
+ * Prevents path traversal attacks via ../../../etc/passwd style inputs AND symlink escapes.
  */
-function validatePath(rawPath: string, baseDir: string): { valid: true; resolved: string } | { valid: false; error: string } {
+export function validatePath(rawPath: string, baseDir: string): { valid: true; resolved: string } | { valid: false; error: string } {
   const resolved = resolve(baseDir, rawPath);
   const normalizedBase = normalize(baseDir + '/');
 
-  // Check for path traversal attempts
+  // Check for path traversal attempts via ../ or absolute path
   if (!resolved.startsWith(normalizedBase) && resolved !== normalizedBase.slice(0, -1)) {
     return { valid: false, error: `Path traversal detected: ${rawPath} resolves outside allowed directory` };
+  }
+
+  // Check for symlink escape attacks — resolve symlinks and verify target is still within baseDir.
+  // Only check if the file/directory exists. For new files, the resolved path check above is sufficient.
+  if (existsSync(resolved)) {
+    try {
+      const realPath = realpathSync(resolved);
+      // Also resolve the base to handle symlinks in the base path itself (e.g., /tmp -> /private/tmp on macOS)
+      let realBase: string;
+      try {
+        realBase = realpathSync(baseDir);
+      } catch {
+        realBase = baseDir;
+      }
+      const normalizedRealBase = normalize(realBase + '/');
+
+      // Check if realPath is within realBase (handle both file and exact directory match)
+      if (!realPath.startsWith(normalizedRealBase) && realPath !== normalizedRealBase.slice(0, -1)) {
+        return { valid: false, error: `Symlink escape detected: ${rawPath} resolves to ${realPath} outside allowed directory` };
+      }
+    } catch {
+      // File exists but can't be resolved — allow it
+    }
   }
 
   return { valid: true, resolved };
@@ -27,6 +50,7 @@ function validatePath(rawPath: string, baseDir: string): { valid: true; resolved
 import { execSync } from 'node:child_process';
 import { hostname, platform, arch, cpus, version, tmpdir } from 'node:os';
 import { TerminalExecutor } from '../terminal/executor.ts';
+import { eventBus, DaemonEvents } from '../../events/bus.ts';
 import { BrowserController, type PageSnapshot } from '../browser/session.ts';
 import type { ToolDefinition, ToolResult } from './registry.ts';
 import type { LLMTool } from '../../llm/provider.ts';
@@ -65,6 +89,59 @@ export const browser = new BrowserController();
 import { isNoLocalTools, LOCAL_DISABLED_MSG, getDefaultCwd } from './local-tools-guard.ts';
 // Re-export for convenience
 export { setNoLocalTools, isNoLocalTools, setDefaultCwd } from './local-tools-guard.ts';
+
+// Safe mode configuration - blocks dangerous commands when enabled
+let safeModeEnabled = false;
+
+const DANGEROUS_COMMANDS = [
+  'rm ', 'rm\t',
+  'sudo ', 'sudo\t',
+  'chmod ', 'chmod\t',
+  'chown ', 'chown\t',
+  'dd ', 'dd\t',
+  'mkfs', 'mke2fs',
+  '>: ', '> ', '>>',  // Redirection
+  '|', '&&', '||',   // Command chaining
+  '$(', '`',          // Command substitution
+  'eval ', 'eval\t',
+  'exec ', 'exec\t',
+  'curl ', 'curl\t', 'wget ', 'wget\t',  // Download tools
+  'nc ', 'nc\t', 'netcat', 'ncat',       // Network tools
+];
+
+const SAFE_MODE_BLOCKED_MSG = 'Command blocked: This command is potentially dangerous and is blocked in safe mode. Disable safe mode if you need to run this command.';
+
+/**
+ * Enable or disable safe mode for command execution.
+ * When enabled, dangerous commands are blocked.
+ */
+export function setSafeMode(enabled: boolean): void {
+  safeModeEnabled = enabled;
+  console.log(`[run_command] Safe mode ${enabled ? 'enabled' : 'disabled'}`);
+}
+
+/**
+ * Check if safe mode is currently enabled.
+ */
+export function isSafeModeEnabled(): boolean {
+  return safeModeEnabled;
+}
+
+/**
+ * Check if a command matches dangerous patterns.
+ * Returns the matched pattern if dangerous, null if safe.
+ */
+function isDangerousCommand(command: string): string | null {
+  const lowerCmd = command.toLowerCase().trim();
+
+  for (const pattern of DANGEROUS_COMMANDS) {
+    if (lowerCmd.startsWith(pattern.toLowerCase()) || lowerCmd.includes(pattern)) {
+      return pattern.trim();
+    }
+  }
+
+  return null;
+}
 
 
 /**
@@ -136,16 +213,35 @@ export const runCommandTool: ToolDefinition = {
     if (isNoLocalTools()) return LOCAL_DISABLED_MSG;
 
     const command = params.command as string;
+
+    // Check safe mode - block dangerous commands
+    if (safeModeEnabled) {
+      const dangerousPattern = isDangerousCommand(command);
+      if (dangerousPattern) {
+        console.warn(`[run_command] Blocked dangerous command in safe mode: "${command.slice(0, 50)}${command.length > 50 ? '...' : ''}" (matched: ${dangerousPattern})`);
+        return SAFE_MODE_BLOCKED_MSG;
+      }
+    }
+
     const explicitCwd = params.cwd as string | undefined;
     const cwd = explicitCwd || getDefaultCwd() || homedir();
     const timeout = (params.timeout as number) || undefined;
 
-    const result = await terminal.execute(command, { cwd, timeout });
-
+    // Stream output in real-time via event bus
     let output = '';
-    if (result.stdout) output += result.stdout;
-    if (result.stderr) output += (output ? '\n' : '') + `[stderr] ${result.stderr}`;
-    if (result.exitCode !== 0) output += `\n[exit code: ${result.exitCode}]`;
+    try {
+      for await (const chunk of terminal.stream(command, { cwd })) {
+        output += chunk;
+        // Emit to event bus for WebSocket broadcast
+        eventBus.emit(DaemonEvents.OBSERVER_EVENT, {
+          event_type: 'command_output',
+          data: { chunk, command: command.slice(0, 100) },
+        });
+      }
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      output += `\n[error] ${errorMsg}`;
+    }
 
     // Truncate very large outputs
     if (output.length > 10000) {
@@ -826,14 +922,89 @@ export const browserScrollTool: ToolDefinition = {
   },
 };
 
+/**
+ * Safe JavaScript expression patterns allowed for browser_evaluate.
+ * These patterns prevent code injection while allowing useful DOM operations.
+ */
+const SAFE_JS_PATTERNS = [
+  // DOM Queries
+  /^\s*document\.(querySelector|querySelectorAll|getElementById|getElementsByClassName|getElementsByTagName)\s*\(/i,
+  // Element properties
+  /^\s*[\w.$]+\.(textContent|innerText|innerHTML|value|className|classList)\s*(=|\(|\.)/i,
+  // Element methods
+  /^\s*[\w.$]+\.(click|focus|blur|select|scrollIntoView|getBoundingClientRect)\s*\(/i,
+  // Safe navigation
+  /^\s*\(?[\w.$]+\??\.(querySelector|querySelectorAll|getElementsByTagName|getElementsByClassName)\s*\(/i,
+  // Event dispatch
+  /^\s*[\w.$]+\.(dispatchEvent|click)\s*\(/i,
+  // Array methods on query results
+  /^\s*Array\.from\s*\(\s*document\./i,
+  // IIFE wrapper (will be validated recursively)
+  /^\s*\(\(\)\s*=>\s*\{[\s\S]*\}\)\(\)\s*$/i,
+];
+
+/**
+ * Validate JavaScript expression against safe patterns.
+ * Blocks: eval, Function constructor, script injection, event handlers, etc.
+ */
+function isSafeJsExpression(expr: string): { safe: true } | { safe: false; reason: string } {
+  const blocked = [
+    { pattern: /\beval\s*\(/i, reason: 'eval() is not allowed' },
+    { pattern: /\bnew\s+Function\s*\(/i, reason: 'Function constructor is not allowed' },
+    { pattern: /\bsetTimeout\s*\(/i, reason: 'setTimeout is not allowed' },
+    { pattern: /\bsetInterval\s*\(/i, reason: 'setInterval is not allowed' },
+    { pattern: /\bfetch\s*\(/i, reason: 'fetch() is not allowed - use http_request tool' },
+    { pattern: /\bXMLHttpRequest/i, reason: 'XMLHttpRequest is not allowed' },
+    { pattern: /\bWebSocket/i, reason: 'WebSocket is not allowed' },
+    { pattern: /\bimport\s*\(/i, reason: 'Dynamic import is not allowed' },
+    { pattern: /\bdocument\.write/i, reason: 'document.write() is not allowed' },
+    { pattern: /\bdocument\.open\s*\(/i, reason: 'document.open() is not allowed' },
+    { pattern: /\bdocument\.close\s*\(/i, reason: 'document.close() is not allowed' },
+    { pattern: /\bon\w+\s*=/i, reason: 'Event handler assignment is not allowed' },
+    { pattern: /<\s*script/i, reason: 'Script tag injection is not allowed' },
+    { pattern: /javascript\s*:/i, reason: 'javascript: URLs are not allowed' },
+    { pattern: /\bcookie\b/i, reason: 'Cookie access is not allowed' },
+    { pattern: /\blocalStorage\b/i, reason: 'localStorage access is not allowed' },
+    { pattern: /\bsessionStorage\b/i, reason: 'sessionStorage access is not allowed' },
+  ];
+
+  for (const { pattern, reason } of blocked) {
+    if (pattern.test(expr)) {
+      return { safe: false, reason };
+    }
+  }
+
+  // Check if expression matches any safe pattern
+  for (const safePattern of SAFE_JS_PATTERNS) {
+    if (safePattern.test(expr)) {
+      return { safe: true };
+    }
+  }
+
+  // For IIFE, validate inner content
+  const iifeMatch = expr.match(/^\s*\(\(\)\s*=>\s*\{([\s\S]*)\}\)\(\)\s*$/);
+  if (iifeMatch) {
+    const innerContent = iifeMatch[1];
+    // Recursively validate non-IIFE parts
+    const lines = innerContent.trim().split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('//'));
+    for (const line of lines) {
+      const result = isSafeJsExpression(line);
+      if (!result.safe) return result;
+    }
+    return { safe: true };
+  }
+
+  return { safe: false, reason: 'Expression does not match allowed patterns' };
+}
+
 export const browserEvaluateTool: ToolDefinition = {
   name: 'browser_evaluate',
-  description: 'Execute JavaScript in the browser page context. Use this for advanced interactions when the standard tools are not enough.',
+  description: 'Execute safe JavaScript expressions in the browser page context for DOM queries and manipulation. Blocked: eval, fetch, timers, cookies, storage.',
   category: 'browser',
   parameters: {
     expression: {
       type: 'string',
-      description: 'JavaScript expression to evaluate in the page. For complex operations, wrap in an IIFE: (() => { ... })()',
+      description: 'JavaScript expression (limited to safe DOM operations). Examples: document.querySelector("#btn").click(), document.title',
       required: true,
     },
     target: {
@@ -844,14 +1015,133 @@ export const browserEvaluateTool: ToolDefinition = {
   },
   execute: async (params) => {
     const target = params.target as string | undefined;
+    const expression = String(params.expression ?? '');
+
+    // Validate expression against security patterns
+    const validation = isSafeJsExpression(expression);
+    if (!validation.safe) {
+      return `Error: Blocked unsafe expression - ${validation.reason}`;
+    }
+
     if (target) {
-      return routeToSidecar(target, 'browser_evaluate', { expression: params.expression }, 'browser');
+      return routeToSidecar(target, 'browser_evaluate', { expression }, 'browser');
     }
     if (isNoLocalTools()) return LOCAL_DISABLED_MSG;
     try {
-      const result = await browser.evaluate(params.expression as string);
+      const result = await browser.evaluate(expression);
       if (result === undefined || result === null) return '(no return value)';
       return typeof result === 'string' ? result : JSON.stringify(result, null, 2);
+    } catch (err) {
+      return `Error: ${err instanceof Error ? err.message : String(err)}`;
+    }
+  },
+};
+
+// --- Graphify Tools ---
+
+export const graphifySearchTool: ToolDefinition = {
+  name: 'graphify_search',
+  description: 'Search the knowledge graph for code concepts, files, or relationships. Returns matching entities with their summaries.',
+  category: 'knowledge',
+  parameters: {
+    query: {
+      type: 'string',
+      description: 'Search query (keyword or phrase)',
+      required: true,
+    },
+    limit: {
+      type: 'number',
+      description: 'Maximum results to return (default: 20)',
+      required: false,
+    },
+  },
+  execute: async (params) => {
+    try {
+      const { getGraphifyService } = await import('../../services/graphify-service.ts');
+      const service = getGraphifyService();
+      const limit = (params.limit as number) || 20;
+      const results = service.search(params.query as string, limit);
+      return JSON.stringify(results, null, 2);
+    } catch (err) {
+      return `Error: ${err instanceof Error ? err.message : String(err)}`;
+    }
+  },
+};
+
+export const graphifyImportTool: ToolDefinition = {
+  name: 'graphify_import',
+  description: 'Import a knowledge graph from Graphify output (graph.json) into the Jarvis Vault.',
+  category: 'knowledge',
+  parameters: {
+    path: {
+      type: 'string',
+      description: 'Path to graph.json file or directory containing it',
+      required: true,
+    },
+    projectId: {
+      type: 'string',
+      description: 'Optional project ID to associate the imported nodes with',
+      required: false,
+    },
+  },
+  execute: async (params) => {
+    try {
+      const { getGraphifyService } = await import('../../services/graphify-service.ts');
+      const service = getGraphifyService();
+      const result = await service.importGraph(params.path as string, params.projectId as string | undefined);
+      return JSON.stringify(result, null, 2);
+    } catch (err) {
+      return `Error: ${err instanceof Error ? err.message : String(err)}`;
+    }
+  },
+};
+
+export const graphifyConnectionsTool: ToolDefinition = {
+  name: 'graphify_connections',
+  description: 'Get relationships and connections for a specific entity in the knowledge graph.',
+  category: 'knowledge',
+  parameters: {
+    entityId: {
+      type: 'string',
+      description: 'Entity ID to get connections for',
+      required: true,
+    },
+  },
+  execute: async (params) => {
+    try {
+      const { getGraphifyService } = await import('../../services/graphify-service.ts');
+      const service = getGraphifyService();
+      const connections = service.getConnections(params.entityId as string);
+      return JSON.stringify(connections, null, 2);
+    } catch (err) {
+      return `Error: ${err instanceof Error ? err.message : String(err)}`;
+    }
+  },
+};
+
+export const vectorSearchTool: ToolDefinition = {
+  name: 'vector_search',
+  description: 'Semantic search across the Jarvis Vault using HNSW vector embeddings. Returns results by meaning, not just keywords.',
+  category: 'knowledge',
+  parameters: {
+    query: {
+      type: 'string',
+      description: 'Search query (semantic matching)',
+      required: true,
+    },
+    limit: {
+      type: 'number',
+      description: 'Maximum results to return (default: 20)',
+      required: false,
+    },
+  },
+  execute: async (params) => {
+    try {
+      const { getVectorIndex } = await import('../../vault/vector-index.ts');
+      const service = getVectorIndex();
+      const limit = (params.limit as number) || 20;
+      const results = await service.search(params.query as string, limit);
+      return JSON.stringify(results, null, 2);
     } catch (err) {
       return `Error: ${err instanceof Error ? err.message : String(err)}`;
     }
@@ -872,6 +1162,10 @@ export const NON_BROWSER_TOOLS: ToolDefinition[] = [
   captureScreenTool,
   getSystemInfoTool,
   listSidecarsTool,
+  graphifySearchTool,
+  graphifyImportTool,
+  graphifyConnectionsTool,
+  vectorSearchTool,
 ];
 
 /**

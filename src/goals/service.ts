@@ -4,7 +4,7 @@
  * GoalService — Super Jarvis integration: Directives API for the Autonomous Loop.
  */
 
-import type { Service, ServiceStatus } from '../daemon/services.ts';
+import type { Service, ServiceStatus } from '../daemon/types.ts';
 import type { GoalEvent } from './events.ts';
 import type { GoalConfig } from '../config/types.ts';
 import type { Goal, GoalLevel, GoalStatus, GoalHealth } from './types.ts';
