@@ -96,7 +96,7 @@ export function ask(question: string, defaultValue?: string): Promise<string> {
  */
 export function askSecret(question: string): Promise<string> {
   return new Promise((resolve) => {
-    const r = getRL();
+    getRL();
     process.stdout.write(`${c.cyan('?')} ${question}: `);
 
     // Temporarily disable echo

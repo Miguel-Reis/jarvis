@@ -4,7 +4,7 @@ import { guardImageSize } from '../llm/provider.ts';
 import { LLMManager } from '../llm/manager.ts';
 import { AgentInstance } from './agent.ts';
 import { AgentHierarchy } from './hierarchy.ts';
-import { ToolRegistry, type ToolDefinition, isToolResult } from '../actions/tools/registry.ts';
+import { ToolRegistry, isToolResult } from '../actions/tools/registry.ts';
 import { toolDefToLLMTool } from '../actions/tools/builtin.ts';
 import type { ActionCategory } from '../roles/authority.ts';
 import type { AuthorityEngine } from '../authority/engine.ts';
@@ -13,7 +13,7 @@ import type { AuditTrail } from '../authority/audit.ts';
 import type { EmergencyController } from '../authority/emergency.ts';
 import { getActionForTool } from '../authority/tool-action-map.ts';
 import { getArchitecturalConstraints } from '../roles/prompt-builder.ts';
-import { globalLocalBrain, type LocalBrainResult } from '../brain/local-brain.ts';
+import { globalLocalBrain } from '../brain/local-brain.ts';
 
 const MAX_TOOL_ITERATIONS = 200;
 const MAX_TOOL_RESULT_CHARS = 6000; // Cap individual tool results to control context size
@@ -743,9 +743,7 @@ and generate a correction strategy. Do NOT attempt the tool again immediately.`;
 
     // --- Normal execution ---
     try {
-      const startTime = Date.now();
       const raw = await this.toolRegistry.execute(toolCall.name, toolCall.arguments);
-      const executionTimeMs = Date.now() - startTime;
 
       // Update audit entry with execution time (for allowed actions)
       // We already logged above; for simplicity we log execution separately if needed

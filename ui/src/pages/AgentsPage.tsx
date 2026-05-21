@@ -5,7 +5,7 @@
  * Combines War Room + Super Jarvis functionality with tabbed interface.
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import '../styles/war-room.css';
 import { AgentTree, type AgentNode } from '../components/AgentTree';
 import { EventTimeline, type TimelineEvent } from '../components/EventTimeline';
@@ -263,6 +263,7 @@ export function AgentsPage() {
     if (!wakeWordEnabled) {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach((t) => t.stop());
         setWakeWordStatus('listening');
         setWakeWordEnabled(true);
         await fetch('/api/super-jarvis/wakeword/enable', { method: 'POST' });

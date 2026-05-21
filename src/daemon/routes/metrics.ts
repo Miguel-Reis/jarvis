@@ -9,7 +9,7 @@ import { getMetricsService } from '../../services/metrics-service.ts';
 import { getPredictionEngine } from '../../services/prediction-engine.ts';
 import { getTimeTracker } from '../../services/time-tracker-service.ts';
 
-export function registerRoutes(ctx: ApiContext): Record<string, Record<string, (req: Request) => Response | Promise<Response>>> {
+export function registerRoutes(_ctx: ApiContext): Record<string, Record<string, (req: Request) => Response | Promise<Response>>> {
   return {
     // Daily metrics
     '/api/metrics/daily': {

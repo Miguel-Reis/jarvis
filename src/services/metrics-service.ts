@@ -6,7 +6,6 @@
  */
 
 import { getDb } from '../vault/schema.ts';
-import { getTimeTracker } from './time-tracker-service.ts';
 
 export interface DailyMetrics {
   date: string;
@@ -319,7 +318,7 @@ export class MetricsService {
   recordTaskCompletion(
     taskId: string,
     goalId: string | undefined,
-    projectId: string | undefined,
+    _projectId: string | undefined,
     durationMs: number | undefined
   ): void {
     try {

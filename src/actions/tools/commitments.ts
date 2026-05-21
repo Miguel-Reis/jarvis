@@ -9,7 +9,7 @@ import type { ToolDefinition } from './registry.ts';
 import type { CommitmentPriority, CommitmentStatus } from '../../vault/commitments.ts';
 import {
   createCommitment, getCommitment, findCommitments,
-  updateCommitmentStatus, updateCommitmentDue, getUpcoming,
+  updateCommitmentStatus, updateCommitmentDue,
 } from '../../vault/commitments.ts';
 
 const VALID_STATUSES = ['pending', 'active', 'completed', 'failed', 'escalated'];

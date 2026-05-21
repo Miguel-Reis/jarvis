@@ -8,7 +8,7 @@
 import { json, type ApiContext } from './_shared.ts';
 import { setSafeMode, isSafeModeEnabled } from '../../actions/tools/builtin.ts';
 
-export function registerRoutes(ctx: ApiContext): Record<string, Record<string, (req: Request) => Response | Promise<Response>>> {
+export function registerRoutes(_ctx: ApiContext): Record<string, Record<string, (req: Request) => Response | Promise<Response>>> {
   return {
     // Get safe mode status
     '/api/safe-mode': {

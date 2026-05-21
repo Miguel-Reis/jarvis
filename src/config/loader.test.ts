@@ -1,9 +1,9 @@
-import { test, expect, describe, beforeEach, afterEach } from 'bun:test';
+import { test, expect, describe, afterEach } from 'bun:test';
 import { loadConfig, saveConfig } from './loader.ts';
 import { DEFAULT_CONFIG } from './types.ts';
 import { existsSync } from 'node:fs';
 import { unlink } from 'node:fs/promises';
-import { join, isAbsolute } from 'node:path';
+import { isAbsolute } from 'node:path';
 
 const TEST_CONFIG_PATH = '/tmp/jarvis-test-config.yaml';
 

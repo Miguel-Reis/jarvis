@@ -32,7 +32,7 @@ function initializeRoleSystem(rolesDir: string): Map<string, RoleDefinition> {
   console.log(`✅ Loaded ${roles.size} roles`);
 
   // Display loaded roles
-  for (const [id, role] of roles) {
+  for (const [, role] of roles) {
     console.log(`   - ${role.name} (authority: ${role.authority_level}/10)`);
   }
 

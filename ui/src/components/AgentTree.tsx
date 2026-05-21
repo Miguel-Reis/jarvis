@@ -5,7 +5,7 @@
  * Shows parent-child relationships and task delegation.
  */
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import '../styles/agent-tree.css';
 
 export interface AgentNode {
@@ -40,7 +40,7 @@ const statusLabels: Record<string, string> = {
   completed: 'Completed',
 };
 
-export function AgentTree({ agents, expanded = true }: AgentTreeProps) {
+export function AgentTree({ agents }: AgentTreeProps) {
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(agents.map(a => a.id)));
 
   const toggleNode = (agentId: string) => {

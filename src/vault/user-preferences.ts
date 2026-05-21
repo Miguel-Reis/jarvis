@@ -6,7 +6,6 @@
  */
 
 import { getDb, generateId } from './schema.ts';
-import type { SQLQueryBindings } from 'bun:sqlite';
 
 export type PreferenceCategory = 'coding' | 'communication' | 'workflow' | 'testing' | 'documentation';
 

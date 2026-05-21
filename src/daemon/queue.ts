@@ -5,6 +5,8 @@
  * retry logic, and failure handling.
  */
 
+import * as fs from 'node:fs';
+
 export type JobStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'retrying';
 
 export interface Job<T = unknown> {
@@ -173,6 +175,7 @@ export class JobQueue {
       if (jobIndex === -1) break;
 
       const job = this.pendingJobs.splice(jobIndex, 1)[0];
+      if (!job) break;
       this.processingJobs.set(job.id, job);
       this.activeWorkers++;
 
@@ -295,7 +298,6 @@ export class JobQueue {
 
   private loadPersistedJobs(): Map<string, Job> {
     try {
-      const fs = await import('node:fs');
       if (fs.existsSync(this.options.persistPath)) {
         const data = fs.readFileSync(this.options.persistPath, 'utf-8');
         const jobs = JSON.parse(data) as Job[];
@@ -309,7 +311,6 @@ export class JobQueue {
 
   private savePersistedJobs(jobs: Map<string, Job>): void {
     try {
-      const fs = await import('node:fs');
       const data = JSON.stringify(Array.from(jobs.values()), null, 2);
       fs.writeFileSync(this.options.persistPath, data, 'utf-8');
     } catch (err) {

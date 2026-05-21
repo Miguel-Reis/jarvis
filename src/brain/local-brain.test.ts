@@ -3,7 +3,7 @@
  */
 
 import { describe, test, expect } from 'bun:test';
-import { LocalBrain, registerBuiltInSkills, type Skill } from './local-brain.ts';
+import { LocalBrain, registerBuiltInSkills } from './local-brain.ts';
 
 describe('LocalBrain', () => {
   test('should register and list skills', () => {

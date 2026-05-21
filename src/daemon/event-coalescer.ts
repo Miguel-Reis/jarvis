@@ -6,7 +6,7 @@
  * by type for clean LLM consumption.
  */
 
-import type { ClassifiedEvent, EventPriority } from './event-classifier.ts';
+import type { ClassifiedEvent } from './event-classifier.ts';
 
 const MAX_BUFFER_SIZE = 100;
 

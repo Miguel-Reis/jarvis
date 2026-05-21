@@ -11,7 +11,7 @@
  * handles platform-specific implementation details internally.
  */
 
-import type { ToolDefinition, ToolResult } from './registry.ts';
+import type { ToolDefinition } from './registry.ts';
 import { routeToSidecarOrDefault } from './sidecar-route.ts';
 import { isNoLocalTools } from './local-tools-guard.ts';
 

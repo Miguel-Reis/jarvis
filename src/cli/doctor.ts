@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { existsSync, readFileSync } from 'node:fs';
 import {
-  c, printBanner, printOk, printWarn, printErr, printInfo, startSpinner, closeRL,
+  c, printBanner, startSpinner, closeRL,
 } from './helpers.ts';
 
 const JARVIS_DIR = join(homedir(), '.jarvis');

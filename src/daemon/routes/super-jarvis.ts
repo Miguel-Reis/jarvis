@@ -11,14 +11,14 @@
  */
 
 import type { ApiContext } from '../api-routes.ts';
-import { json, error } from './_shared.ts';
+import { json } from './_shared.ts';
 
 export function registerRoutes(ctx: ApiContext): Record<string, unknown> {
   const routes: Record<string, unknown> = {};
 
   // GET /api/super-jarvis/directives — Get current goal directives
   routes['/api/super-jarvis/directives'] = {
-    GET: (req: Request) => {
+    GET: (_req: Request) => {
       try {
         const { goalService } = ctx;
         if (!goalService) {
@@ -46,7 +46,7 @@ export function registerRoutes(ctx: ApiContext): Record<string, unknown> {
 
   // GET /api/super-jarvis/observers — Get observer status
   routes['/api/super-jarvis/observers'] = {
-    GET: (req: Request) => {
+    GET: (_req: Request) => {
       try {
         // Return observer status from interrupt manager
         // In a real implementation, this would query the actual interrupt manager
@@ -65,7 +65,7 @@ export function registerRoutes(ctx: ApiContext): Record<string, unknown> {
 
   // POST /api/super-jarvis/observers/:name/enable
   routes['/api/super-jarvis/observers/:name/enable'] = {
-    POST: (req: Request, params: { name: string }) => {
+    POST: (_req: Request, params: { name: string }) => {
       try {
         const { name } = params;
         console.log(`[SuperJarvis] Enabling observer: ${name}`);
@@ -80,7 +80,7 @@ export function registerRoutes(ctx: ApiContext): Record<string, unknown> {
 
   // POST /api/super-jarvis/observers/:name/disable
   routes['/api/super-jarvis/observers/:name/disable'] = {
-    POST: (req: Request, params: { name: string }) => {
+    POST: (_req: Request, params: { name: string }) => {
       try {
         const { name } = params;
         console.log(`[SuperJarvis] Disabling observer: ${name}`);
@@ -95,7 +95,7 @@ export function registerRoutes(ctx: ApiContext): Record<string, unknown> {
 
   // POST /api/super-jarvis/wakeword/enable
   routes['/api/super-jarvis/wakeword/enable'] = {
-    POST: (req: Request) => {
+    POST: (_req: Request) => {
       try {
         console.log('[SuperJarvis] Wake-word enable requested (browser handles detection)');
         return json({ success: true, message: 'Wake-word enabled in browser' });
@@ -108,7 +108,7 @@ export function registerRoutes(ctx: ApiContext): Record<string, unknown> {
 
   // POST /api/super-jarvis/wakeword/disable
   routes['/api/super-jarvis/wakeword/disable'] = {
-    POST: (req: Request) => {
+    POST: (_req: Request) => {
       try {
         console.log('[SuperJarvis] Wake-word disable requested');
         return json({ success: true, message: 'Wake-word disabled' });
@@ -121,7 +121,7 @@ export function registerRoutes(ctx: ApiContext): Record<string, unknown> {
 
   // GET /api/super-jarvis/interrupts — Get interrupt history
   routes['/api/super-jarvis/interrupts'] = {
-    GET: (req: Request) => {
+    GET: (_req: Request) => {
       try {
         // Return empty array — real interrupts come via WebSocket
         return json([]);

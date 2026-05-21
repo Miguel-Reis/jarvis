@@ -5,7 +5,7 @@
 import type { Service, ServiceStatus } from '../daemon/types.ts';
 import type { NodeRegistry, ExecutionContext, StepLogger, NodeInput } from './nodes/registry.ts';
 import type { ToolRegistry } from '../actions/tools/registry.ts';
-import type { WorkflowDefinition, WorkflowExecution, ExecutionStatus } from './types.ts';
+import type { WorkflowDefinition, WorkflowExecution } from './types.ts';
 import type { WorkflowEvent } from './events.ts';
 import { VariableScope } from './variables.ts';
 import { topologicalSort, getOutgoingEdges, executeNode } from './executor.ts';
@@ -37,7 +37,7 @@ export class WorkflowEngine implements Service {
 
   async stop(): Promise<void> {
     // Cancel all active executions
-    for (const [id, controller] of this.activeExecutions) {
+    for (const [, controller] of this.activeExecutions) {
       controller.abort();
     }
     this.activeExecutions.clear();
@@ -119,7 +119,7 @@ export class WorkflowEngine implements Service {
     executionId: string,
     workflowId: string,
     definition: WorkflowDefinition,
-    triggerType: string,
+    _triggerType: string,
     triggerData: Record<string, unknown>,
   ): Promise<void> {
     const abortController = new AbortController();

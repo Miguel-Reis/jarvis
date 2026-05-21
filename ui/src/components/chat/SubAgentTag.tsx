@@ -1,4 +1,3 @@
-import React from "react";
 import type { SubAgentEvent } from "../../hooks/useWebSocket";
 
 type Props = {

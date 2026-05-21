@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { api } from "../hooks/useApi";
 import { useToast } from "../components/Toast";
 import type { CalendarEvent } from "../components/calendar/CalendarEventBadge";

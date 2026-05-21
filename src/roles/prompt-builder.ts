@@ -1,8 +1,7 @@
 import type { RoleDefinition } from './types.ts';
-import { detectOS, getPlatformDescription, getCommandAliases, translateCommand } from '../actions/platform.ts';
+import { detectOS, getPlatformDescription } from '../actions/platform.ts';
 import { buildToolGuide } from './tool-guide.ts';
 import { getDb } from '../vault/schema.ts';
-import { getPreferencesForPrompt } from '../vault/user-preferences.ts';
 
 export type PromptContext = {
   userName?: string;

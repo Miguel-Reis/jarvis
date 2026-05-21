@@ -44,7 +44,6 @@ export class BackgroundAgentService extends BaseAgentService implements Service,
   private llmManager: LLMManager;
   private orchestrator: AgentOrchestrator;
   private bgBrowser: BrowserController;
-  private researchQueue: ResearchQueue | null = null;
   private busy = false;
 
   constructor(config: JarvisConfig, llmManager: LLMManager) {
@@ -54,8 +53,8 @@ export class BackgroundAgentService extends BaseAgentService implements Service,
     this.bgBrowser = new BrowserController(BG_CDP_PORT, BG_PROFILE_DIR);
   }
 
-  setResearchQueue(queue: ResearchQueue): void {
-    this.researchQueue = queue;
+  setResearchQueue(_queue: ResearchQueue): void {
+    // Reserved for future use — research queue integration is not wired yet.
   }
 
   async start(): Promise<void> {

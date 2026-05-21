@@ -7,7 +7,7 @@
 import { json, type ApiContext } from './_shared.ts';
 import { getCoordinationLogger } from '../../services/coordination-logger-service.ts';
 
-export function registerRoutes(ctx: ApiContext): Record<string, Record<string, (req: Request) => Response | Promise<Response>>> {
+export function registerRoutes(_ctx: ApiContext): Record<string, Record<string, (req: Request) => Response | Promise<Response>>> {
   const coordinationLogger = getCoordinationLogger();
 
   return {

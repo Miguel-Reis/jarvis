@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { api, useApiData } from "../hooks/useApi";
 import { SiteTopBar } from "../components/sites/SiteTopBar";
 import { SiteLeftPanel } from "../components/sites/SiteLeftPanel";

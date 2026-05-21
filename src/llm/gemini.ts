@@ -89,7 +89,7 @@ export class GeminiProvider implements LLMProvider {
   }
 
   async chat(messages: LLMMessage[], options: LLMOptions = {}): Promise<LLMResponse> {
-    const { model = this.defaultModel, temperature, max_tokens, tools, tool_choice } = options;
+    const { model = this.defaultModel, temperature, max_tokens, tools } = options;
     const url = `${this.baseUrl}/models/${model}:generateContent?key=${this.apiKey}`;
 
     // Compact history for Gemini's context limits
@@ -116,7 +116,7 @@ export class GeminiProvider implements LLMProvider {
   }
 
   async *stream(messages: LLMMessage[], options: LLMOptions = {}): AsyncIterable<LLMStreamEvent> {
-    const { model = this.defaultModel, temperature, max_tokens, tools, tool_choice } = options;
+    const { model = this.defaultModel, temperature, max_tokens, tools } = options;
     const url = `${this.baseUrl}/models/${model}:streamGenerateContent?alt=sse&key=${this.apiKey}`;
 
     // Compact history for Gemini's context limits

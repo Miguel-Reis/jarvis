@@ -57,11 +57,9 @@ const sanitizeSchema = {
   attributes: {
     ...defaultSchema.attributes,
     '*': defaultSchema.attributes?.['*']?.filter((attr) => {
+      const name = typeof attr === 'string' ? attr : attr[0];
       // Block all event handlers (onclick, onerror, onload, etc.)
-      if (attr.startsWith('on')) return false;
-      // Block javascript: URLs
-      if (attr === 'href' || attr === 'src') return true;
-      return true;
+      return !name.startsWith('on');
     }),
   },
 };
@@ -285,7 +283,7 @@ export function MarkdownContent({ content }: Props) {
           <ReactMarkdown
             key={`md-${lastIndex}`}
             remarkPlugins={[remarkGfm]}
-            rehypePlugins={[rehypeSanitize, rehypeHighlight]}
+            rehypePlugins={[[rehypeSanitize, sanitizeSchema], rehypeHighlight]}
             components={components}
           >
             {text}
@@ -311,7 +309,7 @@ export function MarkdownContent({ content }: Props) {
       <ReactMarkdown
         key={`md-${lastIndex}`}
         remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeSanitize, rehypeHighlight]}
+        rehypePlugins={[[rehypeSanitize, sanitizeSchema], rehypeHighlight]}
         components={components}
       >
         {remaining}

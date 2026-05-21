@@ -434,13 +434,6 @@ const fieldStyle: React.CSSProperties = {
   outline: "none",
 };
 
-const metaCardStyle: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,0.08)",
-  borderRadius: "12px",
-  background: "rgba(255,255,255,0.025)",
-  padding: "12px 14px",
-};
-
 const modalPrimaryButtonStyle: React.CSSProperties = {
   border: "1px solid rgba(34,211,238,0.24)",
   background: "rgba(34,211,238,0.14)",

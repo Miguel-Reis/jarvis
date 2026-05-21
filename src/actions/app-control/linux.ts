@@ -51,7 +51,7 @@ export class LinuxAppController implements AppController {
     }
   }
 
-  async getWindowTree(pid: number): Promise<UIElement[]> {
+  async getWindowTree(_pid: number): Promise<UIElement[]> {
     // TODO: Implement using AT-SPI2 (Assistive Technology Service Provider Interface)
     // This requires complex bindings to the AT-SPI D-Bus interface
     // For now, return empty array with informative error

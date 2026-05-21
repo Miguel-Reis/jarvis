@@ -1,4 +1,3 @@
-import React from "react";
 
 type Commitment = {
   id: string;
@@ -54,7 +53,7 @@ function getAssigneeColor(name: string): string {
   return `hsl(${hue}, 60%, 55%)`;
 }
 
-function getAssigneeLabel(name: string | null, createdFrom: string | null): string {
+function getAssigneeLabel(name: string | null, _createdFrom: string | null): string {
   if (!name) return "Unassigned";
   if (name.toLowerCase() === "user" || name.toLowerCase() === "me") return "You";
   if (name.toLowerCase() === "jarvis") return "JARVIS";

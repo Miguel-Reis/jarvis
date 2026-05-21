@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type { GoalEvent } from "../hooks/useWebSocket";
 import { GoalConstellation } from "../components/goals/GoalConstellation";
 import { GoalTimeline } from "../components/goals/GoalTimeline";
@@ -103,8 +103,6 @@ export default function GoalsPage({ goalEvents }: Props) {
         .catch(() => setSelectedGoal(null));
     }
   };
-
-  const activeCount = goals.filter((g) => g.status === "active").length;
 
   const handleExport = useCallback((format: "csv" | "json") => {
     const data = showOverdue ? overdueGoals : goals;

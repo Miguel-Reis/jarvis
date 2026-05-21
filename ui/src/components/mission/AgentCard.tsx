@@ -1,4 +1,3 @@
-import React from "react";
 
 type Agent = {
   id: string;

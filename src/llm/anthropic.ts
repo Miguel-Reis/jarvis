@@ -73,7 +73,7 @@ export class AnthropicProvider implements LLMProvider {
   /**
    * Make an API request with retry on rate limit (429) and server errors (5xx).
    */
-  private async fetchWithRetry(body: string, stream: boolean = false): Promise<Response> {
+  private async fetchWithRetry(body: string, _stream: boolean = false): Promise<Response> {
     const headers: Record<string, string> = {
       'x-api-key': this.apiKey,
       'anthropic-version': '2023-06-01',
@@ -109,7 +109,7 @@ export class AnthropicProvider implements LLMProvider {
   }
 
   async chat(messages: LLMMessage[], options: LLMOptions = {}): Promise<LLMResponse> {
-    const { model = this.defaultModel, temperature, max_tokens = 16384, tools, tool_choice } = options;
+    const { model = this.defaultModel, temperature, max_tokens = 16384, tools } = options;
 
     // Compact aggressively to stay under per-minute input token rate limits.
     // Claude's context is 200K, but org rate limits are typically 30K-60K input tokens/min;
@@ -137,7 +137,7 @@ export class AnthropicProvider implements LLMProvider {
   }
 
   async *stream(messages: LLMMessage[], options: LLMOptions = {}): AsyncIterable<LLMStreamEvent> {
-    const { model = this.defaultModel, temperature, max_tokens = 16384, tools, tool_choice } = options;
+    const { model = this.defaultModel, temperature, max_tokens = 16384, tools } = options;
 
     // Compact aggressively to stay under per-minute input token rate limits.
     // Claude's context is 200K, but org rate limits are typically 30K-60K input tokens/min;

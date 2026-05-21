@@ -8,7 +8,7 @@
  */
 
 import type { Service, ServiceStatus } from '../daemon/types.ts';
-import { globalPatternObserver, observeUserAction, type ObservedAction } from './pattern-observer-service.ts';
+import { globalPatternObserver, observeUserAction } from './pattern-observer-service.ts';
 import {
   initializePreferences,
   getPreferencesForPrompt,

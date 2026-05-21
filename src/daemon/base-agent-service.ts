@@ -15,7 +15,6 @@ import { getRecentObservations } from '../vault/observations.ts';
 import { findContent } from '../vault/content-pipeline.ts';
 import { getActiveGoalsSummary } from '../vault/retrieval.ts';
 import { getPreferencesForPrompt } from '../vault/user-preferences.ts';
-import { getOrCreateCurrentProjectContext, getProjectContextForPrompt } from '../vault/project-contexts.ts';
 import { extractAndStore } from '../vault/extractor.ts';
 import { getActiveProjectId, getProject } from '../vault/projects.ts';
 import { getWebappInstructionsForMessage } from '../vault/webapp-templates.ts';
@@ -94,7 +93,7 @@ export abstract class BaseAgentService {
   /**
    * Build full system prompt from role and context
    */
-  protected buildFullSystemPrompt(channel?: string, userMessage?: string, precomputedKnowledge?: string): string {
+  protected buildFullSystemPrompt(_channel?: string, userMessage?: string, precomputedKnowledge?: string): string {
     if (!this.role) return '';
     const context = this.buildPromptContext(userMessage, precomputedKnowledge);
     return buildSystemPrompt(this.role, context);

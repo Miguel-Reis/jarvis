@@ -69,7 +69,7 @@ export default function ExecutionMonitor({
 
 function ExecutionCard({
   execution: exec,
-  workflowEvents,
+  workflowEvents: _workflowEvents,
 }: {
   execution: Execution;
   workflowEvents: WorkflowEvent[];

@@ -52,7 +52,7 @@ import type { ResearchQueue } from './research-queue.ts';
 import type { IAgentService } from './agent-service-interface.ts';
 import type { AuthorityEngine } from '../authority/engine.ts';
 import { getSidecarManager } from '../actions/tools/sidecar-route.ts';
-import { withRetry, parallelRetry } from '../utils/retry.ts';
+import { parallelRetry } from '../utils/retry.ts';
 import { BaseAgentService } from './base-agent-service.ts';
 import { eventBus, DaemonEvents } from '../events/bus.ts';
 

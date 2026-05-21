@@ -1,6 +1,3 @@
-import React from "react";
-import { api } from "../../hooks/useApi";
-
 const STAGE_COLORS: Record<string, string> = {
   idea: "#a78bfa",
   research: "#60a5fa",

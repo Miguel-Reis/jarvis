@@ -15,7 +15,6 @@ import type { ApprovalManager, ApprovalRequest } from '../authority/approval.ts'
 import type { EmergencyController } from '../authority/emergency.ts';
 import { getActionForTool } from '../authority/tool-action-map.ts';
 import type { AgentInstance } from '../agents/agent.ts';
-import { detectOS, type OS } from '../actions/platform.ts';
 import { ToolRateLimiter } from './tool-rate-limiter.ts';
 import { storeResult } from './tool-result-store.ts';
 
@@ -270,20 +269,10 @@ Do NOT assume the action succeeded. Tell the user what went wrong and ask how to
   /**
    * Verify that a tool action actually succeeded by checking the filesystem.
    * Returns an error message string if verification fails, null if everything is fine.
-   * Returns null for tools where verification isn't applicable.
-   */
-  private detectOS(): OS {
-    return detectOS();
-  }
-
-  /**
-   * Verify that a tool action actually succeeded by checking the filesystem.
-   * Returns an error message string if verification fails, null if everything is fine.
    * Covers: write_file, create_directory, delete_file, run_command.
    * Knows platform-specific paths and commands per OS.
    */
   verifyToolEffect(toolName: string, args: Record<string, unknown>, result: unknown): string | null {
-    const os = this.detectOS();
     const strResult = typeof result === 'string' ? result : JSON.stringify(result);
 
     if (toolName === 'write_file') {

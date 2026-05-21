@@ -1,4 +1,3 @@
-import React from "react";
 
 const STAGE_COLORS: Record<string, string> = {
   idea: "#a78bfa",

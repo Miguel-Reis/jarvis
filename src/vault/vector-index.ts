@@ -24,9 +24,8 @@ export interface SearchMatch {
 }
 
 export class VectorIndexService {
-  private db: VectorDb | null = null;
+  private db: InstanceType<typeof VectorDb> | null = null;
   private dimensions = 768; // Default to Ollama nomic-embed-text
-  private readonly collectionName = 'entities';
 
   /**
    * Initialize or load the HNSW index
@@ -54,7 +53,13 @@ export class VectorIndexService {
 
     try {
       // Use in-memory database to avoid file lock issues
-      this.db = new VectorDb({ dimensions: this.dimensions, path: ':memory:' });
+      try {
+        this.db = new VectorDb({ dimensions: this.dimensions });
+      } catch (err) {
+        console.error('[VectorIndex] Failed to create VectorDb:', err instanceof Error ? err.message : String(err));
+        this.db = null;
+        return;
+      }
       console.log(`[VectorIndex] HNSW index initialized (${this.dimensions}d, ${backend})`);
     } catch (err) {
       console.error('[VectorIndex] Failed to initialize:', err instanceof Error ? err.message : String(err));

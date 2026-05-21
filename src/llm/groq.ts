@@ -7,7 +7,6 @@ import type {
   LLMTool,
   LLMToolCall,
 } from './provider.ts';
-import { compactHistory, calculateHistoryBudget } from './history.ts';
 
 type GroqMessage = {
   role: 'system' | 'user' | 'assistant' | 'tool';

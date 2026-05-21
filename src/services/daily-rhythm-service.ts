@@ -169,7 +169,6 @@ export class DailyRhythmService implements Service {
   private async deliverMorningBriefing(): Promise<void> {
     console.log('[DailyRhythm] Delivering morning briefing...');
 
-    const today = new Date().toISOString().split('T')[0];
     const briefing = await this.generateMorningBriefing();
 
     if (this.onBriefing) {
@@ -258,8 +257,6 @@ export class DailyRhythmService implements Service {
 
     // Get today's task completions
     const today = this.getTodayString();
-    const todayStart = new Date(today).getTime();
-    const todayEnd = todayStart + 86400000;
 
     const tasksStmt = db.prepare(`
       SELECT status, COUNT(*) as count

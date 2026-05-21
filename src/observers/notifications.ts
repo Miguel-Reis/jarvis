@@ -23,7 +23,6 @@ export class NotificationListener implements Observer {
   private running = false;
   private handler: ObserverEventHandler | null = null;
   private process: Subprocess | null = null;
-  private available = false;
 
   async start(): Promise<void> {
     this.running = true;
@@ -35,7 +34,6 @@ export class NotificationListener implements Observer {
         console.log('[notifications] dbus-monitor not found — notification monitoring disabled');
         return;
       }
-      this.available = true;
     } catch {
       console.log('[notifications] Cannot check for dbus-monitor — notification monitoring disabled');
       return;
@@ -61,7 +59,6 @@ export class NotificationListener implements Observer {
       this.readOutput();
     } catch (err) {
       console.error('[notifications] Failed to start dbus-monitor:', err);
-      this.available = false;
     }
   }
 

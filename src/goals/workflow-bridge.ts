@@ -64,7 +64,7 @@ export function generateRhythmWorkflows(config: GoalConfig): GoalWorkflowDefinit
  */
 export function registerGoalWorkflows(
   goalWorkflows: GoalWorkflowDefinition[],
-  triggerManager: { fireTrigger: (workflowId: string, triggerType: string, data?: Record<string, unknown>) => void },
+  _triggerManager: { fireTrigger: (workflowId: string, triggerType: string, data?: Record<string, unknown>) => void },
 ): void {
   // Note: The actual cron scheduling is handled by the GoalService's own timers
   // (checkDailyRhythm runs every 60s and checks the time window).
@@ -83,7 +83,7 @@ export function registerGoalWorkflows(
  */
 export async function handleGoalWorkflowTrigger(
   action: 'morning_plan' | 'evening_review',
-  goalService: { getGoal: (id: string) => unknown },
+  _goalService: { getGoal: (id: string) => unknown },
   onComplete?: (result: Record<string, unknown>) => void,
 ): Promise<void> {
   console.log(`[GoalWorkflowBridge] Executing ${action}`);

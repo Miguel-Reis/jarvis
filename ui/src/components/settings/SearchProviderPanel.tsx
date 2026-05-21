@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useApiData, api } from "../../hooks/useApi";
 
 type SearchConfigData = {
@@ -9,7 +9,7 @@ type SearchConfigData = {
 };
 
 export function SearchProviderPanel() {
-  const { data: cfg, loading, refetch } = useApiData<SearchConfigData>("/api/config/search", []);
+  const { data: cfg, refetch } = useApiData<SearchConfigData>("/api/config/search", []);
   const [provider, setProvider] = useState("duckduckgo");
   const [braveKey, setBraveKey] = useState("");
   const [tavilyKey, setTavilyKey] = useState("");

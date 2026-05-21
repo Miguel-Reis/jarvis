@@ -233,8 +233,6 @@ export class BehaviorAnalytics {
     const topApps = getAppUsageStats(weekStartMs, weekEndMs);
 
     // Compare with previous week for trends
-    const prevWeekStartMs = prevMonday.getTime();
-    const prevWeekEndMs = weekStartMs - 1;
     let prevTotalMinutes = 0;
     let prevTotalFocus = 0;
     let prevTotalSwitches = 0;

@@ -607,7 +607,7 @@ function ToggleSwitch({ checked, onChange, disabled }: { checked: boolean; onCha
 }
 
 function ProviderSection({
-  name, provider, isPrimary, hasKey,
+  name, provider: _provider, isPrimary, hasKey,
   apiKey, onApiKeyChange,
   model, customModel, onModelChange, onCustomModelChange,
   models, testing, testResult, onTest,

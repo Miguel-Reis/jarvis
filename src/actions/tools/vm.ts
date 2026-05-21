@@ -8,7 +8,6 @@
 import type { ToolDefinition } from './registry.ts';
 import { getRemoteRegistry } from './remote.ts';
 import { SSHExecutor } from '../remote/ssh-executor.ts';
-import { classifyCommand } from '../remote/risk.ts';
 import * as vbox from '../vm/virtualbox.ts';
 
 /** Helper to resolve connection and return SSHExecutor. */

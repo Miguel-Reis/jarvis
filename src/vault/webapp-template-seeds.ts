@@ -91,7 +91,6 @@ export function seedWebappTemplates(): void {
 
   // 1. Load built-in templates
   const templates = loadTemplatesFromDir(builtinDir);
-  const builtinCount = templates.size;
 
   // 2. Layer user overrides (same app_name replaces built-in)
   const userTemplates = loadTemplatesFromDir(userDir);

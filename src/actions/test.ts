@@ -5,7 +5,6 @@ import {
   TerminalExecutor,
   WSLBridge,
   BrowserSession,
-  CDPBrowser,
   ToolRegistry,
   type ToolDefinition,
 } from './index.ts';
@@ -16,7 +15,7 @@ async function testActionLayer() {
   console.log('1. App Controller');
   console.log(`   Platform: ${process.platform}`);
   try {
-    const appController = getAppController();
+    getAppController();
     console.log(`   ✓ App controller initialized for ${process.platform}`);
   } catch (error) {
     console.log(`   ⚠ App controller not available: ${error instanceof Error ? error.message.split('\n')[0] : String(error)}`);

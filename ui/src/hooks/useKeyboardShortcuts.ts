@@ -5,7 +5,7 @@
  * Supports page-specific shortcuts and global shortcuts.
  */
 
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 
 export type ShortcutHandler = (e: KeyboardEvent) => void;
 

@@ -2,7 +2,7 @@
  * System Status Page
  */
 
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import '../styles/system-status.css';
 
 interface ServiceHealth {
@@ -94,8 +94,6 @@ export function SystemStatusPage() {
   function calculateCPUUsage(cpu: { user: number; system: number }, uptime: number) {
     // cpu.user and cpu.system are in microseconds
     // Convert to percentage based on uptime in seconds
-    const totalCpuTime = (cpu.user + cpu.system) / 1_000_000; // Convert μs to seconds
-    const cores = navigator.hardwareConcurrency || 4; // Assume 4 cores if unknown
     const userPercent = (cpu.user / 1_000_000 / uptime) * 100;
     const systemPercent = (cpu.system / 1_000_000 / uptime) * 100;
     const totalPercent = ((userPercent + systemPercent) / 2);

@@ -10,17 +10,12 @@
 import type { HealthMonitor } from './health.ts';
 import type { AgentService } from './agent-service.ts';
 import type { JarvisConfig } from '../config/types.ts';
-import type { EntityType } from '../vault/entities.ts';
-import type { CommitmentPriority, CommitmentStatus } from '../vault/commitments.ts';
-import type { ObservationType } from '../vault/observations.ts';
-import type { ContentStage, ContentType } from '../vault/content-pipeline.ts';
 import type { AuthorityEngine } from '../authority/engine.ts';
 import type { ApprovalManager } from '../authority/approval.ts';
-import type { AuditTrail, AuthorityDecisionType } from '../authority/audit.ts';
+import type { AuditTrail } from '../authority/audit.ts';
 import type { AuthorityLearner } from '../authority/learning.ts';
 import type { EmergencyController } from '../authority/emergency.ts';
 import type { DeferredExecutor } from '../authority/deferred-executor.ts';
-import type { ActionCategory } from '../roles/authority.ts';
 import type { AwarenessService } from '../awareness/service.ts';
 import type { WebSocketService } from './ws-service.ts';
 import type { ChannelService } from './channel-service.ts';

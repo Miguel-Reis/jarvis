@@ -215,7 +215,7 @@ class SseTransport implements McpTransport {
   private eventSource: EventSource | null = null;
   private baseUrl: string;
 
-  constructor(private config: Required<McpServerConfig> & { transport: 'sse' }) {
+  constructor(config: Required<McpServerConfig> & { transport: 'sse' }) {
     this.serverName = config.name;
     this.baseUrl = config.url.replace(/\/$/, '');
   }
@@ -338,7 +338,7 @@ export class McpClient {
   private transport: McpTransport;
   private discoveredTools: McpToolSchema[] = [];
 
-  constructor(private config: McpServerConfig) {
+  constructor(config: McpServerConfig) {
     this.serverName = config.name;
 
     // Normalize config — default to stdio

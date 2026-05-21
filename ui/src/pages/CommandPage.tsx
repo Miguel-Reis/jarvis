@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useApiData } from "../hooks/useApi";
 import "../styles/command.css";
 

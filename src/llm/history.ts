@@ -13,7 +13,6 @@
 import type { LLMMessage } from './provider.ts';
 
 const SYSTEM_RESERVE = 500;          // Tokens reserved for system prompt
-const MINIMUM_BUDGET_PER_TURN = 100;  // Minimum tokens per turn
 
 /**
  * Compact message history for LLM API requests.

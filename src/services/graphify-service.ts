@@ -13,7 +13,7 @@
  */
 
 import { getDb, generateId, withTransaction } from '../vault/schema.ts';
-import { readdir, readFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 
@@ -61,8 +61,6 @@ export interface SearchMatch {
 }
 
 export class GraphifyService {
-  private graphPath: string | null = null;
-
   /**
    * Import graph from Graphify output
    */
@@ -80,8 +78,6 @@ export class GraphifyService {
         result.errors.push('Failed to read graph.json');
         return result;
       }
-
-      this.graphPath = graphPath;
 
       const db = getDb();
 

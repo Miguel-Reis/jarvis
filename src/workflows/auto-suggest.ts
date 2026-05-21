@@ -28,15 +28,13 @@ type AwarenessPattern = {
 };
 
 export class WorkflowAutoSuggest {
-  private nodeRegistry: NodeRegistry;
   private llmManager: any;
   private patterns: AwarenessPattern[] = [];
   private suggestions: WorkflowSuggestion[] = [];
   private lastAnalysis = 0;
   private analysisCooldownMs = 300_000; // 5 min
 
-  constructor(nodeRegistry: NodeRegistry, llmManager: unknown) {
-    this.nodeRegistry = nodeRegistry;
+  constructor(_nodeRegistry: NodeRegistry, llmManager: unknown) {
     this.llmManager = llmManager;
   }
 

@@ -20,8 +20,6 @@ export class LLMManager {
   private sessionTokenCount = 0;
   private sessionTokenWarned80 = false;
   private sessionTokenWarned95 = false;
-  private static readonly BUDGET_WARN_80 = 0.80;
-  private static readonly BUDGET_WARN_95 = 0.95;
 
   /**
    * Estimate token count from text.

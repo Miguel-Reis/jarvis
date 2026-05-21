@@ -81,10 +81,6 @@ export default function KnowledgePage() {
     [selectedId]
   );
 
-  const selectedEntity = useMemo(() =>
-    entities?.find(e => e.id === selectedId) || null,
-  [entities, selectedId]);
-
   const handleNavigateToEntity = (entityId: string) => {
     setSelectedId(entityId);
   };

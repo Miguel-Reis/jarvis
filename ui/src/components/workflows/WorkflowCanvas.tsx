@@ -67,7 +67,7 @@ const nodeTypes: NodeTypes = {
 export default function WorkflowCanvas({
   workflowId,
   workflowEvents,
-  sendMessage,
+  sendMessage: _sendMessage,
 }: {
   workflowId: string;
   workflowEvents: WorkflowEvent[];

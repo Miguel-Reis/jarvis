@@ -17,7 +17,7 @@ class MockChannel implements ChannelAdapter {
     this._connected = false;
   }
 
-  async sendMessage(to: string, text: string): Promise<void> {
+  async sendMessage(_to: string, _text: string): Promise<void> {
     // Mock implementation
   }
 

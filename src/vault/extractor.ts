@@ -186,7 +186,7 @@ export async function extractAndStore(
 
     // Store all extracted data atomically — if any step fails, nothing is committed
     const activeProject = getActiveProjectId();
-    const entityMap = withTransaction(() => {
+    withTransaction(() => {
       const map = new Map<string, string>(); // name -> id
 
       // Store entities

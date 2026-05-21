@@ -4,7 +4,6 @@ import {
   getPersonality,
   savePersonality,
   updatePersonality,
-  type PersonalityModel,
 } from './model.ts';
 import {
   extractSignals,

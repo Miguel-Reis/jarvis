@@ -1,4 +1,3 @@
-import React from "react";
 import { CalendarEventBadge } from "./CalendarEventBadge";
 import type { CalendarEvent } from "./CalendarEventBadge";
 

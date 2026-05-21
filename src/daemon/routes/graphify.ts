@@ -7,7 +7,7 @@
 import type { ApiContext } from '../api-routes.ts';
 import { json, error } from './_shared.ts';
 
-export function registerRoutes(ctx: ApiContext) {
+export function registerRoutes(_ctx: ApiContext) {
   return {
     '/api/graphify/import': {
       POST: async (req: Request) => {

@@ -24,7 +24,7 @@ export const goalUpdateTrigger: NodeDefinition = {
   },
   inputs: [],
   outputs: ['default'],
-  execute: async (input, config, ctx) => {
+  execute: async (input, _config, ctx) => {
     ctx.logger.info(`Goal update trigger fired — event: ${input.data.event_type ?? 'unknown'}`);
     return {
       data: {

@@ -7,7 +7,7 @@
 
 import { test, expect, beforeEach } from 'bun:test';
 import { initDatabase } from '../vault/schema.ts';
-import { createGoal, updateGoalStatus } from '../vault/goals.ts';
+import { createGoal } from '../vault/goals.ts';
 import { matchAwarenessToGoals, logAutoDetectedProgress } from './awareness-bridge.ts';
 import { generateRhythmWorkflows, registerGoalWorkflows } from './workflow-bridge.ts';
 import { extractGoalCompletion } from '../vault/extractor.ts';

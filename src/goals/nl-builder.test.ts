@@ -1,6 +1,6 @@
 import { test, expect, describe, beforeEach } from 'bun:test';
 import { initDatabase } from '../vault/schema.ts';
-import { NLGoalBuilder, type GoalProposal } from './nl-builder.ts';
+import { NLGoalBuilder } from './nl-builder.ts';
 import { GoalEstimator } from './estimator.ts';
 import * as vault from '../vault/goals.ts';
 

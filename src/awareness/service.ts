@@ -10,7 +10,7 @@
 import type { Service, ServiceStatus } from '../daemon/types.ts';
 import type { JarvisConfig, AwarenessConfig } from '../config/types.ts';
 import type { LLMManager } from '../llm/manager.ts';
-import type { AwarenessEvent, LiveContext, DailyReport, Suggestion, SessionSummary, WeeklyReport, BehavioralInsight } from './types.ts';
+import type { AwarenessEvent, LiveContext, DailyReport, SessionSummary, WeeklyReport, BehavioralInsight } from './types.ts';
 import type { SuggestionType, SuggestionRow } from './types.ts';
 import type { SidecarEvent, BinaryDataInline } from '../sidecar/protocol.ts';
 
@@ -55,7 +55,6 @@ export class AwarenessService implements Service {
   private suggestionEngine: SuggestionEngine;
   private contextGraph: ContextGraph;
   private analytics: BehaviorAnalytics;
-  private llm: LLMManager;
   private eventCallback: ((event: AwarenessEvent) => void) | null;
   private enabled: boolean;
   private captureDir: string;
@@ -69,7 +68,6 @@ export class AwarenessService implements Service {
   ) {
     const cfg = jarvisConfig.awareness!;
     this.config = cfg;
-    this.llm = llm;
     this.eventCallback = eventCallback ?? null;
     this.enabled = cfg.enabled;
     this.captureDir = cfg.capture_dir.replace(/^~/, os.homedir());
@@ -249,7 +247,7 @@ export class AwarenessService implements Service {
 
   // ── Event Handlers ──
 
-  private async handleScreenCapture(sidecarId: string, event: SidecarEvent): Promise<void> {
+  private async handleScreenCapture(_sidecarId: string, event: SidecarEvent): Promise<void> {
     // Extract image buffer from binary data
     let imageBuffer: Buffer | null = null;
 

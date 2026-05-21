@@ -6,7 +6,7 @@
  */
 
 import type { ServerWebSocket } from 'bun';
-import type { RPCRequest, SidecarEvent } from './protocol.ts';
+import type { RPCRequest } from './protocol.ts';
 import type { EventScheduler } from './scheduler.ts';
 import { validateEvent, validateBinaryFrame, MAX_JSON_SIZE } from './validator.ts';
 
@@ -153,7 +153,7 @@ export class SidecarConnection {
     this.stopHeartbeat();
 
     // Reject all pending binary waits
-    for (const [refId, pending] of this.pendingBinary) {
+    for (const [, pending] of this.pendingBinary) {
       clearTimeout(pending.timer);
       pending.reject(new Error('Connection closed'));
     }

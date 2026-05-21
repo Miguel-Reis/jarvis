@@ -1,4 +1,3 @@
-import React from "react";
 import type { SettingsSection } from "../App";
 import "../styles/settings.css";
 import { PersonalityPanel } from "../components/settings/PersonalityPanel";

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useApiData } from "../hooks/useApi";
 import "../styles/settings.css";
 

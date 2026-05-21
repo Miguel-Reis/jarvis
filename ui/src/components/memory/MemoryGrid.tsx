@@ -1,4 +1,3 @@
-import React from "react";
 import { MemoryDocumentCard } from "./MemoryDocumentCard";
 import type { MemoryProfile } from "./MemoryDocumentCard";
 

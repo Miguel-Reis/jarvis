@@ -5,7 +5,6 @@
  * Shows inter-agent communication, task assignments, and escalations.
  */
 
-import React from 'react';
 import '../styles/event-timeline.css';
 
 export interface TimelineEvent {

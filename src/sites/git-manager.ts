@@ -13,7 +13,6 @@ export class GitManager {
   static async isInstalled(): Promise<boolean> {
     try {
       const proc = Bun.spawn(['git', '--version'], { stdout: 'pipe', stderr: 'pipe' });
-      const stdout = await new Response(proc.stdout).text();
       return (await proc.exited) === 0;
     } catch {
       return false;

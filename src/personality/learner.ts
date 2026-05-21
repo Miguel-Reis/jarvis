@@ -15,7 +15,7 @@ function clamp(value: number, min: number, max: number): number {
 /**
  * Analyze a user message for preference signals
  */
-export function extractSignals(userMessage: string, assistantResponse: string): InteractionSignal[] {
+export function extractSignals(userMessage: string, _assistantResponse: string): InteractionSignal[] {
   const signals: InteractionSignal[] = [];
   const lowerMessage = userMessage.toLowerCase();
 

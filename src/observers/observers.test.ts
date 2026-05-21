@@ -14,7 +14,6 @@ import {
   NotificationListener,
   CalendarSync,
   EmailSync,
-  type ObserverEvent,
 } from './index';
 
 // Use an isolated temp dir instead of /tmp to avoid slow recursive watches on CI

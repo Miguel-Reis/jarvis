@@ -9,7 +9,7 @@
  */
 
 import type { ApiContext } from '../api-routes.ts';
-import { json, error } from './_shared.ts';
+import { json } from './_shared.ts';
 import {
   exportAllPreferences,
   importPreferences,
@@ -21,7 +21,7 @@ import {
   type PreferenceCategory,
 } from '../../vault/user-preferences.ts';
 
-export function registerRoutes(ctx: ApiContext): Record<string, unknown> {
+export function registerRoutes(_ctx: ApiContext): Record<string, unknown> {
   const routes: Record<string, unknown> = {};
 
   // GET /api/preferences — Get all high-confidence preferences
@@ -58,7 +58,7 @@ export function registerRoutes(ctx: ApiContext): Record<string, unknown> {
 
   // GET /api/preferences/:category — Get preferences by single category
   routes['/api/preferences/:category'] = {
-    GET: (req: Request, params: { category: string }) => {
+    GET: (_req: Request, params: { category: string }) => {
       try {
         const category = params.category as PreferenceCategory;
         const validCategories: PreferenceCategory[] = ['coding', 'communication', 'workflow', 'testing', 'documentation'];
@@ -112,7 +112,7 @@ export function registerRoutes(ctx: ApiContext): Record<string, unknown> {
 
   // DELETE /api/preferences/:category/:name — Delete a preference
   routes['/api/preferences/:category/:name'] = {
-    DELETE: (req: Request, params: { category: string; name: string }) => {
+    DELETE: (_req: Request, params: { category: string; name: string }) => {
       try {
         const category = params.category as PreferenceCategory;
         const name = params.name;

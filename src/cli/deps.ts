@@ -11,7 +11,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { spawnSync } from 'bun';
-import { c, printOk, printWarn, printErr, printInfo, askYesNo, ask, askSecret, startSpinner, detectPlatform } from './helpers.ts';
+import { c, printOk, printWarn, printErr, printInfo, askYesNo, ask, askSecret, detectPlatform } from './helpers.ts';
 import { LINUX_BROWSER_PATHS, MACOS_BROWSER_PATHS, type BrowserExecutable } from '../actions/browser/chrome-launcher.ts';
 
 export type DepStatus = {

@@ -1,4 +1,3 @@
-import React from "react";
 import type { AgentActivityEvent } from "../../hooks/useWebSocket";
 
 export type LiveAgentInfo = {

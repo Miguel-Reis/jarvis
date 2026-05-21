@@ -5,7 +5,7 @@
  * and connection tracking. Handles ES256 key pair lifecycle and JWT signing.
  */
 
-import { generateKeyPair, exportJWK, exportPKCS8, exportSPKI, importPKCS8, importSPKI, SignJWT, jwtVerify, createRemoteJWKSet, type JWK } from 'jose';
+import { generateKeyPair, exportJWK, exportPKCS8, exportSPKI, importPKCS8, importSPKI, SignJWT, jwtVerify, type JWK } from 'jose';
 import { existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import type { ServerWebSocket } from 'bun';
@@ -88,7 +88,7 @@ export class SidecarManager implements Service {
       await this.loadOrGenerateKeys();
 
       // Wire scheduler handlers
-      this.scheduler.on('rpc_result', async (sidecarId, event) => {
+      this.scheduler.on('rpc_result', async (_sidecarId, event) => {
         const payload = event.payload as RPCResultPayload | RPCErrorPayload;
         if (payload.error) {
           this.rpcTracker.fail(payload.rpc_id, new Error(`${payload.error.code}: ${payload.error.message}`));
@@ -120,7 +120,7 @@ export class SidecarManager implements Service {
         this.scheduler.on(type, sidecarEventHandler);
       }
 
-      this.rpcTracker.onDetachedComplete((rpcId, result, error) => {
+      this.rpcTracker.onDetachedComplete((rpcId, _result, error) => {
         if (error) {
           console.warn(`[SidecarManager] Detached RPC ${rpcId} failed:`, error.message);
           this.detachedErrorCallback?.(

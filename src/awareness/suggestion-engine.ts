@@ -6,7 +6,7 @@
  * Supports: error, stuck, automation, knowledge, schedule, break, general.
  */
 
-import type { ScreenContext, AwarenessEvent, Suggestion, SuggestionType } from './types.ts';
+import type { ScreenContext, AwarenessEvent, Suggestion } from './types.ts';
 import { createSuggestion, getSuggestionCountSince, getCaptureCountSince } from '../vault/awareness.ts';
 import { searchEntitiesByName } from '../vault/entities.ts';
 import { findFacts } from '../vault/facts.ts';
@@ -192,7 +192,7 @@ export class SuggestionEngine {
     minutes: number,
     signals: Array<{ name: string; score: number; detail: string }>
   ): string {
-    const topSignal = signals.sort((a, b) => b.score - a.score)[0]!;
+    signals.sort((a, b) => b.score - a.score);
 
     const messages: Record<string, string> = {
       code_editor: `I've been watching you edit this code for ${minutes}+ minutes and it looks like you might be stuck. Let me analyze your code for issues...`,

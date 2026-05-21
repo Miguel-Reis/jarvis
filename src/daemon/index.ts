@@ -28,7 +28,7 @@ import { createApiRoutes, setCorsOrigin } from "./api-routes.ts";
 import { initEmbeddingService } from "../llm/embeddings.ts";
 import { GoogleAuth } from "../integrations/google-auth.ts";
 import { ResearchQueue } from "./research-queue.ts";
-import { researchQueueTool, setResearchQueueRef } from "../actions/tools/research.ts";
+import { setResearchQueueRef } from "../actions/tools/research.ts";
 import { ChannelService } from "./channel-service.ts";
 import { McpService } from "./mcp-service.ts";
 // Static imports migrated from dynamic imports
@@ -116,9 +116,9 @@ let screenCaptureService: ScreenCaptureService | null = null;
 let vlmAnalyzer: VLMAnalyzer | null = null;
 let autoTestService: AutoTestService | null = null;
 let liveScreenService: LiveScreenService | null = null;
-let timeTracker = getTimeTracker();
-let metricsService = getMetricsService();
-let predictionEngine = getPredictionEngine();
+getTimeTracker();
+getMetricsService();
+getPredictionEngine();
 let coordinationLogger = getCoordinationLogger();
 let deepMemoryService: import('../services/deep-memory-synthesis-service.ts').DeepMemorySynthesisService | null = null;
 let voiceLoopService: import('../services/voice-loop-service.ts').VoiceLoopService | null = null;
@@ -733,7 +733,7 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
     apiContext.mcpService = mcpService;
     approvalDelivery.setBroadcaster(wsService);
     approvalDelivery.setChannelSender(channelService);
-    deferredExecutor.setResultCallback((requestId, request, result) => {
+    deferredExecutor.setResultCallback((_requestId, request, result) => {
       // Notify via WS and channels that an approved action was executed
       const text = `[EXECUTED] ${request.tool_name}: ${result.slice(0, 200)}`;
       wsService.broadcastNotification(text, 'normal');

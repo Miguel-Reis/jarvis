@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import type { WorkflowEvent } from "../hooks/useWebSocket";
 import { useApiData, api } from "../hooks/useApi";
 import { useToast } from "../components/Toast";

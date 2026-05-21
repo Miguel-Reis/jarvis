@@ -5,8 +5,8 @@
  * API keys are stored in the encrypted secrets file via the keychain module.
  */
 
-import { getSetting, setSetting, getSettingsByPrefix } from '../vault/settings.ts';
-import { getSecret, setSecret, deleteSecret, hasSecret } from '../vault/keychain.ts';
+import { getSetting, setSetting } from '../vault/settings.ts';
+import { getSecret, setSecret, hasSecret } from '../vault/keychain.ts';
 import type { JarvisConfig } from '../config/types.ts';
 import { AnthropicProvider } from '../llm/anthropic.ts';
 import { OpenAIProvider } from '../llm/openai.ts';

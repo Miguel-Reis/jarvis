@@ -1,5 +1,5 @@
 import { test, expect, describe, beforeEach } from 'bun:test';
-import { initDatabase, closeDb, getDb } from '../vault/schema.ts';
+import { initDatabase, getDb } from '../vault/schema.ts';
 import { AuthorityEngine, type AuthorityConfig } from './engine.ts';
 import { ApprovalManager } from './approval.ts';
 import { AuditTrail } from './audit.ts';

@@ -16,7 +16,7 @@ const mockOrchestrator = {
     console.log(`   Data: ${JSON.stringify(event.data)}`);
     console.log(`   Timestamp: ${new Date(event.timestamp).toISOString()}\n`);
   },
-  processMessage: async (systemPrompt: string, message: string) => {
+  processMessage: async (_systemPrompt: string, message: string) => {
     console.log(`[MockOrchestrator] Processing: ${message.slice(0, 100)}...`);
     return "Interrupt processed successfully";
   },

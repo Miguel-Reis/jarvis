@@ -30,7 +30,7 @@ export function HUDOverlayPage() {
     voiceActive: false,
     systemStatus: 'healthy',
   });
-  const [isDragging, setIsDragging] = useState(false);
+  const [, setIsDragging] = useState(false);
   const [position, setPosition] = useState({ x: 20, y: 20 });
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [opacity, setOpacity] = useState(0.85);

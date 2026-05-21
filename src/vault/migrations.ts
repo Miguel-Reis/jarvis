@@ -141,7 +141,7 @@ function setSchemaVersion(version: number): void {
 // ── Runner ─────────────────────────────────────────────────────────
 
 export async function runMigrations(): Promise<void> {
-  const db = getDb();
+  getDb();
   let version: number;
 
   try {

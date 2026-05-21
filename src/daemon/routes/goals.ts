@@ -4,7 +4,7 @@
  */
 
 import type { ApiContext } from '../api-routes';
-import { json, error, getSearchParams } from './_shared.ts';
+import { json, error } from './_shared.ts';
 
 export function registerRoutes(ctx: ApiContext) {
   return {

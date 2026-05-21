@@ -11,7 +11,7 @@ import { homedir } from 'node:os';
 import { Buffer } from 'node:buffer';
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, writeFileSync, unlinkSync } from 'node:fs';
-import { c, printOk, printErr, printWarn } from './helpers.ts';
+import { printOk, printErr, printWarn } from './helpers.ts';
 
 function canSpawnBinary(binary: string): boolean {
   try {

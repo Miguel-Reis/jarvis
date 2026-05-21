@@ -1,4 +1,3 @@
-import React from "react";
 import type { ChatMessage } from "../../hooks/useWebSocket";
 import { ToolCallBadge } from "./ToolCallBadge";
 import { SubAgentTag } from "./SubAgentTag";

@@ -9,11 +9,6 @@ import { watch, type FSWatcher } from 'node:fs';
 import { join } from 'node:path';
 import type { Observer, ObserverEvent, ObserverEventHandler } from './index';
 
-type DebounceEntry = {
-  path: string;
-  timestamp: number;
-};
-
 export class FileWatcher implements Observer {
   name = 'file-watcher';
   private watchers: FSWatcher[] = [];

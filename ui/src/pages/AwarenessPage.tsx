@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { api, useApiData } from "../hooks/useApi";
 import { LiveContextPanel } from "../components/awareness/LiveContextPanel";
 import { SuggestionPanel } from "../components/awareness/SuggestionPanel";

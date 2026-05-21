@@ -208,18 +208,6 @@ describe('vmGetState', () => {
 
 describe('sudoPrefix', () => {
   it('adds sudo -u when vm_user differs from connection user', () => {
-    const fake: RemoteShell = {
-      connection: {
-        name: 'test',
-        host: 'localhost',
-        user: 'miguel',
-        vm_user: 'vboxuser',
-        jumpChain: [],
-      } as RemoteConnection,
-      exec: async () => ({ stdout: '', stderr: '', exitCode: 0, duration: 0 }),
-      stream: async function* () {},
-    };
-
     // Internal test for the helper
     const cmd = 'VBoxManage list vms';
     const expected = `sudo -u vboxuser ${cmd}`;

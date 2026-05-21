@@ -267,7 +267,7 @@ describe('Process Lock Manager', () => {
     }, { timeout: 15000 });
 
     test('lock survives SIGTERM of holder (graceful)', async () => {
-      const { proc, pid } = await spawnLockHolder();
+      const { proc, pid: _pid } = await spawnLockHolder();
       childProc = proc;
 
       // SIGTERM — child exits, OS releases flock

@@ -12,6 +12,7 @@
 
 import type { Service, ServiceStatus } from '../daemon/types.ts';
 import { getDb, generateId } from '../vault/schema.ts';
+import { readFileSync } from 'node:fs';
 
 export interface ScreenCaptureConfig {
   enabled: boolean;
@@ -49,11 +50,9 @@ export class ScreenCaptureService implements Service {
   private captureBuffer: ScreenCaptureResult[] = [];  // Circular buffer
   private maxBufferSize = 5;  // Keep last 5 captures
   private onCapture?: (capture: ScreenCaptureResult) => void;
-  private isWSL: boolean = false;
 
   constructor(config?: Partial<ScreenCaptureConfig>) {
     this.config = { ...DEFAULT_CONFIG, ...config };
-    this.isWSL = false;
   }
 
   /**
@@ -67,7 +66,7 @@ export class ScreenCaptureService implements Service {
 
     // Check /proc/version for Microsoft
     try {
-      const version = Bun.file('/proc/version').text().catch(() => '').toLowerCase();
+      const version = readFileSync('/proc/version', 'utf-8').toLowerCase();
       if (version.includes('microsoft')) {
         return true;
       }

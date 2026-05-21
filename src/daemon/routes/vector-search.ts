@@ -8,7 +8,7 @@ import type { ApiContext } from '../api-routes.ts';
 import { json, error } from './_shared.ts';
 import { getVectorIndex } from '../../vault/vector-index.ts';
 
-export function registerRoutes(ctx: ApiContext) {
+export function registerRoutes(_ctx: ApiContext) {
   return {
     '/api/vector/search': {
       GET: async (req: Request) => {

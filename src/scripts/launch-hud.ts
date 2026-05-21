@@ -6,8 +6,6 @@
  */
 
 import { spawn } from 'node:child_process';
-import path from 'node:path';
-import os from 'node:os';
 
 const PORT = process.env.JARVIS_PORT || '3142';
 const HUD_URL = `http://localhost:${PORT}/#/hud`;

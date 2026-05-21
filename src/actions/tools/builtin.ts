@@ -227,7 +227,6 @@ export const runCommandTool: ToolDefinition = {
 
     const explicitCwd = params.cwd as string | undefined;
     const cwd = explicitCwd || getDefaultCwd() || homedir();
-    const timeout = (params.timeout as number) || undefined;
 
     // Stream output in real-time via event bus
     let output = '';

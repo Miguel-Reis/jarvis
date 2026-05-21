@@ -535,13 +535,13 @@ export function registerRoutes(ctx: ApiContext) {
             existingRepo?: string;
           };
           const gh = ctx.siteBuilderService.githubManager;
-          let owner: string, repo: string, cloneUrl: string, htmlUrl: string;
+          let owner: string, repo: string, cloneUrl: string;
 
           if (body.existingRepo) {
             const [o, r] = body.existingRepo.split('/');
             if (!o || !r) return error('existingRepo must be in "owner/repo" format');
             const info = await gh.getRepo(o, r);
-            owner = info.owner; repo = info.repo; cloneUrl = info.cloneUrl; htmlUrl = info.htmlUrl;
+            owner = info.owner; repo = info.repo; cloneUrl = info.cloneUrl;
           } else {
             if (!body.name) return error('name is required (or provide existingRepo)');
             const info = await gh.createRepo({
@@ -549,7 +549,7 @@ export function registerRoutes(ctx: ApiContext) {
               description: body.description,
               private: body.private ?? true,
             });
-            owner = info.owner; repo = info.repo; cloneUrl = info.cloneUrl; htmlUrl = info.htmlUrl;
+            owner = info.owner; repo = info.repo; cloneUrl = info.cloneUrl;
           }
 
           await gh.addRemote(projectPath, cloneUrl);

@@ -21,8 +21,6 @@ export interface OverallHealth {
   version: string;
 }
 
-const HEALTH_CHECK_TIMEOUT = 5000;
-
 /**
  * Check database connectivity and query performance
  */
@@ -205,7 +203,7 @@ export async function checkDiskHealth(): Promise<HealthCheckResult> {
 
     if (platform === 'win32') {
       // Windows: use PowerShell
-      const output = execSync(
+      execSync(
         'powershell -command "Get-Volume | Select-Object -First 1 | Select-Object SizeRemaining,Size"',
         { encoding: 'utf-8' }
       );
@@ -290,8 +288,6 @@ export async function checkMemoryHealth(): Promise<HealthCheckResult> {
  * Run all health checks
  */
 export async function runDeepHealthCheck(): Promise<OverallHealth> {
-  const startTime = Date.now();
-
   const [database, llm, browser, sidecars, disk, memory] = await Promise.all([
     checkDatabaseHealth(),
     checkLLMProviderHealth(),

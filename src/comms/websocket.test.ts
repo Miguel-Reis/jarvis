@@ -160,7 +160,7 @@ test('WebSocketServer - binary message routing', async () => {
   let receivedFromWs: any = null;
 
   server.setHandler({
-    async onMessage(msg, _ws) { return undefined; },
+    async onMessage(_msg, _ws) { return undefined; },
     async onBinaryMessage(data, ws) {
       receivedBinary = data;
       receivedFromWs = ws;
@@ -191,7 +191,7 @@ test('WebSocketServer - sendBinary reaches client', async () => {
   let serverWsRef: any = null;
 
   server.setHandler({
-    async onMessage(msg, ws) {
+    async onMessage(_msg, ws) {
       serverWsRef = ws;
       return { type: 'status', payload: { ok: true }, timestamp: Date.now() };
     },
@@ -364,7 +364,7 @@ test('WebSocketServer - sendToClient unicasts JSON', async () => {
   let serverWsRef: any = null;
 
   server.setHandler({
-    async onMessage(msg, ws) {
+    async onMessage(_msg, ws) {
       serverWsRef = ws;
       return undefined;  // No auto-response
     },

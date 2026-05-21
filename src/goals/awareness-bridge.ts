@@ -7,7 +7,6 @@
  * Feeds the evening review with detected activity.
  */
 
-import type { Goal } from './types.ts';
 import * as vault from '../vault/goals.ts';
 
 export type AwarenessGoalMatch = {

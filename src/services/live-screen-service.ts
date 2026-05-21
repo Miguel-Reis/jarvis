@@ -14,9 +14,10 @@
  */
 
 import type { Service, ServiceStatus } from '../daemon/types.ts';
-import { getSidecarManager, resolveDefaultSidecar } from '../actions/tools/sidecar-route.ts';
+import { getSidecarManager } from '../actions/tools/sidecar-route.ts';
 import type { SidecarInfo } from '../sidecar/types.ts';
 import { getDb, generateId } from '../vault/schema.ts';
+import { readFileSync } from 'node:fs';
 
 export interface LiveScreenConfig {
   enabled: boolean;
@@ -77,7 +78,7 @@ export class LiveScreenService implements Service {
     }
 
     try {
-      const version = Bun.file('/proc/version').text().catch(() => '').toLowerCase();
+      const version = readFileSync('/proc/version', 'utf-8').toLowerCase();
       if (version.includes('microsoft')) {
         return true;
       }
@@ -138,7 +139,7 @@ export class LiveScreenService implements Service {
     this.statusState = 'stopping';
 
     // Stop all intervals
-    for (const [sidecarId, timer] of this.captureIntervals) {
+    for (const [, timer] of this.captureIntervals) {
       clearInterval(timer);
     }
     this.captureIntervals.clear();
@@ -202,21 +203,6 @@ export class LiveScreenService implements Service {
   }
 
   /**
-   * Stop intervals for sidecars that are no longer available
-   */
-  private cleanupIntervals(): void {
-    const availableIds = new Set(this.getAvailableSidecars().map(s => s.id));
-
-    for (const [sidecarId, timer] of this.captureIntervals) {
-      if (!availableIds.has(sidecarId)) {
-        clearInterval(timer);
-        this.captureIntervals.delete(sidecarId);
-        console.log(`[LiveScreen] Stopped capture for disconnected sidecar: ${sidecarId}`);
-      }
-    }
-  }
-
-  /**
    * Capture screen from a specific sidecar
    */
   private async captureFromSidecar(sidecar: SidecarInfo): Promise<LiveScreenResult | null> {
@@ -255,10 +241,10 @@ export class LiveScreenService implements Service {
         try {
           const parsed = JSON.parse(result);
           if (parsed._binary) {
-            base64 = parsed._binary;
+            base64 = parsed._binary as string;
             imageData = Buffer.from(base64, 'base64');
           } else if (parsed.data) {
-            base64 = parsed.data;
+            base64 = parsed.data as string;
             imageData = Buffer.from(base64, 'base64');
           }
         } catch {

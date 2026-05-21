@@ -68,7 +68,7 @@ class Histogram {
 
   constructor(
     private name: string,
-    private labels: MetricLabels = {},
+    _labels: MetricLabels = {},
     bucketBoundaries: number[] = [10, 50, 100, 250, 500, 1000, 2500, 5000, 10000]
   ) {
     this.buckets = bucketBoundaries.map(threshold => ({ threshold, count: 0 }));
@@ -114,11 +114,11 @@ class Histogram {
       count: this.count,
       sum: this.sum,
       average: this.sum / this.count,
-      min: sorted[0],
-      max: sorted[sorted.length - 1],
-      p50: sorted[Math.floor(sorted.length * 0.5)],
-      p90: sorted[Math.floor(sorted.length * 0.9)],
-      p99: sorted[Math.floor(sorted.length * 0.99)],
+      min: sorted[0]!,
+      max: sorted[sorted.length - 1]!,
+      p50: sorted[Math.floor(sorted.length * 0.5)]!,
+      p90: sorted[Math.floor(sorted.length * 0.9)]!,
+      p99: sorted[Math.floor(sorted.length * 0.99)]!,
     };
   }
 

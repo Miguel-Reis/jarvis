@@ -15,10 +15,9 @@ import {
   getProjectContextForPrompt,
   upsertProjectContext,
   type ProjectContext,
+  findGitRoot,
 } from '../vault/project-contexts.ts';
-import { findGitRoot } from '../vault/project-contexts.ts';
-import { watch, type FSWatcher } from 'node:fs';
-import { join, dirname } from 'node:path';
+import type { FSWatcher } from 'node:fs';
 
 export interface ProjectContextConfig {
   enabled: boolean;

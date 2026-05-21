@@ -986,7 +986,7 @@ type DashboardData = {
 /* ================================================================
    DASHBOARD PAGE — root export, data fetching
    ================================================================ */
-export default function DashboardPage({ messages, isConnected, voice, agentActivity, goalEvents, workflowEvents }: DashboardProps) {
+export default function DashboardPage({ messages, isConnected: _isConnected, voice, agentActivity: _agentActivity, goalEvents, workflowEvents }: DashboardProps) {
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [health, setHealth] = useState<HealthData | null>(null);
   const [entities, setEntities] = useState<VaultEntity[]>([]);

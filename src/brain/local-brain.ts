@@ -207,7 +207,7 @@ export class LocalBrain {
     return { match: false, params: {}, confidence: 0 };
   }
 
-  private extractParams(match: RegExpMatchArray, skill: Skill): Record<string, string> {
+  private extractParams(match: RegExpMatchArray, _skill: Skill): Record<string, string> {
     const params: Record<string, string> = {};
 
     // Extract named groups from regex

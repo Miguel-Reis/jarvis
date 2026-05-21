@@ -237,7 +237,7 @@ export class PredictionEngine {
       const activeGoals = goals.filter(g => g.status !== 'completed');
       const completedGoals = goals.filter(g => g.status === 'completed');
 
-      const completedScore = completedGoals.reduce((sum, g) => sum + 1, 0);
+      const completedScore = completedGoals.reduce((sum, _) => sum + 1, 0);
       const activeScore = activeGoals.reduce((sum, g) => sum + (g.score ?? 0), 0);
       const completionPercentage = Math.round(((completedScore + activeScore) / goals.length) * 100);
 

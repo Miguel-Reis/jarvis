@@ -17,13 +17,6 @@ const DNS_HOSTS = [
 
 type NetworkStatus = 'online' | 'offline' | 'degraded';
 
-type NetworkEvent = {
-  status: NetworkStatus;
-  latencyMs?: number;
-  dnsHost?: string;
-  message?: string;
-};
-
 export class NetworkMonitor implements Observer {
   name = 'network-monitor';
   private running = false;

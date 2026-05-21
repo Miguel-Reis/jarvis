@@ -1,7 +1,7 @@
-import { test, expect, describe, beforeEach, afterEach } from 'bun:test';
+import { test, expect, describe, afterEach } from 'bun:test';
 import { DESKTOP_TOOLS } from './desktop.ts';
 import { setSidecarManagerRef, resolveDefaultSidecar } from './sidecar-route.ts';
-import type { SidecarInfo, SidecarCapability } from '../../sidecar/types.ts';
+import type { SidecarInfo } from '../../sidecar/types.ts';
 
 /**
  * Minimal mock of SidecarManager for routing tests.

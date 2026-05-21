@@ -10,15 +10,6 @@
 
 import type { RemoteShell, RemoteExecResult } from '../remote/types.ts';
 
-type VMInfo = {
-  name: string;
-  uuid: string;
-  ostype: string;
-  state: string;
-  memory: number;
-  cpus: number;
-};
-
 type SnapshotInfo = {
   name: string;
   uuid: string;

@@ -187,7 +187,6 @@ export function registerRoutes(ctx: ApiContext): Record<string, Record<string, (
     // Observer status
     '/api/status/observers': {
       GET: () => {
-        const { ObserverManager } = require('../../observers/index.ts');
         // Return observer status from service registry
         const observerService = ctx.observerService;
         if (!observerService) {
@@ -206,7 +205,6 @@ export function registerRoutes(ctx: ApiContext): Record<string, Record<string, (
     '/api/status/network': {
       GET: async () => {
         try {
-          const { NetworkMonitor } = await import('../../observers/network.ts');
           // Return cached network status if available
           return json({
             status: 'online',

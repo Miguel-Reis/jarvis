@@ -4,7 +4,6 @@ import {
   buildExtractionPrompt,
   parseExtractionResponse,
   extractAndStore,
-  type ExtractionResult,
 } from './extractor.ts';
 import { findEntities } from './entities.ts';
 import { findFacts } from './facts.ts';
@@ -110,7 +109,7 @@ describe('Vault Extractor', () => {
     test('should extract and store entities', async () => {
       const mockProvider: LLMProvider = {
         name: 'mock',
-        async chat(messages: LLMMessage[], options?: LLMOptions): Promise<LLMResponse> {
+        async chat(_messages: LLMMessage[], _options?: LLMOptions): Promise<LLMResponse> {
           return {
             content: JSON.stringify({
               entities: [

@@ -22,7 +22,7 @@ import { saveNotification } from '../vault/notifications.ts';
 import { WebSocketServer, type WSMessage } from '../comms/websocket.ts';
 import { StreamRelay } from '../comms/streaming.ts';
 import { getOrCreateConversation, addMessage } from '../vault/conversations.ts';
-import { createThread, saveMessage as saveThreadMessage, updateThreadTitle, getThread } from '../vault/threads.ts';
+import { saveMessage as saveThreadMessage, updateThreadTitle, getThread } from '../vault/threads.ts';
 import { maybeCreateUserProfileFollowupPrompt, recordUserProfileTurn } from '../user/profile-followup.ts';
 import { eventBus, DaemonEvents } from '../events/bus.ts';
 
@@ -50,12 +50,6 @@ type VoiceSession = {
  * Wake-word detection hook for browser-based clients.
  * This is called when a client connects and requests wake-word activation.
  */
-async function activateClientWakeWord(): Promise<void> {
-  // In a browser context, the client would use the WakeWordService class
-  // This is a server-side stub - actual wake-word runs in the dashboard
-  console.log('[WSService] Client requested wake-word activation (browser handles detection)');
-}
-
 export class WebSocketService implements Service {
   name = 'websocket';
   private _status: ServiceStatus = 'stopped';
@@ -78,7 +72,6 @@ export class WebSocketService implements Service {
   /** Periodic ping interval to keep connections alive and detect dead clients */
   private pingTimer: Timer | null = null;
   private static PING_INTERVAL_MS = 25_000; // 25 seconds
-  private static CLIENT_TIMEOUT_MS = 90_000; // 90 seconds without pong → close
 
   constructor(port: number, agentService: AgentService) {
     this.port = port;
@@ -88,7 +81,7 @@ export class WebSocketService implements Service {
 
     // Wire delegation callback via event bus: when PA delegates to a specialist,
     // update the active task's assigned_to on the task board
-    eventBus.on(DaemonEvents.AGENT_DELEGATION, (specialistName, task) => {
+    eventBus.on(DaemonEvents.AGENT_DELEGATION, (specialistName, _task) => {
       if (!this.activeTaskId) return;
       try {
         const updated = updateCommitmentAssignee(this.activeTaskId, specialistName);

@@ -1,5 +1,4 @@
 import type { AgentInstance } from './agent.ts';
-import type { Commitment } from '../vault/commitments.ts';
 import { createCommitment } from '../vault/commitments.ts';
 import { sendMessage, type MessagePriority } from './messaging.ts';
 

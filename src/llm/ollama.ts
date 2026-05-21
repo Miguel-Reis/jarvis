@@ -90,7 +90,7 @@ export class OllamaProvider implements LLMProvider {
   }
 
   async chat(messages: LLMMessage[], options: LLMOptions = {}): Promise<LLMResponse> {
-    const { model = this.defaultModel, temperature, tools, tool_choice, signal } = options;
+    const { model = this.defaultModel, temperature, tools, signal } = options;
     
     // Compact history for Ollama's context limits
     const budget = calculateHistoryBudget(32000);
@@ -130,7 +130,7 @@ export class OllamaProvider implements LLMProvider {
   }
 
   async *stream(messages: LLMMessage[], options: LLMOptions = {}): AsyncIterable<LLMStreamEvent> {
-    const { model = this.defaultModel, temperature, tools, tool_choice, signal } = options;
+    const { model = this.defaultModel, temperature, tools, signal } = options;
     
     // Compact history for Ollama's context limits
     const budget = calculateHistoryBudget(32000);

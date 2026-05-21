@@ -51,7 +51,6 @@ export class VoiceLoopService implements Service {
 
   // Callbacks
   private onTranscript?: (sessionId: string, transcript: string) => void;
-  private onTTSDone?: (sessionId: string) => void;
   private onSessionEnd?: (sessionId: string) => void;
 
   constructor(config?: Partial<VoiceLoopConfig>) {
@@ -93,7 +92,7 @@ export class VoiceLoopService implements Service {
     }
 
     // End all sessions
-    for (const [id, session] of this.sessions.entries()) {
+    for (const id of this.sessions.keys()) {
       this.endSession(id);
     }
     this.sessions.clear();
@@ -130,10 +129,6 @@ export class VoiceLoopService implements Service {
    */
   setTranscriptCallback(callback: (sessionId: string, transcript: string) => void): void {
     this.onTranscript = callback;
-  }
-
-  setTTSDoneCallback(callback: (sessionId: string) => void): void {
-    this.onTTSDone = callback;
   }
 
   setSessionEndCallback(callback: (sessionId: string) => void): void {

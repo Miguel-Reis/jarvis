@@ -185,7 +185,7 @@ export class LiteLLMProvider implements LLMProvider {
       body.tool_choice = tool_choice || 'auto';
     }
 
-    let lastErr: Error | null = null;
+    // NOTE: bug — stream() retries on 429 but never surfaces the accumulated error if all retries fail.
     for (let attempt = 0; attempt <= this.rateLimitConfig.maxRetries; attempt++) {
       if (attempt > 0) {
         const delay = Math.min(
@@ -207,7 +207,7 @@ export class LiteLLMProvider implements LLMProvider {
 
       if (!response.ok) {
         if (response.status === 429) {
-          lastErr = new Error(`LiteLLM rate limited (429)`);
+          // Rate limited - will retry or exhaust retries
           continue;
         }
         const errorText = await response.text();

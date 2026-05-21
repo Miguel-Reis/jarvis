@@ -4,7 +4,7 @@
  */
 
 import type { ApiContext } from '../api-routes';
-import { json, error, getSearchParams, CORS } from './_shared.ts';
+import { json, error, getSearchParams } from './_shared.ts';
 import { findEntities, getEntity, searchEntitiesByName, createEntity, deleteEntity } from '../../vault/entities.ts';
 import { findFacts, createFact, deleteFact } from '../../vault/facts.ts';
 import { findRelationships, getEntityRelationships } from '../../vault/relationships.ts';

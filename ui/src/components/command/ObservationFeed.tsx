@@ -1,4 +1,3 @@
-import React from "react";
 import { useApiData } from "../../hooks/useApi";
 
 type Observation = {

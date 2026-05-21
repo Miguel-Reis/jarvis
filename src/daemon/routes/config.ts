@@ -502,7 +502,7 @@ export function registerRoutes(ctx: ApiContext) {
 
     '/api/user-profile/presets': {
       GET: () => {
-        const presets = Object.entries(USER_PROFILE_PRESETS).map(([id, data]) => ({
+        const presets = Object.entries(USER_PROFILE_PRESETS).map(([id, _data]) => ({
           id,
           name: id.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
           description: getProfilePresetDescription(id),

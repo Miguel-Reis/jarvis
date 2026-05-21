@@ -11,7 +11,6 @@ import {
   listAllowedActions,
   listDeniedActions,
   getRolePermissionsSummary,
-  type RoleDefinition,
   type ActionCategory,
 } from './index.ts';
 

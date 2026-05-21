@@ -1,10 +1,10 @@
 import { test, expect, describe, beforeEach } from 'bun:test';
 import { initDatabase } from '../vault/schema.ts';
 import * as vault from '../vault/workflows.ts';
-import { topologicalSort, getOutgoingEdges, executeNode } from './executor.ts';
+import { topologicalSort, getOutgoingEdges } from './executor.ts';
 import { resolveExpression, resolveTemplateString, resolveAllTemplates, type TemplateContext } from './template.ts';
 import { VariableScope } from './variables.ts';
-import { NodeRegistry, type NodeDefinition, type NodeInput, type ExecutionContext } from './nodes/registry.ts';
+import { NodeRegistry, type NodeDefinition } from './nodes/registry.ts';
 import type { WorkflowDefinition } from './types.ts';
 import { DEFAULT_WORKFLOW_SETTINGS } from './types.ts';
 

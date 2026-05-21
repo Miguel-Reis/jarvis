@@ -31,7 +31,6 @@ export { SignalAdapter } from './channels/signal.ts';
 // Channel Manager
 export class ChannelManager {
   private channels: Map<string, import('./channels/telegram.ts').ChannelAdapter> = new Map();
-  private handler: import('./channels/telegram.ts').ChannelHandler | null = null;
 
   /**
    * Register a channel adapter
@@ -49,8 +48,6 @@ export class ChannelManager {
    * Set the message handler for all channels
    */
   setHandler(handler: import('./channels/telegram.ts').ChannelHandler): void {
-    this.handler = handler;
-
     // Apply handler to all registered channels
     for (const adapter of this.channels.values()) {
       adapter.onMessage(handler);

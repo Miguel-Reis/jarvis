@@ -491,7 +491,7 @@ export class GoalService implements Service {
    * Decompose a high-level goal into actionable sub-tasks using the LLM.
    * This requires integration with the LLM manager.
    */
-  async decomposeGoal(goalId: string, llmManager?: any): Promise<SubTask[]> {
+  async decomposeGoal(goalId: string, _llmManager?: any): Promise<SubTask[]> {
     const goal = vault.getGoal(goalId);
     if (!goal) return [];
 

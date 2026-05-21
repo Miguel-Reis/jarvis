@@ -51,8 +51,8 @@ describe('Vault — Goals', () => {
   test('parent-child hierarchy', () => {
     const obj = vault.createGoal('Objective', 'objective');
     const kr1 = vault.createGoal('KR 1', 'key_result', { parent_id: obj.id });
-    const kr2 = vault.createGoal('KR 2', 'key_result', { parent_id: obj.id });
-    const milestone = vault.createGoal('Milestone 1', 'milestone', { parent_id: kr1.id });
+    vault.createGoal('KR 2', 'key_result', { parent_id: obj.id });
+    vault.createGoal('Milestone 1', 'milestone', { parent_id: kr1.id });
 
     const children = vault.getGoalChildren(obj.id);
     expect(children.length).toBe(2);
@@ -67,7 +67,7 @@ describe('Vault — Goals', () => {
     const obj = vault.createGoal('Root', 'objective');
     const kr = vault.createGoal('KR', 'key_result', { parent_id: obj.id });
     const ms = vault.createGoal('Milestone', 'milestone', { parent_id: kr.id });
-    const task = vault.createGoal('Task', 'task', { parent_id: ms.id });
+    vault.createGoal('Task', 'task', { parent_id: ms.id });
 
     const tree = vault.getGoalTree(obj.id);
     expect(tree.length).toBe(4);
@@ -342,7 +342,7 @@ describe('Vault — Goals', () => {
     expect(morning.goals_reviewed).toEqual(['goal-1', 'goal-2']);
     expect(morning.actions_planned).toEqual(['Build endpoints', 'Write tests']);
 
-    const evening = vault.createCheckIn(
+    vault.createCheckIn(
       'evening_review',
       'Built endpoints but skipped tests',
       ['goal-1', 'goal-2'],

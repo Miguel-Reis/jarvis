@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import type { ApprovalRequest } from "../../hooks/useWebSocket";
 
 type Props = {

@@ -8,7 +8,6 @@
 import type { AwarenessConfig } from '../config/types.ts';
 import type { ScreenContext, AwarenessEvent } from './types.ts';
 import { createSession, endSession, incrementSessionCaptureCount, updateSession } from '../vault/awareness.ts';
-import { generateId } from '../vault/schema.ts';
 import { StruggleDetector } from './struggle-detector.ts';
 
 // Strong error indicators — always trigger (rare in normal output)
@@ -276,7 +275,7 @@ export class ContextTracker {
   /**
    * Report idle/stuck state from sidecar idle_detected event.
    */
-  reportIdle(appName: string, durationMs: number): void {
+  reportIdle(_appName: string, durationMs: number): void {
     // The struggle detector already handles stuck detection from processCapture,
     // but this provides an external signal from the sidecar's window observer.
     // We can use it to supplement the stuck detection threshold.
