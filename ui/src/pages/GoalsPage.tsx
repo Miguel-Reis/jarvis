@@ -3,6 +3,7 @@ import type { GoalEvent } from "../hooks/useWebSocket";
 import { GoalConstellation } from "../components/goals/GoalConstellation";
 import { GoalTimeline } from "../components/goals/GoalTimeline";
 import { GoalMetrics } from "../components/goals/GoalMetrics";
+import { GoalKanban } from "../components/goals/GoalKanban";
 import { GoalDetail } from "../components/goals/GoalDetail";
 import { GoalCreateModal } from "../components/goals/GoalCreateModal";
 import "../styles/goals.css";
@@ -34,14 +35,14 @@ export type Goal = {
   completed_at: number | null;
 };
 
-type Tab = "constellation" | "timeline" | "metrics";
+type Tab = "kanban" | "constellation" | "timeline" | "metrics";
 
 type Props = {
   goalEvents: GoalEvent[];
 };
 
 export default function GoalsPage({ goalEvents }: Props) {
-  const [tab, setTab] = useState<Tab>("constellation");
+  const [tab, setTab] = useState<Tab>("kanban");
   const [goals, setGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
@@ -104,6 +105,13 @@ export default function GoalsPage({ goalEvents }: Props) {
         {/* View tabs */}
         <nav className="goals-view-tabs" aria-label="Goal views">
           <button
+            className={`goals-view-tab${tab === "kanban" ? " active" : ""}`}
+            onClick={() => setTab("kanban")}
+            aria-current={tab === "kanban" ? "page" : undefined}
+          >
+            Kanban
+          </button>
+          <button
             className={`goals-view-tab${tab === "constellation" ? " active" : ""}`}
             onClick={() => setTab("constellation")}
             aria-current={tab === "constellation" ? "page" : undefined}
@@ -161,6 +169,9 @@ export default function GoalsPage({ goalEvents }: Props) {
       ) : (
         <div className="goals-body">
           <div className="goals-content">
+            {tab === "kanban" && (
+              <GoalKanban goals={goals} onSelect={handleSelect} onRefresh={fetchGoals} />
+            )}
             {tab === "constellation" && (
               <GoalConstellation
                 goals={goals}
