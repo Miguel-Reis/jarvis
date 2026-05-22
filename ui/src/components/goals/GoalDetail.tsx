@@ -81,14 +81,20 @@ export function GoalDetail({ goal, onClose, onUpdated }: Props) {
 
   // Fetch children and progress history
   useEffect(() => {
-    fetch(`/api/goals/${goal.id}/children`)
+    const controller = new AbortController();
+    const { signal } = controller;
+
+    fetch(`/api/goals/${goal.id}/children`, { signal })
       .then(r => r.json())
-      .then(setChildren)
-      .catch(() => setChildren([]));
-    fetch(`/api/goals/${goal.id}/progress?limit=20`)
+      .then(data => { if (!signal.aborted) setChildren(data); })
+      .catch(err => { if (err.name !== "AbortError") setChildren([]); });
+
+    fetch(`/api/goals/${goal.id}/progress?limit=20`, { signal })
       .then(r => r.json())
-      .then(setProgress)
-      .catch(() => setProgress([]));
+      .then(data => { if (!signal.aborted) setProgress(data); })
+      .catch(err => { if (err.name !== "AbortError") setProgress([]); });
+
+    return () => controller.abort();
   }, [goal.id]);
 
   // ----------------------------------------------------------------

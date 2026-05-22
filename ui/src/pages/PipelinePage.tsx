@@ -48,6 +48,7 @@ export default function PipelinePage({ contentEvents, sendMessage }: Props) {
   const [modalOpen, setModalOpen] = useState(false);
   const [recentlyUpdated, setRecentlyUpdated] = useState<Set<string>>(new Set());
   const lastProcessedRef = useRef(0);
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data: items, loading, refetch } = useApiData<ContentItem[]>("/api/content", [refreshKey]);
   const [localItems, setLocalItems] = useState<ContentItem[]>([]);
@@ -61,9 +62,10 @@ export default function PipelinePage({ contentEvents, sendMessage }: Props) {
     if (newEvents.length === 0) return;
     lastProcessedRef.current = newEvents[newEvents.length - 1]!.timestamp;
 
+    const newUpdatedIds = new Set<string>();
+
     setLocalItems(prev => {
       let updated = [...prev];
-      const newUpdatedIds = new Set<string>();
       for (const event of newEvents) {
         const { action, item } = event;
         const idx = updated.findIndex(t => t.id === item.id);
@@ -71,15 +73,26 @@ export default function PipelinePage({ contentEvents, sendMessage }: Props) {
         else if (action === "updated") { if (idx !== -1) updated[idx] = item; else updated.push(item); newUpdatedIds.add(item.id); }
         else if (action === "deleted") { if (idx !== -1) updated.splice(idx, 1); if (selectedId === item.id) setSelectedId(null); }
       }
-      if (newUpdatedIds.size > 0) {
-        setRecentlyUpdated(prev => new Set([...prev, ...newUpdatedIds]));
-        setTimeout(() => { setRecentlyUpdated(prev => { const next = new Set(prev); for (const id of newUpdatedIds) next.delete(id); return next; }); }, 1500);
-      }
       return updated;
     });
 
+    if (newUpdatedIds.size > 0) {
+      setRecentlyUpdated(prev => new Set([...prev, ...newUpdatedIds]));
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+      highlightTimerRef.current = setTimeout(() => {
+        setRecentlyUpdated(prev => { const next = new Set(prev); for (const id of newUpdatedIds) next.delete(id); return next; });
+      }, 1500);
+    }
+
     if (newEvents.some(e => e.item.id === selectedId && e.action === "updated")) setRefreshKey(k => k + 1);
   }, [contentEvents, selectedId]);
+
+  // Clear highlight timer on unmount
+  useEffect(() => {
+    return () => {
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+    };
+  }, []);
 
   // Stage counts
   const stageCounts = useMemo(() => {

@@ -280,7 +280,7 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
     const MAX_REACTOR_INFLIGHT = 8;
     const reactSafe = (event: ReturnType<typeof classifyEvent>) => {
       if (reactorInFlight >= MAX_REACTOR_INFLIGHT) {
-        console.warn('[Daemon] Reactor saturated — dropping low-priority event:', event.type);
+        console.warn('[Daemon] Reactor saturated — dropping low-priority event:', event.event.type);
         return;
       }
       reactorInFlight++;
@@ -491,7 +491,7 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
     };
     setCorsOrigin(jarvisConfig.daemon.port);
     const apiRoutes = createApiRoutes(apiContext);
-    wsService.setApiRoutes(apiRoutes);
+    wsService.setApiRoutes(apiRoutes as Record<string, Record<string, (req: Request) => Response | Promise<Response>>>);
 
     // Serve dashboard from ui/dist/
     wsService.setStaticDir(uiDistDir);

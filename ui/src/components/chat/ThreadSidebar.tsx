@@ -28,6 +28,7 @@ export function ThreadSidebar({ activeThreadId, onSelectThread, onNewThread }: P
   const [threads, setThreads] = useState<Thread[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const loadThreads = useCallback(async () => {
     try {
@@ -59,8 +60,10 @@ export function ThreadSidebar({ activeThreadId, onSelectThread, onNewThread }: P
       if (activeThreadId === threadId) {
         onNewThread();
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to delete chat";
+      setDeleteError(message);
+      setTimeout(() => setDeleteError(null), 3000);
     } finally {
       setDeletingId(null);
     }
@@ -68,6 +71,12 @@ export function ThreadSidebar({ activeThreadId, onSelectThread, onNewThread }: P
 
   return (
     <aside className="thread-sidebar" aria-label="Chat history">
+      {/* Delete error banner */}
+      {deleteError && (
+        <div style={{ padding: "8px 12px", background: "rgba(251,113,133,0.12)", color: "var(--j-error, #fb7185)", fontSize: "12px", borderBottom: "1px solid rgba(251,113,133,0.2)" }}>
+          {deleteError}
+        </div>
+      )}
       {/* Header */}
       <div className="thread-sidebar-header">
         <span className="thread-sidebar-title">Chats</span>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 
 type CheckResult = {
   name: string;
@@ -82,15 +82,26 @@ export function DiagnosticsPanel() {
   const [checksError, setChecksError] = useState<string | null>(null);
   const [resetStatus, setResetStatus] = useState<"idle" | "confirming" | "running" | "done" | "error">("idle");
   const [resetMessage, setResetMessage] = useState("");
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => { isMountedRef.current = false; };
+  }, []);
 
   const fetchHealth = useCallback(async () => {
     try {
       const res = await fetch("/api/diagnostics/health");
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setHealth(await res.json());
-      setHealthError(null);
+      const data = await res.json();
+      if (isMountedRef.current) {
+        setHealth(data);
+        setHealthError(null);
+      }
     } catch (err) {
-      setHealthError(err instanceof Error ? err.message : String(err));
+      if (isMountedRef.current) {
+        setHealthError(err instanceof Error ? err.message : String(err));
+      }
     }
   }, []);
 

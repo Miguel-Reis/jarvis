@@ -234,6 +234,7 @@ export function useWebSocket() {
   const subAgentEventsRef = useRef<SubAgentEvent[]>([]);
   const voiceCallbacksRef = useRef<VoiceCallbacks | null>(null);
   const activeThreadIdRef = useRef<string | null>(null);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const connect = useCallback(() => {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -267,7 +268,7 @@ export function useWebSocket() {
     ws.onclose = () => {
       setIsConnected(false);
       console.log("[WS] Disconnected, reconnecting in 2s...");
-      setTimeout(connect, 2000);
+      reconnectTimerRef.current = setTimeout(connect, 2000);
     };
 
     ws.onerror = () => {
@@ -534,6 +535,7 @@ export function useWebSocket() {
   useEffect(() => {
     connect();
     return () => {
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
       wsRef.current?.close();
     };
   }, [connect]);

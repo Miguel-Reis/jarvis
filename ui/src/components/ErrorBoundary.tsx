@@ -13,7 +13,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
     return { error };
   }
 
-  componentDidCatch(error: Error, info: React.ErrorInfo) {
+  override componentDidCatch(error: Error, info: React.ErrorInfo) {
     console.error(`[ErrorBoundary:${this.props.name ?? "page"}]`, error, info.componentStack);
   }
 
@@ -26,7 +26,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
     this.setState({ error: null });
   }
 
-  render() {
+  override render() {
     if (!this.state.error) return this.props.children;
 
     const { error } = this.state;

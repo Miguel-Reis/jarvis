@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { GoalEvent } from "../hooks/useWebSocket";
 import { GoalConstellation } from "../components/goals/GoalConstellation";
 import { GoalTimeline } from "../components/goals/GoalTimeline";
@@ -48,6 +48,12 @@ export default function GoalsPage({ goalEvents }: Props) {
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [createInitialText, setCreateInitialText] = useState("");
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => { isMountedRef.current = false; };
+  }, []);
 
   const openCreate = (prefill = "") => {
     setCreateInitialText(prefill);
@@ -80,15 +86,18 @@ export default function GoalsPage({ goalEvents }: Props) {
     fetchGoals();
   };
 
-  const handleUpdated = () => {
+  const handleUpdated = useCallback(() => {
     fetchGoals();
     if (selectedGoal) {
       fetch(`/api/goals/${selectedGoal.id}`)
         .then((r) => (r.ok ? r.json() : null))
-        .then((g) => { if (g) setSelectedGoal(g); else setSelectedGoal(null); })
-        .catch(() => setSelectedGoal(null));
+        .then((g) => {
+          if (!isMountedRef.current) return;
+          if (g) setSelectedGoal(g); else setSelectedGoal(null);
+        })
+        .catch(() => { if (isMountedRef.current) setSelectedGoal(null); });
     }
-  };
+  }, [fetchGoals, selectedGoal]);
 
   const activeCount = goals.filter((g) => g.status === "active").length;
 
