@@ -977,7 +977,8 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
 
       heartbeatBusy = true;
       console.log('[Daemon] Heartbeat starting...');
-      try {
+
+      const heartbeatPromise = (async () => {
         // Check commitments and route critical/high ones to reactor
         const commitmentEvents = checkCommitments();
         for (const evt of commitmentEvents) {
@@ -993,30 +994,31 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
         // Flush coalesced events for heartbeat
         const coalescedSummary = coalescer.flush();
 
-        // Run heartbeat on BACKGROUND agent with timeout to prevent stuck busy lock
-        const heartbeatPromise = bgAgentService.handleHeartbeat(
-          coalescedSummary || undefined
-        );
-        const timeoutPromise = new Promise<null>((resolve) =>
-          setTimeout(() => {
-            console.error('[Daemon] Heartbeat timed out after 5 minutes');
-            resolve(null);
-          }, HEARTBEAT_TIMEOUT_MS)
-        );
+        return bgAgentService.handleHeartbeat(coalescedSummary || undefined);
+      })();
 
-        const heartbeatResponse = await Promise.race([heartbeatPromise, timeoutPromise]);
+      const timeoutPromise = new Promise<null>((resolve) =>
+        setTimeout(() => {
+          console.error('[Daemon] Heartbeat timed out after 5 minutes');
+          resolve(null);
+        }, HEARTBEAT_TIMEOUT_MS)
+      );
 
-        if (heartbeatResponse) {
-          console.log('[Daemon] Heartbeat response:', heartbeatResponse.slice(0, 200));
-          wsService.broadcastHeartbeat(heartbeatResponse);
-        } else {
-          console.log('[Daemon] Heartbeat returned no response (busy or timed out)');
-        }
-      } catch (err) {
-        console.error('[Daemon] Heartbeat error:', err);
-      } finally {
-        heartbeatBusy = false;
-      }
+      // Always clear busy flag when the actual work settles, not just on timeout
+      heartbeatPromise
+        .then((heartbeatResponse) => {
+          if (heartbeatResponse) {
+            console.log('[Daemon] Heartbeat response:', heartbeatResponse.slice(0, 200));
+            wsService.broadcastHeartbeat(heartbeatResponse);
+          } else {
+            console.log('[Daemon] Heartbeat returned no response');
+          }
+        })
+        .catch((err) => console.error('[Daemon] Heartbeat error:', err))
+        .finally(() => { heartbeatBusy = false; });
+
+      // Race only to decide whether to wait; busy flag is cleared by the promise above
+      await Promise.race([heartbeatPromise, timeoutPromise]).catch(() => {});
     }, heartbeatIntervalMs);
 
     logWithTimestamp(`JARVIS daemon running on port ${config.port}`);

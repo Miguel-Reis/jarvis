@@ -651,7 +651,7 @@ If the user wants to create a new project, tell them to use the Site Builder pag
         setDefaultCwd(projectPath);
       }
 
-      const { stream, onComplete } = this.agentService.streamMessage(text, channel, siteContext);
+      const { stream, onComplete } = this.agentService.streamMessage(text, channel, siteContext, incomingThreadId ?? undefined);
 
       // Set up streaming TTS: speak sentences as they arrive
       const ttsActive = !!(this.ttsProvider && ws);

@@ -4,6 +4,6 @@
  * (heartbeat/reactions) implement this.
  */
 export interface IAgentService {
-  handleMessage(text: string, channel?: string): Promise<string>;
+  handleMessage(text: string, channel?: string, threadId?: string): Promise<string>;
   handleHeartbeat(coalescedEvents?: string): Promise<string | null>;
 }

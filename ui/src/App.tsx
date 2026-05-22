@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { useVoice } from "./hooks/useVoice";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import "./styles/sidebar.css";
 
 import ChatPage from "./pages/ChatPage";
@@ -23,9 +24,9 @@ const SitesPage = React.lazy(() => import("./pages/SitesPage"));
 
 type Route = "dashboard" | "chat" | "tasks" | "pipeline" | "memory" | "calendar" | "office" | "knowledge" | "command" | "authority" | "awareness" | "workflows" | "goals" | "sites" | "settings";
 
-export type SettingsSection = "general" | "profile" | "llm" | "channels" | "integrations" | "sidecar";
+export type SettingsSection = "general" | "profile" | "llm" | "channels" | "integrations" | "sidecar" | "diagnostics";
 
-const SETTINGS_SECTIONS: SettingsSection[] = ["general", "profile", "llm", "channels", "integrations", "sidecar"];
+const SETTINGS_SECTIONS: SettingsSection[] = ["general", "profile", "llm", "channels", "integrations", "sidecar", "diagnostics"];
 
 function getRoute(): Route {
   const hash = window.location.hash.replace("#/", "");
@@ -97,6 +98,7 @@ const SETTINGS_NAV: { section: SettingsSection; label: string }[] = [
   { section: "channels", label: "Channels" },
   { section: "integrations", label: "Integrations" },
   { section: "sidecar", label: "Sidecar" },
+  { section: "diagnostics", label: "Diagnostics" },
 ];
 
 /* ================================================================
@@ -280,21 +282,23 @@ export function App() {
           </div>
         ) : null}
         <React.Suspense fallback={<PageFallback />}>
-          {route === "dashboard" && <DashboardPage messages={ws.messages} isConnected={ws.isConnected} voice={voice} agentActivity={ws.agentActivity} goalEvents={ws.goalEvents} workflowEvents={ws.workflowEvents} />}
-          {route === "chat" && <ChatPage messages={ws.messages} isConnected={ws.isConnected} sendMessage={ws.sendMessage} voice={voice} activeThreadId={ws.activeThreadId} onSelectThread={ws.selectThread} onNewThread={ws.startNewThread} />}
-          {route === "tasks" && <TasksPage taskEvents={ws.taskEvents} />}
-          {route === "pipeline" && <PipelinePage contentEvents={ws.contentEvents} sendMessage={ws.sendMessage} />}
-          {route === "memory" && <MemoryPage />}
-          {route === "calendar" && <CalendarPage taskEvents={ws.taskEvents} contentEvents={ws.contentEvents} />}
-          {route === "office" && <OfficePage agentActivity={ws.agentActivity} />}
-          {route === "knowledge" && <KnowledgePage />}
-          {route === "command" && <CommandPage />}
-          {route === "awareness" && <AwarenessPage />}
-          {route === "workflows" && <WorkflowsPage workflowEvents={ws.workflowEvents} sendMessage={ws.sendMessage} />}
-          {route === "goals" && <GoalsPage goalEvents={ws.goalEvents} />}
-          {route === "sites" && <SitesPage sendMessage={ws.sendMessage} isConnected={ws.isConnected} messages={ws.messages} />}
-          {route === "authority" && <AuthorityPage />}
-          {route === "settings" && <SettingsPage section={settingsSection} />}
+          <ErrorBoundary name={route}>
+            {route === "dashboard" && <DashboardPage messages={ws.messages} isConnected={ws.isConnected} voice={voice} agentActivity={ws.agentActivity} goalEvents={ws.goalEvents} workflowEvents={ws.workflowEvents} />}
+            {route === "chat" && <ChatPage messages={ws.messages} isConnected={ws.isConnected} sendMessage={ws.sendMessage} voice={voice} activeThreadId={ws.activeThreadId} onSelectThread={ws.selectThread} onNewThread={ws.startNewThread} />}
+            {route === "tasks" && <TasksPage taskEvents={ws.taskEvents} />}
+            {route === "pipeline" && <PipelinePage contentEvents={ws.contentEvents} sendMessage={ws.sendMessage} />}
+            {route === "memory" && <MemoryPage />}
+            {route === "calendar" && <CalendarPage taskEvents={ws.taskEvents} contentEvents={ws.contentEvents} />}
+            {route === "office" && <OfficePage agentActivity={ws.agentActivity} />}
+            {route === "knowledge" && <KnowledgePage />}
+            {route === "command" && <CommandPage />}
+            {route === "awareness" && <AwarenessPage />}
+            {route === "workflows" && <WorkflowsPage workflowEvents={ws.workflowEvents} sendMessage={ws.sendMessage} />}
+            {route === "goals" && <GoalsPage goalEvents={ws.goalEvents} />}
+            {route === "sites" && <SitesPage sendMessage={ws.sendMessage} isConnected={ws.isConnected} messages={ws.messages} />}
+            {route === "authority" && <AuthorityPage />}
+            {route === "settings" && <SettingsPage section={settingsSection} />}
+          </ErrorBoundary>
         </React.Suspense>
       </main>
     </div>

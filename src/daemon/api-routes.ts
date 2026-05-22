@@ -3021,6 +3021,114 @@ export function createApiRoutes(ctx: ApiContext): Record<string, unknown> {
       },
     },
 
+    // --- Diagnostics ---
+
+    '/api/diagnostics/health': {
+      GET: () => {
+        const health = ctx.healthMonitor.getHealth();
+        const db = getDb();
+        let dbIntegrity: string;
+        try {
+          const rows = db.prepare('PRAGMA integrity_check').all() as { integrity_check: string }[];
+          dbIntegrity = rows[0]?.integrity_check ?? 'ok';
+        } catch (err) {
+          dbIntegrity = `error: ${err instanceof Error ? err.message : String(err)}`;
+        }
+        const sidecarConnected = ctx.sidecarManager
+          ? ctx.sidecarManager.listSidecars().some((s: { status: string }) => s.status === 'connected')
+          : false;
+        return json({ ...health, dbIntegrity, sidecarConnected });
+      },
+    },
+
+    '/api/diagnostics/run': {
+      POST: async () => {
+        const results: { name: string; status: 'ok' | 'warn' | 'fail' | 'skip'; message: string }[] = [];
+
+        // Bun version
+        const [major] = Bun.version.split('.').map(Number);
+        results.push({ name: 'Bun Runtime', status: (major ?? 0) >= 1 ? 'ok' : 'warn', message: `v${Bun.version}` });
+
+        // Data directory
+        const jarvisDir = path.join(os.homedir(), '.jarvis');
+        results.push({ name: 'Data Directory', status: existsSync(jarvisDir) ? 'ok' : 'warn', message: jarvisDir });
+
+        // Config file
+        const configPath = path.join(jarvisDir, 'config.yaml');
+        results.push({ name: 'Config File', status: existsSync(configPath) ? 'ok' : 'fail', message: existsSync(configPath) ? configPath : 'Not found. Run: jarvis onboard' });
+
+        // LLM provider
+        const primary = ctx.config.llm?.primary ?? 'anthropic';
+        const provCfg = (ctx.config.llm as Record<string, unknown>)?.[primary] as Record<string, string> | undefined;
+        if (primary === 'ollama') {
+          results.push({ name: 'LLM Provider', status: 'ok', message: `ollama (${provCfg?.model ?? 'llama3'})` });
+        } else if (provCfg?.api_key) {
+          results.push({ name: 'LLM Provider', status: 'ok', message: `${primary} (key: ${provCfg.api_key.slice(0, 10)}...)` });
+        } else {
+          results.push({ name: 'LLM Provider', status: 'fail', message: `${primary} API key not set` });
+        }
+
+        // LLM connectivity
+        try {
+          const manager = ctx.agentService.getLLMManager();
+          const resp = await manager.chat([{ role: 'user', content: 'ping' }], { max_tokens: 5 });
+          results.push({ name: 'LLM Connectivity', status: 'ok', message: `Model: ${resp.model}` });
+        } catch (err) {
+          results.push({ name: 'LLM Connectivity', status: 'fail', message: String(err).slice(0, 120) });
+        }
+
+        // SQLite integrity
+        try {
+          const db = getDb();
+          const rows = db.prepare('PRAGMA integrity_check').all() as { integrity_check: string }[];
+          const result = rows[0]?.integrity_check ?? 'ok';
+          results.push({ name: 'SQLite Integrity', status: result === 'ok' ? 'ok' : 'fail', message: result });
+        } catch (err) {
+          results.push({ name: 'SQLite Integrity', status: 'fail', message: String(err) });
+        }
+
+        // Sidecar connection
+        if (ctx.sidecarManager) {
+          const sidecars = ctx.sidecarManager.listSidecars();
+          const connected = sidecars.filter((s: { status: string }) => s.status === 'connected').length;
+          results.push({ name: 'Sidecar', status: connected > 0 ? 'ok' : 'warn', message: `${connected}/${sidecars.length} sidecars connected` });
+        } else {
+          results.push({ name: 'Sidecar', status: 'skip', message: 'Sidecar manager not running' });
+        }
+
+        // TTS
+        results.push({ name: 'TTS', status: ctx.config.tts?.enabled ? 'ok' : 'skip', message: ctx.config.tts?.enabled ? `${ctx.config.tts.provider ?? 'edge'}` : 'Disabled' });
+
+        // Channels
+        const tg = ctx.config.channels?.telegram;
+        results.push({ name: 'Telegram', status: (tg?.enabled && tg.bot_token) ? 'ok' : 'skip', message: (tg?.enabled && tg.bot_token) ? 'Bot token set' : 'Not configured' });
+        const dc = ctx.config.channels?.discord;
+        results.push({ name: 'Discord', status: (dc?.enabled && dc.bot_token) ? 'ok' : 'skip', message: (dc?.enabled && dc.bot_token) ? 'Bot token set' : 'Not configured' });
+
+        const summary = { ok: 0, warn: 0, fail: 0, skip: 0 };
+        for (const r of results) summary[r.status]++;
+        return json({ checks: results, summary });
+      },
+    },
+
+    '/api/system/reset': {
+      POST: () => {
+        try {
+          const orchestrator = ctx.agentService.getOrchestrator();
+          const primary = orchestrator.getPrimary();
+          if (primary) {
+            primary.clearHistory();
+            orchestrator.clearTemporaryGrants(primary.id);
+          }
+          const taskManager = ctx.agentService.getTaskManager();
+          if (taskManager) taskManager.cleanup(0); // flush all completed tasks immediately
+          return json({ ok: true, message: 'Agent memory flushed. System reset complete.' });
+        } catch (err) {
+          return error(`Reset failed: ${err instanceof Error ? err.message : String(err)}`, 500);
+        }
+      },
+    },
+
     // --- CORS preflight ---
     '/api/*': {
       OPTIONS: () => new Response(null, { status: 204, headers: CORS }),

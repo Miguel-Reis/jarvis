@@ -108,6 +108,14 @@ export class AgentInstance {
     return [...this.messageHistory];
   }
 
+  clearHistory(): void {
+    this.messageHistory = [];
+  }
+
+  setHistory(messages: LLMMessage[]): void {
+    this.messageHistory = [...messages];
+  }
+
   terminate(): void {
     this.agent.status = 'terminated';
     this.clearTask();

@@ -190,8 +190,8 @@ export class ChannelService implements Service {
     const conversation = getOrCreateConversation(channelTag);
     addMessage(conversation.id, { role: 'user', content: msg.text });
 
-    // 2. Route to AgentService (non-streaming — external channels are request/response)
-    const response = await this.agentService.handleMessage(msg.text, channelTag);
+    // 2. Route to AgentService — pass conversation ID as threadId for context isolation
+    const response = await this.agentService.handleMessage(msg.text, channelTag, conversation.id);
 
     // 3. Persist assistant response to vault
     addMessage(conversation.id, { role: 'assistant', content: response });

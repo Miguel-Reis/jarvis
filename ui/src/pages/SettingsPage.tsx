@@ -9,6 +9,7 @@ import { ChannelsPanel } from "../components/settings/ChannelsPanel";
 import { SidecarPanel } from "../components/settings/SidecarPanel";
 import { UserProfilePanel } from "../components/settings/UserProfilePanel";
 import { ServicePanel } from "../components/settings/ServicePanel";
+import { DiagnosticsPanel } from "../components/settings/DiagnosticsPanel";
 
 const SECTION_META: Record<SettingsSection, { title: string; subtitle: string }> = {
   general: { title: "General", subtitle: "Personality, role, and heartbeat configuration" },
@@ -17,6 +18,7 @@ const SECTION_META: Record<SettingsSection, { title: string; subtitle: string }>
   channels: { title: "Communication Channels", subtitle: "Telegram, Discord, voice transcription, and text-to-speech" },
   integrations: { title: "Integrations", subtitle: "Third-party service connections" },
   sidecar: { title: "Sidecar", subtitle: "Remote machine control via Go sidecar agents" },
+  diagnostics: { title: "Diagnostics", subtitle: "System health, connectivity checks, and agent memory reset" },
 };
 
 export default function SettingsPage({ section }: { section: SettingsSection }) {
@@ -56,6 +58,7 @@ export default function SettingsPage({ section }: { section: SettingsSection }) 
           {section === "channels" && <ChannelsPanel />}
           {section === "integrations" && <IntegrationsPanel />}
           {section === "sidecar" && <SidecarPanel />}
+          {section === "diagnostics" && <DiagnosticsPanel />}
         </div>
       </div>
     </div>

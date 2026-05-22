@@ -243,7 +243,7 @@ export class AgentService implements Service, IAgentService {
   /**
    * Stream a message through the agent. Returns a stream and an onComplete callback.
    */
-  streamMessage(text: string, channel: string = 'websocket', siteContext?: string): {
+  streamMessage(text: string, channel: string = 'websocket', siteContext?: string, threadId?: string): {
     stream: AsyncIterable<LLMStreamEvent>;
     onComplete: (fullText: string) => Promise<void>;
   } {
@@ -252,7 +252,7 @@ export class AgentService implements Service, IAgentService {
       systemPrompt += '\n\n' + siteContext;
     }
 
-    const stream = this.orchestrator.streamMessage(systemPrompt, text);
+    const stream = this.orchestrator.streamMessage(systemPrompt, text, threadId);
 
     const onComplete = async (fullText: string): Promise<void> => {
       // Note: orchestrator already adds assistant response to history
@@ -273,10 +273,10 @@ export class AgentService implements Service, IAgentService {
   /**
    * Non-streaming message handler. Returns full response string.
    */
-  async handleMessage(text: string, channel: string = 'websocket'): Promise<string> {
+  async handleMessage(text: string, channel: string = 'websocket', threadId?: string): Promise<string> {
     const systemPrompt = this.buildFullSystemPrompt(channel, text);
 
-    const response = await this.orchestrator.processMessage(systemPrompt, text);
+    const response = await this.orchestrator.processMessage(systemPrompt, text, threadId);
 
     // Run extraction and learning in parallel (non-blocking but tracked)
     Promise.allSettled([
