@@ -164,15 +164,17 @@ export class EventReactor {
   }
 
   private hashEvent(classified: ClassifiedEvent): string {
-    // Simple hash: type + stringified data (first 500 chars to avoid huge hashes)
-    const key = `${classified.event.type}:${JSON.stringify(classified.event.data).slice(0, 500)}`;
-    let hash = 0;
+    // Use a timestamp-bucketed key so deduplication only applies within a short window,
+    // not permanently. This prevents 32-bit hash collisions from dropping distinct events.
+    const bucket = Math.floor(classified.event.timestamp / 10_000); // 10-second windows
+    const key = `${bucket}:${classified.event.type}:${JSON.stringify(classified.event.data).slice(0, 500)}`;
+    // djb2 over a longer key — collision rate drops significantly with the bucket prefix
+    let hash = 5381;
     for (let i = 0; i < key.length; i++) {
-      const char = key.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash |= 0; // Convert to 32-bit integer
+      hash = ((hash << 5) + hash) ^ key.charCodeAt(i);
+      hash |= 0;
     }
-    return hash.toString(36);
+    return `${bucket}:${(hash >>> 0).toString(36)}`;
   }
 
   private canReactForType(eventType: string): boolean {

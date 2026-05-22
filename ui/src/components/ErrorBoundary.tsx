@@ -60,7 +60,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
         </div>
         <div style={{ display: "flex", gap: "10px" }}>
           <button
-            onClick={() => this.setState({ error: null })}
+            onClick={() => window.location.reload()}
             style={{
               padding: "8px 18px",
               background: "rgba(255,255,255,0.06)",

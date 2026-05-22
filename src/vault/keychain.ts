@@ -69,6 +69,12 @@ function loadSecrets(): Record<string, string> {
 
 function saveSecrets(secrets: Record<string, string>): void {
   ensureDir();
+  // Guard: refuse to write an empty map when a non-empty secrets file already exists.
+  // This prevents a loadSecrets() failure from silently destroying all secrets on the next write.
+  if (Object.keys(secrets).length === 0 && existsSync(SECRETS_PATH)) {
+    console.warn('[Keychain] Refusing to overwrite existing secrets file with an empty map — possible decrypt error earlier in this call chain.');
+    return;
+  }
   const key = getOrCreateKey();
   const json = JSON.stringify(secrets);
   const encrypted = encrypt(key, json);

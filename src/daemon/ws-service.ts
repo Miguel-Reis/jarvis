@@ -52,7 +52,9 @@ export class WebSocketService implements Service {
     this.streamRelay = new StreamRelay(this.wsServer);
 
     // Wire delegation callback: when PA delegates to a specialist,
-    // update the active task's assigned_to on the task board
+    // update the active task's assigned_to on the task board.
+    // NOTE: activeTaskId is captured per-turn via the closure set in handleChat,
+    // not via this.activeTaskId, to avoid race conditions across concurrent chats.
     this.agentService.setDelegationCallback((specialistName) => {
       if (!this.activeTaskId) return;
       try {
@@ -606,6 +608,9 @@ If the user wants to create a new project, tell them to use the Site Builder pag
         });
         updateCommitmentStatus(taskCommitment.id, 'active');
         taskCommitment.status = 'active';
+        // Use local var (not this.activeTaskId) so concurrent chats don't overwrite each other.
+        // this.activeTaskId is kept in sync for the delegation callback, but task lifecycle
+        // uses the closure-captured taskCommitment.id.
         this.activeTaskId = taskCommitment.id;
         this.broadcastTaskUpdate(taskCommitment, 'created');
       } catch (err) {

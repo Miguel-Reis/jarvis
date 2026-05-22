@@ -46,6 +46,7 @@ export class BackgroundAgentService implements Service, IAgentService {
   private role: RoleDefinition | null = null;
   private researchQueue: ResearchQueue | null = null;
   private busy = false;
+  private _queue: Array<() => void> = [];
 
   constructor(config: JarvisConfig, llmManager: LLMManager) {
     this.config = config;
@@ -159,10 +160,11 @@ export class BackgroundAgentService implements Service, IAgentService {
    * Handle a reactive event message (from EventReactor / CommitmentExecutor).
    */
   async handleMessage(text: string, channel: string = 'system'): Promise<string> {
-    // Wait if busy — event reactor already has its own queue, so this is a safety net
-    const waitStart = Date.now();
-    while (this.busy && Date.now() - waitStart < 60_000) {
-      await new Promise(r => setTimeout(r, 1000));
+    // Serialize concurrent callers with a promise queue rather than a polling loop.
+    if (this.busy) {
+      return new Promise((resolve) => {
+        this._queue.push(() => this.handleMessage(text, channel).then(resolve));
+      });
     }
 
     this.busy = true;
@@ -174,6 +176,9 @@ export class BackgroundAgentService implements Service, IAgentService {
       return `Error: ${err instanceof Error ? err.message : String(err)}`;
     } finally {
       this.busy = false;
+      // Drain one waiting caller from the queue
+      const next = this._queue.shift();
+      if (next) next();
     }
   }
 
