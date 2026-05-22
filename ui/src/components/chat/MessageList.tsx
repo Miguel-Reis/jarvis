@@ -4,6 +4,7 @@ import { MessageBubble } from "./MessageBubble";
 
 type Props = {
   messages: ChatMessage[];
+  isLoading?: boolean;
 };
 
 function formatTimeDivider(timestamp: number): string {
@@ -27,13 +28,37 @@ function shouldShowTimeDivider(current: ChatMessage, previous: ChatMessage | und
   return gap > 10 * 60 * 1000; // 10 minutes
 }
 
-export function MessageList({ messages }: Props) {
+function MessageSkeleton() {
+  return (
+    <div className="chat-skeleton-wrap" aria-hidden="true">
+      <div className="chat-skeleton-sender">
+        <div className="chat-skeleton-orb" />
+        <div className="chat-skeleton-label" />
+      </div>
+      <div className="chat-skeleton-bubble chat-skeleton-bubble-wide" />
+      <div className="chat-skeleton-bubble chat-skeleton-bubble-med" />
+      <div className="chat-skeleton-bubble chat-skeleton-bubble-narrow" />
+    </div>
+  );
+}
+
+export function MessageList({ messages, isLoading }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  if (isLoading) {
+    return (
+      <div className="chat-messages-scroll" role="status" aria-label="Loading messages">
+        <div className="chat-messages-center">
+          <MessageSkeleton />
+        </div>
+      </div>
+    );
+  }
 
   if (messages.length === 0) {
     return (

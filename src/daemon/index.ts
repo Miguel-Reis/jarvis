@@ -276,6 +276,18 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
     const heartbeatConfig = jarvisConfig.heartbeat;
     const reactor = new EventReactor();
     const coalescer = new EventCoalescer();
+    let reactorInFlight = 0;
+    const MAX_REACTOR_INFLIGHT = 8;
+    const reactSafe = (event: ReturnType<typeof classifyEvent>) => {
+      if (reactorInFlight >= MAX_REACTOR_INFLIGHT) {
+        console.warn('[Daemon] Reactor saturated — dropping low-priority event:', event.type);
+        return;
+      }
+      reactorInFlight++;
+      reactor.react(event)
+        .catch(err => console.error('[Daemon] Reactor error:', err))
+        .finally(() => { reactorInFlight--; });
+    };
 
     // 4b. Create GoogleAuth if configured
     let googleAuth: GoogleAuth | null = null;
@@ -552,9 +564,7 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
               timestamp: event.timestamp,
             });
             if (classified.priority === 'critical' || classified.priority === 'high') {
-              reactor.react(classified).catch(err =>
-                console.error('[Daemon] Awareness reaction error:', err)
-              );
+              reactSafe(classified);
             } else {
               coalescer.addEvent(classified);
             }
@@ -941,9 +951,7 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
       // Classify and route
       const classified = classifyEvent(observerEvent);
       if (classified.priority === 'critical' || classified.priority === 'high') {
-        reactor.react(classified).catch(err =>
-          console.error('[Daemon] Sidecar event reaction error:', err)
-        );
+        reactSafe(classified);
       } else {
         coalescer.addEvent(classified);
       }
@@ -983,9 +991,7 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
         const commitmentEvents = checkCommitments();
         for (const evt of commitmentEvents) {
           if (evt.priority === 'critical' || evt.priority === 'high') {
-            reactor.react(evt).catch(err =>
-              console.error('[Daemon] Commitment reaction error:', err)
-            );
+            reactSafe(evt);
           } else {
             coalescer.addEvent(evt);
           }

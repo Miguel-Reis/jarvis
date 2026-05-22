@@ -519,6 +519,55 @@
 .chat-ts-right { text-align: right; }
 
 /* ================================================================
+   SKELETON LOADING
+   ================================================================ */
+@keyframes chat-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.chat-skeleton-wrap {
+  margin-bottom: 20px;
+  animation: chat-materialize 400ms cubic-bezier(0.16,1,0.3,1) both;
+}
+
+.chat-skeleton-sender {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.chat-skeleton-orb {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--surface-3);
+}
+
+.chat-skeleton-label {
+  width: 48px;
+  height: 8px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--surface-3) 25%, var(--surface-4) 50%, var(--surface-3) 75%);
+  background-size: 200% 100%;
+  animation: chat-shimmer 1.6s linear infinite;
+}
+
+.chat-skeleton-bubble {
+  height: 14px;
+  border-radius: 10px;
+  margin-bottom: 8px;
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%);
+  background-size: 200% 100%;
+  animation: chat-shimmer 1.6s linear infinite;
+}
+
+.chat-skeleton-bubble-wide   { width: 82%; animation-delay: 0ms; }
+.chat-skeleton-bubble-med    { width: 64%; animation-delay: 80ms; }
+.chat-skeleton-bubble-narrow { width: 48%; animation-delay: 160ms; }
+
+/* ================================================================
    STREAMING CURSOR
    ================================================================ */
 .chat-cursor {

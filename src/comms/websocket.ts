@@ -482,6 +482,9 @@ export class WebSocketServer {
           // HMR proxy cleanup
           const proxyUpstream = (ws.data as any)?._proxyUpstream as WebSocket | undefined;
           if (proxyUpstream) {
+            proxyUpstream.onmessage = null;
+            proxyUpstream.onerror = null;
+            proxyUpstream.onclose = null;
             try { proxyUpstream.close(); } catch { /* ignore */ }
             return;
           }
