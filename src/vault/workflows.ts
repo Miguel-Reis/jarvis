@@ -121,17 +121,18 @@ export function findWorkflows(query?: {
     params.push(query.enabled ? 1 : 0);
   }
 
+  if (query?.tag) {
+    conditions.push(`tags LIKE ?`);
+    params.push(`%"${query.tag}"%`);
+  }
+
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
   const limitVal = query?.limit ? Math.max(1, Math.min(parseInt(String(query.limit), 10) || 100, 1000)) : null;
   const limitClause = limitVal ? 'LIMIT ?' : '';
   if (limitVal) params.push(limitVal);
   const rows = getDb().prepare(`SELECT * FROM workflows ${where} ORDER BY updated_at DESC ${limitClause}`).all(...params as any[]) as WorkflowRow[];
 
-  let result = rows.map(parseWorkflow);
-  if (query?.tag) {
-    result = result.filter(w => w.tags.includes(query.tag!));
-  }
-  return result;
+  return rows.map(parseWorkflow);
 }
 
 export function updateWorkflow(

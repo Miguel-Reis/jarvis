@@ -51,7 +51,7 @@ import { getDueCommitments, getUpcoming } from '../vault/commitments.ts';
 import { findContent } from '../vault/content-pipeline.ts';
 import { getRecentObservations } from '../vault/observations.ts';
 import { extractAndStore } from '../vault/extractor.ts';
-import { getKnowledgeForMessage } from '../vault/retrieval.ts';
+import { getKnowledgeForMessage, getActiveGoalsSummary } from '../vault/retrieval.ts';
 import { formatUserProfileForPrompt } from '../user/profile.ts';
 import { getUserProfile } from '../vault/user-profile.ts';
 import { getWebappInstructionsForMessage } from '../vault/webapp-templates.ts';
@@ -606,13 +606,12 @@ export class AgentService implements Service, IAgentService {
 
     // Active goals context for the system prompt
     try {
-      const { getActiveGoalsSummary } = require('../vault/retrieval.ts');
       const goalsSummary = getActiveGoalsSummary();
       if (goalsSummary) {
         context.activeGoals = goalsSummary;
       }
-    } catch {
-      // Goals module may not be available — ignore
+    } catch (err) {
+      console.error('[AgentService] Goals context error:', err);
     }
 
     // Authority rules for the system prompt

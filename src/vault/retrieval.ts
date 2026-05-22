@@ -11,6 +11,7 @@ import { searchEntitiesByName, type Entity } from './entities.ts';
 import { findFacts, type Fact } from './facts.ts';
 import { getEntityRelationships } from './relationships.ts';
 import { USER_PROFILE_VAULT_SOURCE } from './user-profile.ts';
+import { findGoals } from './goals.ts';
 
 // Common stopwords to filter from search queries
 const STOPWORDS = new Set([
@@ -203,7 +204,6 @@ export function getKnowledgeForMessage(message: string): string {
  */
 export function getActiveGoalsSummary(): string {
   try {
-    const { findGoals } = require('./goals.ts');
     const activeGoals = findGoals({ status: 'active' }) as Array<{
       id: string;
       parent_id: string | null;

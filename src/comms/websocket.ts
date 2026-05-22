@@ -528,6 +528,7 @@ export class WebSocketServer {
         sent++;
       } catch (error) {
         console.error('[WebSocketServer] Error broadcasting to client:', error);
+        this.clients.delete(client);
       }
     }
 
