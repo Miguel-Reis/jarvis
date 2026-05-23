@@ -32,6 +32,7 @@
     "prebuild:ui": "bun run copy:models",
     "build:ui": "bun build ui/index.html --outdir ui/dist",
     "test": "bun test",
+    "test:ui": "bun test ui/src/",
     "lint": "bunx biome check src/ ui/src/",
     "db:init": "bun run src/vault/schema.ts",
     "setup": "bun run scripts/setup-config.ts",
@@ -73,7 +74,10 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.15",
-    "@types/bun": "latest"
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/bun": "latest",
+    "happy-dom": "^20.9.0"
   },
   "peerDependencies": {
     "typescript": "^5"

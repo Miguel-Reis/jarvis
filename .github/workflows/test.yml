@@ -15,5 +15,6 @@ jobs:
           bun-version: latest
       - run: bun install
       - run: bun test
+      - run: bun run test:ui
       - run: bunx tsc --noEmit
       - run: bun run lint

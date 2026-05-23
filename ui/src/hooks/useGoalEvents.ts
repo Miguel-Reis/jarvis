@@ -11,7 +11,7 @@ export function useGoalEvents() {
   const [goalEvents, setGoalEvents] = useState<GoalEvent[]>([]);
 
   const handleGoalEvent = useCallback((event: GoalEvent) => {
-    setGoalEvents((prev) => [...prev.slice(-100), event]);
+    setGoalEvents((prev) => [...prev, event].slice(-100));
   }, []);
 
   return { goalEvents, handleGoalEvent };

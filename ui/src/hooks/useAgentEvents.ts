@@ -35,11 +35,11 @@ export function useAgentEvents() {
   }, []);
 
   const handleWorkflowEvent = useCallback((wfEvent: WorkflowEvent) => {
-    setWorkflowEvents((prev) => [...prev.slice(-100), wfEvent]);
+    setWorkflowEvents((prev) => [...prev, wfEvent].slice(-100));
   }, []);
 
   const handleSiteEvent = useCallback((siteEvent: SiteEvent) => {
-    setSiteEvents((prev) => [...prev.slice(-100), siteEvent]);
+    setSiteEvents((prev) => [...prev, siteEvent].slice(-100));
   }, []);
 
   return {
