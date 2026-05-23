@@ -75,10 +75,10 @@ export function registerRoutes(_ctx: ApiContext) {
     },
 
     '/api/vector/status': {
-      GET: () => {
+      GET: async () => {
         try {
           const service = getVectorIndex();
-          const stats = service.getStats();
+          const stats = await service.getStats();
 
           return json({
             available: stats.totalVectors > 0,

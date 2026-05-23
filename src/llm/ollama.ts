@@ -75,23 +75,15 @@ export class OllamaProvider implements LLMProvider {
   name = 'ollama';
   private baseUrl: string;
   private defaultModel: string;
-  private apiKey: string | undefined;
 
-  constructor(baseUrl = 'http://localhost:11434', defaultModel = 'llama3', apiKey?: string) {
-    // Use default if baseUrl is empty/whitespace
-    const effectiveUrl = baseUrl && baseUrl.trim().length > 0 ? baseUrl : 'http://localhost:11434';
-    this.baseUrl = effectiveUrl.replace(/\/$/, '');
+  constructor(baseUrl = 'http://localhost:11434', defaultModel = 'llama3', _apiKey?: string) {
+    this.baseUrl = baseUrl.replace(/\/$/, ''); // Remove trailing slash
     this.defaultModel = defaultModel;
-    this.apiKey = apiKey || undefined;
-  }
-
-  private get authHeaders(): Record<string, string> {
-    return this.apiKey ? { 'Authorization': `Bearer ${this.apiKey}` } : {};
   }
 
   async chat(messages: LLMMessage[], options: LLMOptions = {}): Promise<LLMResponse> {
-    const { model = this.defaultModel, temperature, tools, signal } = options;
-    
+    const { model = this.defaultModel, temperature, max_tokens, tools } = options;
+
     // Compact history for Ollama's context limits
     const budget = calculateHistoryBudget(32000);
     const compactedMessages = compactHistory(messages, budget);
@@ -102,9 +94,10 @@ export class OllamaProvider implements LLMProvider {
       stream: false,
     };
 
-    if (temperature !== undefined) {
-      body.options = { temperature };
-    }
+    const ollamaOpts: Record<string, unknown> = {};
+    if (temperature !== undefined) ollamaOpts.temperature = temperature;
+    if (max_tokens !== undefined) ollamaOpts.num_predict = max_tokens;
+    if (Object.keys(ollamaOpts).length > 0) body.options = ollamaOpts;
 
     if (tools && tools.length > 0) {
       body.tools = this.convertTools(tools);
@@ -114,10 +107,8 @@ export class OllamaProvider implements LLMProvider {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...this.authHeaders,
       },
       body: JSON.stringify(body),
-      signal,
     });
 
     if (!response.ok) {
@@ -130,8 +121,8 @@ export class OllamaProvider implements LLMProvider {
   }
 
   async *stream(messages: LLMMessage[], options: LLMOptions = {}): AsyncIterable<LLMStreamEvent> {
-    const { model = this.defaultModel, temperature, tools, signal } = options;
-    
+    const { model = this.defaultModel, temperature, max_tokens, tools } = options;
+
     // Compact history for Ollama's context limits
     const budget = calculateHistoryBudget(32000);
     const compactedMessages = compactHistory(messages, budget);
@@ -142,9 +133,10 @@ export class OllamaProvider implements LLMProvider {
       stream: true,
     };
 
-    if (temperature !== undefined) {
-      body.options = { temperature };
-    }
+    const ollamaOpts: Record<string, unknown> = {};
+    if (temperature !== undefined) ollamaOpts.temperature = temperature;
+    if (max_tokens !== undefined) ollamaOpts.num_predict = max_tokens;
+    if (Object.keys(ollamaOpts).length > 0) body.options = ollamaOpts;
 
     if (tools && tools.length > 0) {
       body.tools = this.convertTools(tools);
@@ -154,10 +146,8 @@ export class OllamaProvider implements LLMProvider {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...this.authHeaders,
       },
       body: JSON.stringify(body),
-      signal,
     });
 
     if (!response.ok) {
@@ -241,35 +231,13 @@ export class OllamaProvider implements LLMProvider {
   }
 
   async supportsVision(): Promise<boolean> {
-    try {
-      const response = await fetch(`${this.baseUrl}/api/show`, {
-        method: 'POST',
-        headers: { ...this.authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: this.defaultModel }),
-        signal: AbortSignal.timeout(5000),
-      });
-      if (!response.ok) return false;
-      const data = await response.json() as {
-        details?: { families?: string[]; family?: string };
-        model_info?: Record<string, unknown>;
-      };
-      // Ollama marks vision models with the "clip" family (CLIP vision encoder)
-      const families = data.details?.families ?? [];
-      if (families.includes('clip') || families.includes('mllama')) return true;
-      // Secondary check: model_info must have explicit clip/vision encoder namespace keys
-      const infoKeys = Object.keys(data.model_info ?? {});
-      if (infoKeys.some(k => k.startsWith('clip.') || k.startsWith('vision.'))) return true;
-      return false;
-    } catch {
-      return false; // Unreachable daemon or unknown — assume no vision
-    }
+    const m = this.defaultModel.toLowerCase();
+    return m.includes('llava') || m.includes('vision') || m.includes('bakllava');
   }
 
   async listModels(): Promise<string[]> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/tags`, {
-        headers: this.authHeaders,
-      });
+      const response = await fetch(`${this.baseUrl}/api/tags`);
 
       if (!response.ok) {
         throw new Error(`Failed to list models: ${response.status}`);

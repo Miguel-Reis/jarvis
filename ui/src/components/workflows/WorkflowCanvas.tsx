@@ -81,6 +81,11 @@ export default function WorkflowCanvas({
   const [showPanel, setShowPanel] = useState(true);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Refs so scheduleSave always reads the latest state, even from a stale closure
+  const nodesRef = useRef(nodes);
+  const edgesRef = useRef(edges);
+  useEffect(() => { nodesRef.current = nodes; }, [nodes]);
+  useEffect(() => { edgesRef.current = edges; }, [edges]);
 
   const { data: nodeCatalog } = useApiData<NodeCatalogItem[]>("/api/workflows/nodes");
   const { data: latestVersion, refetch: refetchVersion } = useApiData<WorkflowVersion[]>(
@@ -132,6 +137,42 @@ export default function WorkflowCanvas({
     setEdges(flowEdges);
   }, [latestVersion, catalogMap]);
 
+  const scheduleSave = useCallback(() => {
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(async () => {
+      try {
+        // Read from refs so the timeout always uses the latest state,
+        // even when multiple rapid edits race against each other.
+        const definition = {
+          nodes: nodesRef.current.map(n => ({
+            id: n.id,
+            type: n.data.nodeType,
+            label: n.data.label,
+            position: n.position,
+            config: n.data.config ?? {},
+          })),
+          edges: edgesRef.current.map(e => ({
+            id: e.id,
+            source: e.source,
+            target: e.target,
+            sourceHandle: e.sourceHandle,
+            label: e.label,
+          })),
+          settings: latestVersion?.[0]?.definition.settings ?? {
+            maxRetries: 3, retryDelayMs: 5000, timeoutMs: 300000,
+            parallelism: "parallel", onError: "stop",
+          },
+        };
+        await api(`/api/workflows/${workflowId}/versions`, {
+          method: "POST",
+          body: JSON.stringify({ definition, changelog: "Auto-save" }),
+        });
+      } catch (err) {
+        console.error("Failed to save workflow:", err);
+      }
+    }, 2000);
+  }, [workflowId, latestVersion]);
+
   const onConnect = useCallback((connection: Connection) => {
     setEdges(eds => addEdge({
       ...connection,
@@ -139,7 +180,7 @@ export default function WorkflowCanvas({
       style: { stroke: "rgba(255,255,255,0.15)", strokeWidth: 1.5 },
     }, eds));
     scheduleSave();
-  }, []);
+  }, [scheduleSave]);
 
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     setSelectedNodeId(node.id);
@@ -185,41 +226,7 @@ export default function WorkflowCanvas({
     setNodes(nds => [...nds, newNode]);
     setSelectedNodeId(newNode.id);
     scheduleSave();
-  }, [catalogMap]);
-
-  const scheduleSave = useCallback(() => {
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    saveTimeoutRef.current = setTimeout(async () => {
-      try {
-        const definition = {
-          nodes: nodes.map(n => ({
-            id: n.id,
-            type: n.data.nodeType,
-            label: n.data.label,
-            position: n.position,
-            config: n.data.config ?? {},
-          })),
-          edges: edges.map(e => ({
-            id: e.id,
-            source: e.source,
-            target: e.target,
-            sourceHandle: e.sourceHandle,
-            label: e.label,
-          })),
-          settings: latestVersion?.[0]?.definition.settings ?? {
-            maxRetries: 3, retryDelayMs: 5000, timeoutMs: 300000,
-            parallelism: "parallel", onError: "stop",
-          },
-        };
-        await api(`/api/workflows/${workflowId}/versions`, {
-          method: "POST",
-          body: JSON.stringify({ definition, changelog: "Auto-save" }),
-        });
-      } catch (err) {
-        console.error("Failed to save workflow:", err);
-      }
-    }, 2000);
-  }, [nodes, edges, workflowId, latestVersion]);
+  }, [catalogMap, scheduleSave]);
 
   const handleConfigUpdate = useCallback((nodeId: string, config: Record<string, unknown>) => {
     setNodes(nds => nds.map(n =>

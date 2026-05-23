@@ -135,12 +135,7 @@ export class BackupService {
 
     try {
       const compressed = await readFile(backupPath);
-      const decompressed = await new Promise<Buffer>((resolve, reject) => {
-        gzipAsync(compressed, { reverse: true } as any, (err, result) => {
-          if (err) reject(err);
-          else resolve(result);
-        });
-      });
+      const decompressed = await gzipAsync(compressed, { reverse: true } as any);
 
       const backupData = JSON.parse(decompressed.toString());
 

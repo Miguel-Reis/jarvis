@@ -17,7 +17,7 @@ export function registerRoutes(ctx: ApiContext): Record<string, Record<string, (
       GET: () => {
         const html = getStatusPage(
           ctx.agentService,
-          ctx.wsService,
+          ctx.wsService ?? null,
           ctx.approvalManager ?? null,
           ctx.auditTrail ?? null,
           ctx.commitmentExecutor ?? null,
@@ -59,7 +59,7 @@ export function registerRoutes(ctx: ApiContext): Record<string, Record<string, (
         // Measure LLM latency (primary provider)
         try {
           const llmStart = Date.now();
-          const { anthropic } = await import('../../llm/anthropic.ts');
+          const { anthropic } = await import('../../llm/anthropic.ts') as any;
           await anthropic({
             model: 'claude-sonnet-4-6',
             messages: [{ role: 'user', content: 'Respond with just OK' }],

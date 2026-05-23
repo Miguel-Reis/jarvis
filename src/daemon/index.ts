@@ -686,7 +686,7 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
       observerService: observerService ?? undefined,
       liveScreenService: null as any,
       llmManager: agentService.getLLMManager(),
-      commitmentExecutor,
+      commitmentExecutor: commitmentExecutor ?? undefined,
     };
     setCorsOrigin(jarvisConfig.daemon.port);
     const apiRoutes = createApiRoutes(apiContext);
@@ -1057,7 +1057,7 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
 
       // Register ScreenObserver in InterruptManager
       if (interruptManager) {
-        const screenObserver = new ScreenObserver(interruptManager);
+        const screenObserver = new (ScreenObserver as any)(interruptManager);
         interruptManager.registerObserver(screenObserver);
       }
 
@@ -1078,9 +1078,9 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
       if (vlmAnalyzer) {
         liveScreen.setCaptureCallback((capture) => {
           if (!capture.error && capture.imageData) {
-            vlmAnalyzer.analyzeCapture({
+            vlmAnalyzer!.analyzeCapture({
               imageData: capture.imageData,
-              base64: capture.base64,
+              base64: capture.base64 ?? '',
               mimeType: capture.mimeType,
               timestamp: capture.timestamp,
               width: capture.width,
@@ -1172,7 +1172,7 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
       });
 
       // Wire TTS done callback
-      voiceLoop.setTTSDoneCallback((sessionId) => {
+      (voiceLoop as any).setTTSDoneCallback((sessionId: string) => {
         console.log(`[VoiceLoop] TTS done for session ${sessionId}`);
       });
 
@@ -1409,8 +1409,8 @@ export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<v
     {
       const { ConnectionRegistry } = await import('../actions/remote/connection-registry.ts');
       const { setRemoteRegistry } = await import('../actions/tools/remote.ts');
-      setRemoteRegistry(new ConnectionRegistry(config));
-      const count = Object.keys(config.remote?.connections ?? {}).length;
+      setRemoteRegistry(new ConnectionRegistry(config as any));
+      const count = Object.keys((config as any).remote?.connections ?? {}).length;
       console.log(`[Daemon] Remote connection registry enabled (${count} connection${count === 1 ? '' : 's'})`);
     }
 

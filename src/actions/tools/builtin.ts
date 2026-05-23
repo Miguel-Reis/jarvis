@@ -987,7 +987,7 @@ function isSafeJsExpression(expr: string): { safe: true } | { safe: false; reaso
   if (iifeMatch) {
     const innerContent = iifeMatch[1];
     // Recursively validate non-IIFE parts
-    const lines = innerContent.trim().split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('//'));
+    const lines = innerContent!.trim().split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('//'));
     for (const line of lines) {
       const result = isSafeJsExpression(line);
       if (!result.safe) return result;

@@ -1,6 +1,7 @@
 import type { RoleDefinition } from '../roles/types.ts';
 import type { LLMMessage, LLMResponse, LLMStreamEvent, LLMToolCall, LLMTool, ContentBlock } from '../llm/provider.ts';
 import { guardImageSize } from '../llm/provider.ts';
+import { getThreadContext } from '../vault/threads.ts';
 import { LLMManager } from '../llm/manager.ts';
 import { AgentInstance } from './agent.ts';
 import { AgentHierarchy } from './hierarchy.ts';
@@ -287,14 +288,27 @@ export class AgentOrchestrator {
    * Process a user message through the primary agent (non-streaming).
    * Includes the tool execution loop: LLM → tool_calls → execute → re-call → repeat.
    */
-  async processMessage(systemPrompt: string, message: string): Promise<string> {
+  async processMessage(systemPrompt: string, message: string, threadId?: string): Promise<string> {
     const primary = this.getPrimary();
     if (!primary) {
       throw new Error('No primary agent exists. Create one first.');
     }
 
-    // Add user message to persistent history
-    primary.addMessage('user', message);
+    // Clear leftover temporary grants from any previous turn
+    this.clearTemporaryGrants(primary.id);
+
+    // Load thread-scoped history from vault, or fall back to in-memory scratch
+    if (threadId) {
+      const vaultMessages = getThreadContext(threadId, 50);
+      if (vaultMessages.length > 0) {
+        primary.setHistory(vaultMessages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })));
+      } else {
+        primary.clearHistory();
+        primary.addMessage('user', message);
+      }
+    } else {
+      primary.addMessage('user', message);
+    }
 
     // If no LLM manager, return placeholder
     if (!this.llmManager) {
@@ -461,14 +475,27 @@ and generate a correction strategy. Do NOT attempt the tool again immediately.`;
    * Yields text/tool_call events through all iterations.
    * Only emits 'done' when the final response is complete.
    */
-  async *streamMessage(systemPrompt: string, message: string): AsyncIterable<LLMStreamEvent> {
+  async *streamMessage(systemPrompt: string, message: string, threadId?: string): AsyncIterable<LLMStreamEvent> {
     const primary = this.getPrimary();
     if (!primary) {
       throw new Error('No primary agent exists. Create one first.');
     }
 
-    // Add user message to persistent history
-    primary.addMessage('user', message);
+    // Clear leftover temporary grants from any previous turn
+    this.clearTemporaryGrants(primary.id);
+
+    // Load thread-scoped history from vault, or fall back to in-memory scratch
+    if (threadId) {
+      const vaultMessages = getThreadContext(threadId, 50);
+      if (vaultMessages.length > 0) {
+        primary.setHistory(vaultMessages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })));
+      } else {
+        primary.clearHistory();
+        primary.addMessage('user', message);
+      }
+    } else {
+      primary.addMessage('user', message);
+    }
 
     // If no LLM manager, yield placeholder
     if (!this.llmManager) {

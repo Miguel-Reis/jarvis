@@ -183,7 +183,7 @@ export function ChannelsPanel() {
       }
       if (ttsCfg.openai) {
         setOpenaiModel(ttsCfg.openai.model || "tts-1");
-        setOpenaiVoice(ttsCfg.openai.voice || "alloy");
+        setOpenaiVoice((ttsCfg.openai as any).voice || "alloy");
       }
     }
   }, [ttsCfg]);

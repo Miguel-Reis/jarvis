@@ -86,7 +86,7 @@ export class VectorIndexService {
       const embedding = await this.embed(content);
       if (!embedding) return;
 
-      this.db.insert(entityId, embedding, { content });
+      (this.db as any).insert(entityId, embedding, { content });
     } catch (err) {
       console.error('[VectorIndex] Failed to add entity:', err instanceof Error ? err.message : String(err));
     }
@@ -118,7 +118,7 @@ export class VectorIndexService {
       const queryEmbedding = await this.embed(query);
       if (!queryEmbedding) return [];
 
-      const results = this.db.search(queryEmbedding, limit);
+      const results = await (this.db as any).search(queryEmbedding, limit);
 
       if (!results || results.length === 0) {
         return [];
@@ -213,15 +213,16 @@ export class VectorIndexService {
   /**
    * Get index statistics
    */
-  getStats(): VectorIndexStats {
+  async getStats(): Promise<VectorIndexStats> {
     if (!this.db) {
       return { totalVectors: 0, dimensions: 0, indexSize: 0 };
     }
 
+    const len = await (this.db as any).len() as number;
     return {
-      totalVectors: this.db.len(),
+      totalVectors: len,
       dimensions: this.dimensions,
-      indexSize: this.db.len(),
+      indexSize: len,
     };
   }
 

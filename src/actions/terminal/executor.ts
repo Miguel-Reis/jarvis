@@ -90,7 +90,9 @@ export class TerminalExecutor {
         stderr: 'pipe',
       });
 
+      let timedOut = false;
       const timeoutId = setTimeout(() => {
+        timedOut = true;
         proc.kill();
       }, timeout);
 
@@ -101,6 +103,10 @@ export class TerminalExecutor {
       ]);
 
       clearTimeout(timeoutId);
+
+      if (timedOut) {
+        throw new Error(`Command timed out after ${timeout}ms: ${command}`);
+      }
 
       const duration = Date.now() - startTime;
 

@@ -819,7 +819,7 @@ export function registerRoutes(ctx: ApiContext) {
           // Signal: check local daemon connection
           if (channel === 'signal') {
             const apiUrl = ctx.config.channels?.signal?.api_url || 'http://localhost:8080';
-            const phone = body.phone || ctx.config.channels?.signal?.phone;
+            const phone = (body as any).phone || ctx.config.channels?.signal?.phone;
             if (!phone) return error('Signal phone number required', 400);
 
             try {
@@ -967,7 +967,7 @@ export function registerRoutes(ctx: ApiContext) {
           openai: tts?.openai ? {
             has_api_key: !!tts.openai.api_key,
             model: tts.openai.model ?? 'tts-1',
-            voice: tts.openai.voice ?? 'alloy',
+            voice: (tts.openai as any).voice ?? 'alloy',
           } : null,
         });
       },
@@ -1187,7 +1187,7 @@ export function registerRoutes(ctx: ApiContext) {
             { voice_id: 'en-GB-RyanNeural', name: 'Ryan (UK Male)', locale: 'en-GB' },
             { voice_id: 'en-GB-SoniaNeural', name: 'Sonia (UK Female)', locale: 'en-GB' },
           ];
-          return json(lang === 'all' ? azureVoices : azureVoices.filter(v => v.locale.startsWith(lang.split('-')[0])));
+          return json(lang === 'all' ? azureVoices : azureVoices.filter(v => v.locale.startsWith(lang.split('-')[0] ?? '')));
         }
 
         if (provider === 'google') {
@@ -1206,7 +1206,7 @@ export function registerRoutes(ctx: ApiContext) {
             { voice_id: 'en-US-Wavenet-A', name: 'WaveNet A (US Female)', locale: 'en-US' },
             { voice_id: 'en-US-Wavenet-B', name: 'WaveNet B (US Male)', locale: 'en-US' },
           ];
-          return json(lang === 'all' ? googleVoices : googleVoices.filter(v => v.locale.startsWith(lang.split('-')[0])));
+          return json(lang === 'all' ? googleVoices : googleVoices.filter(v => v.locale.startsWith(lang.split('-')[0] ?? '')));
         }
 
         if (provider === 'openai') {

@@ -157,7 +157,7 @@ export default function AwarenessPage() {
       <div className="aw-tab-content">
         {tab === "live" && (
           <div className="aw-live-split">
-            <div><LiveContextPanel /></div>
+            <div><LiveContextPanel status={status} loading={!status} /></div>
             <div><SuggestionPanel /></div>
           </div>
         )}

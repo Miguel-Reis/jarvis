@@ -162,7 +162,7 @@ export class BackgroundAgentService extends BaseAgentService implements Service,
   /**
    * Handle a reactive event message (from EventReactor / CommitmentExecutor).
    */
-  async handleMessage(text: string, channel: string = 'system'): Promise<string> {
+  async handleMessage(text: string, channel: string = 'system', _threadId?: string): Promise<string> {
     if (!this.role) {
       throw new Error('Background agent not initialized — call start() first');
     }

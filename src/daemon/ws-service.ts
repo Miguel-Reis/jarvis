@@ -81,7 +81,7 @@ export class WebSocketService implements Service {
 
     // Wire delegation callback via event bus: when PA delegates to a specialist,
     // update the active task's assigned_to on the task board
-    eventBus.on(DaemonEvents.AGENT_DELEGATION, (specialistName, _task) => {
+    eventBus.on(DaemonEvents.AGENT_DELEGATION, (specialistName: string, _task: unknown) => {
       if (!this.activeTaskId) return;
       try {
         const updated = updateCommitmentAssignee(this.activeTaskId, specialistName);

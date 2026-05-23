@@ -33,9 +33,9 @@ export function getStatusPage(
 
   const agentStatus = agentService?.status() ?? 'stopped';
   const wsClients = wsService?.getClientCount?.() ?? 0;
-  const pendingApprovals = approvalManager?.getPendingRequests?.()?.length ?? 0;
+  const pendingApprovals = (approvalManager as any)?.getPendingRequests?.()?.length ?? 0;
   const auditStats = auditTrail?.getStats?.() ?? { total: 0, allowed: 0, denied: 0, approvalRequired: 0, byCategory: {} };
-  const commitments = commitmentExecutor?.getPendingCommitments?.() ?? [];
+  const commitments = (commitmentExecutor as any)?.getPendingCommitments?.() ?? [];
 
   const getStatusColor = (status: string) => {
     if (status === 'running') return '#22c55e';
@@ -182,7 +182,7 @@ export function getStatusPage(
           <span class="stat-label">Pending</span>
           <span class="stat-value">${commitments.length}</span>
         </div>
-        ${commitments.slice(0, 3).map(c => `
+        ${commitments.slice(0, 3).map((c: any) => `
           <div class="commitment">
             <strong>${c.title?.slice(0, 40) || 'Unnamed'}</strong>${c.title && c.title.length > 40 ? '...' : ''}<br>
             <span style="color: #94a3b8">Due: ${c.dueAt ? new Date(c.dueAt).toLocaleString() : 'No deadline'}</span>

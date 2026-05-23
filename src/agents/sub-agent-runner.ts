@@ -273,6 +273,15 @@ export async function runSubAgent(opts: RunSubAgentOptions): Promise<SubAgentRes
     // Add final response to agent's history
     agent.addMessage('assistant', finalText);
 
+    if (!finalText) {
+      return {
+        success: false,
+        response: 'Sub-agent exceeded max iterations without producing a response.',
+        toolsUsed: [...new Set(toolsUsed)],
+        tokensUsed: totalUsage,
+      };
+    }
+
     return {
       success: true,
       response: finalText,

@@ -17,6 +17,9 @@ const BLOCKED_PATTERNS = [
   /\bglobal\b/,
   /\beval\s*\(/,
   /\bFunction\s*\(/,
+  /\bconstructor\b/,        // blocks (0).constructor.constructor('return process')()
+  /\b__proto__\b/,          // blocks prototype chain walking
+  /\bprototype\b/,          // blocks Object.prototype manipulation
   /\bchild_process\b/,
   /\b__dirname\b/,
   /\b__filename\b/,
@@ -34,6 +37,7 @@ const BLOCKED_PATTERNS = [
   /\bspawnSync\b/,
   /\bexec\s*\(/,
   /\bspawn\s*\(/,
+  /\[.*['"`]constructor['"`].*\]/,  // blocks ['constructor'] accessor pattern
 ];
 
 /**

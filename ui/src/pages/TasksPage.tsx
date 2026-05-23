@@ -83,6 +83,7 @@ export default function TasksPage({ taskEvents }: Props) {
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
   const [recentlyUpdated, setRecentlyUpdated] = useState<Set<string>>(new Set());
   const lastProcessedRef = useRef(0);
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data: fetchedTasks, loading, refetch } = useApiData<Commitment[]>(
     "/api/vault/commitments",
@@ -103,9 +104,10 @@ export default function TasksPage({ taskEvents }: Props) {
 
     lastProcessedRef.current = newEvents[newEvents.length - 1]!.timestamp;
 
+    const newUpdatedIds = new Set<string>();
+
     setLocalTasks((prev) => {
       let updated = [...prev];
-      const newUpdatedIds = new Set<string>();
 
       for (const event of newEvents) {
         const { action, task } = event;
@@ -121,20 +123,28 @@ export default function TasksPage({ taskEvents }: Props) {
         }
       }
 
-      if (newUpdatedIds.size > 0) {
-        setRecentlyUpdated((prev) => new Set([...prev, ...newUpdatedIds]));
-        setTimeout(() => {
-          setRecentlyUpdated((prev) => {
-            const next = new Set(prev);
-            for (const id of newUpdatedIds) next.delete(id);
-            return next;
-          });
-        }, 1500);
-      }
-
       return updated;
     });
+
+    if (newUpdatedIds.size > 0) {
+      setRecentlyUpdated((prev) => new Set([...prev, ...newUpdatedIds]));
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+      highlightTimerRef.current = setTimeout(() => {
+        setRecentlyUpdated((prev) => {
+          const next = new Set(prev);
+          for (const id of newUpdatedIds) next.delete(id);
+          return next;
+        });
+      }, 1500);
+    }
   }, [taskEvents]);
+
+  // Clear highlight timer on unmount
+  useEffect(() => {
+    return () => {
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+    };
+  }, []);
 
   // Filter tasks by search
   const filteredTasks = useMemo(() => {

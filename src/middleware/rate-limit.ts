@@ -170,7 +170,7 @@ export class RateLimiter {
     const forwardedFor = req.headers.get('X-Forwarded-For');
     if (forwardedFor) {
       // Take first IP in chain
-      const ip = forwardedFor.split(',')[0].trim();
+      const ip = (forwardedFor.split(',')[0] || '').trim();
       return `ip:${ip}`;
     }
 

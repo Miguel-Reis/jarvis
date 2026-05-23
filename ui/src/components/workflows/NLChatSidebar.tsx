@@ -29,7 +29,9 @@ export default function NLChatSidebar({
 
     setInput("");
     const userMsg: ChatMessage = { role: "user", content: text };
-    setMessages(prev => [...prev, userMsg]);
+    // Build the updated list immediately so history sent to the server is current.
+    const updatedMessages = [...messages, userMsg];
+    setMessages(updatedMessages);
     setLoading(true);
 
     try {
@@ -39,7 +41,7 @@ export default function NLChatSidebar({
         body: JSON.stringify({
           workflowId,
           message: text,
-          history: messages.slice(-10),
+          history: updatedMessages.slice(-10),
         }),
       });
 

@@ -136,12 +136,17 @@ export class WebhookManager {
       }
     }
 
-    // Enrich with request metadata
+    // Enrich with request metadata — strip sensitive headers before persisting
+    const SENSITIVE_HEADERS = new Set(['authorization', 'cookie', 'x-jarvis-signature', 'x-api-key', 'x-hub-signature', 'x-hub-signature-256']);
+    const safeHeaders: Record<string, string> = {};
+    for (const [k, v] of req.headers.entries()) {
+      if (!SENSITIVE_HEADERS.has(k.toLowerCase())) safeHeaders[k] = v;
+    }
     data._webhook = {
       method: req.method,
       url: req.url,
       timestamp: Date.now(),
-      headers: Object.fromEntries(req.headers.entries()),
+      headers: safeHeaders,
     };
 
     // Fire callback (non-blocking)

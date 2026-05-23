@@ -500,7 +500,7 @@ function DetailPanel({ profile, profiles, onSelectEntity }: {
     const id = profile.entity.id;
     api<DetailFact[]>(`/api/vault/entities/${id}/facts`).then(setDetailFacts).catch(() => setDetailFacts([]));
     api<DetailRel[]>(`/api/vault/entities/${id}/relationships`).then(setDetailRels).catch(() => setDetailRels([]));
-    api<Conversation[]>(`/api/vault/conversations?limit=5`).then(setConversations).catch(() => setConversations([]));
+    api<Conversation[]>(`/api/vault/conversations?entity_id=${id}&limit=5`).then(setConversations).catch(() => setConversations([]));
   }, [profile?.entity.id]);
 
   if (!profile) {
@@ -703,10 +703,12 @@ function EntityCard({ profile, index, query }: { profile: MemoryProfile; index: 
 
 function highlightText(text: string, q: string): React.ReactNode {
   if (!q) return text;
-  const regex = new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi");
-  const parts = text.split(regex);
+  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const parts = text.split(new RegExp(`(${escaped})`, "gi"));
+  // Use a separate non-global regex for testing to avoid lastIndex drift
+  const matchRe = new RegExp(`^${escaped}$`, "i");
   return parts.map((part, i) =>
-    regex.test(part) ? (
+    matchRe.test(part) ? (
       <mark key={i} style={{ background: "rgba(139,92,246,0.25)", color: "inherit", borderRadius: 2, padding: "0 1px" }}>{part}</mark>
     ) : part
   );

@@ -69,7 +69,7 @@ describe('vmListRunning', () => {
 
     const vms = await vbox.vmListRunning(fake);
     expect(vms).toHaveLength(1);
-    expect(vms[0].name).toBe('Running-VM');
+    expect(vms[0]!.name).toBe('Running-VM');
   });
 });
 

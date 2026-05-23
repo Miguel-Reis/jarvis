@@ -246,6 +246,7 @@ export function getDueCommitments(): Commitment[] {
 /**
  * Update a commitment's status to any valid status.
  * Sets completed_at for terminal states (completed, failed).
+ * Only overwrites result if explicitly provided.
  */
 export function updateCommitmentStatus(
   id: string,
@@ -259,9 +260,15 @@ export function updateCommitmentStatus(
   const isTerminal = status === 'completed' || status === 'failed';
   const completedAt = isTerminal ? Date.now() : null;
 
-  db.prepare(
-    'UPDATE commitments SET status = ?, completed_at = ?, result = ? WHERE id = ?'
-  ).run(status, completedAt, result ?? null, id);
+  if (result !== undefined) {
+    db.prepare(
+      'UPDATE commitments SET status = ?, completed_at = ?, result = ? WHERE id = ?'
+    ).run(status, completedAt, result, id);
+  } else {
+    db.prepare(
+      'UPDATE commitments SET status = ?, completed_at = ? WHERE id = ?'
+    ).run(status, completedAt, id);
+  }
 
   return getCommitment(id);
 }

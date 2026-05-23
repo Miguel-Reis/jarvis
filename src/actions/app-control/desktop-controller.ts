@@ -165,11 +165,6 @@ export class DesktopController implements AppController {
     const flatElements: FlatElement[] = [];
     this.flattenTree(result.elements || [], 0, flatElements);
 
-    this.lastSnapshotWindow = {
-      pid: targetPid!,
-      title: result.window?.title || '',
-    };
-
     return {
       window: result.window || { pid: targetPid, title: '', className: '' },
       elements: flatElements.slice(0, MAX_SNAPSHOT_ELEMENTS),
@@ -386,7 +381,7 @@ export class DesktopController implements AppController {
     for (const el of elements) {
       const id = el.id as unknown as number;
       const uiElement: UIElement = {
-        id,
+        id: String(id),
         role: el.role || '',
         name: el.name || '',
         value: el.value || null,
@@ -403,7 +398,7 @@ export class DesktopController implements AppController {
         name: el.name || '',
         value: el.value || null,
         depth,
-        isEnabled: el.isEnabled ?? true,
+        isEnabled: (el as any).isEnabled ?? true,
       });
 
       // Recurse into children
@@ -428,7 +423,7 @@ export class DesktopController implements AppController {
     return raw
       .filter((el): el is { id: unknown; role?: string; name?: string; value?: string; bounds?: { x: number; y: number; width: number; height: number }; children?: unknown[]; properties?: unknown } => typeof el === 'object' && el !== null && 'id' in el)
       .map((el) => ({
-        id: el.id as number ?? 0,
+        id: String(el.id ?? 0),
         role: el.role ?? '',
         name: el.name ?? '',
         value: el.value ?? null,

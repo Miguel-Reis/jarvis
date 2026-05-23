@@ -242,7 +242,7 @@ export async function testSlackConnection(botToken: string): Promise<{ success: 
   try {
     const client = new SlackClient({ botToken });
     const result = await client.test();
-    return { success: true, user: result.user, team: result.team };
+    return { success: true, user: result.user, team: result.team } as any;
   } catch (err) {
     return {
       success: false,

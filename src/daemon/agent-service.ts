@@ -306,7 +306,7 @@ export class AgentService extends BaseAgentService implements Service, IAgentSer
   /**
    * Non-streaming message handler. Returns full response string.
    */
-  async handleMessage(text: string, channel: string = 'websocket'): Promise<string> {
+  async handleMessage(text: string, channel: string = 'websocket', _threadId?: string): Promise<string> {
     const knowledge = await getKnowledgeForMessage(text).catch(() => '');
     const systemPrompt = this.buildFullSystemPrompt(channel, text, knowledge || undefined);
 

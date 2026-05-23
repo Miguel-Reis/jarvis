@@ -1,6 +1,24 @@
 import { writeFileSync, appendFileSync, mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { dirname, resolve, normalize } from 'node:path';
+import { homedir } from 'node:os';
 import type { NodeDefinition } from '../registry.ts';
+
+const ALLOWED_ROOTS = [
+  normalize(homedir() + '/.jarvis/'),
+  normalize('/tmp/'),
+  normalize('/var/tmp/'),
+];
+
+function assertSafePath(filePath: string): void {
+  const resolved = normalize(resolve(filePath));
+  const allowed = ALLOWED_ROOTS.some(root => resolved.startsWith(root));
+  if (!allowed) {
+    throw new Error(
+      `Path traversal blocked: "${filePath}" is outside allowed directories ` +
+      `(~/.jarvis/, /tmp/). Use a path within these directories.`
+    );
+  }
+}
 
 export const fileWriteAction: NodeDefinition = {
   type: 'action.file_write',
@@ -41,6 +59,7 @@ export const fileWriteAction: NodeDefinition = {
   execute: async (input, config, ctx) => {
     const filePath = String(config.path ?? '');
     if (!filePath) throw new Error('path is required');
+    assertSafePath(filePath);
 
     const content = String(config.content ?? '');
     const mode = String(config.mode ?? 'write');

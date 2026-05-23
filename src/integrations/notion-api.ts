@@ -113,7 +113,7 @@ export class NotionClient {
    * List all databases the bot has access to
    */
   async listDatabases(): Promise<NotionDatabase[]> {
-    const data = await this.request<{ results: NotionDatabase[] }>('search', {
+    const data = await this.request<{ results: NotionDatabase[] }>('search', 'POST', {
       filter: { property: 'object', value: 'database' },
     });
     return data.results;
@@ -224,6 +224,7 @@ export class NotionClient {
    */
   static createParagraph(text: string): NotionBlock {
     return {
+      id: '',
       object: 'block',
       type: 'paragraph',
       paragraph: {
@@ -237,6 +238,7 @@ export class NotionClient {
    */
   static createHeading(text: string, level: 1 | 2 | 3 = 1): NotionBlock {
     return {
+      id: '',
       object: 'block',
       type: `heading_${level}`,
       [`heading_${level}`]: {
@@ -250,6 +252,7 @@ export class NotionClient {
    */
   static createToDo(text: string, checked = false): NotionBlock {
     return {
+      id: '',
       object: 'block',
       type: 'to_do',
       to_do: {
@@ -264,6 +267,7 @@ export class NotionClient {
    */
   static createBullet(text: string): NotionBlock {
     return {
+      id: '',
       object: 'block',
       type: 'bulleted_list_item',
       bulleted_list_item: {

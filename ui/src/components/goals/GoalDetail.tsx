@@ -19,16 +19,6 @@ type ProgressEntry = {
   created_at: number;
 };
 
-type CheckIn = {
-  id: string;
-  type: "morning_plan" | "evening_review";
-  summary: string;
-  goals_reviewed: string[];
-  actions_planned: string[];
-  actions_completed: string[];
-  created_at: number;
-};
-
 // ----------------------------------------------------------------
 // Static lookup maps
 // ----------------------------------------------------------------
@@ -73,7 +63,6 @@ export function GoalDetail({ goal, onClose, onUpdated }: Props) {
   const [showScoreInput, setShowScoreInput]   = useState(false);
   const [children, setChildren]               = useState<Goal[]>([]);
   const [progress, setProgress]               = useState<ProgressEntry[]>([]);
-  const [checkIns, setCheckIns]               = useState<CheckIn[]>([]);
   const [saving, setSaving]                   = useState(false);
   const [confirmDelete, setConfirmDelete]     = useState(false);
 
@@ -90,20 +79,22 @@ export function GoalDetail({ goal, onClose, onUpdated }: Props) {
     setConfirmDelete(false);
   }, [goal.id]);
 
-  // Fetch children, progress, and check-ins
+  // Fetch children and progress history
   useEffect(() => {
-    fetch(`/api/goals/${goal.id}/children`)
+    const controller = new AbortController();
+    const { signal } = controller;
+
+    fetch(`/api/goals/${goal.id}/children`, { signal })
       .then(r => r.json())
-      .then(setChildren)
-      .catch(() => setChildren([]));
-    fetch(`/api/goals/${goal.id}/progress?limit=20`)
+      .then(data => { if (!signal.aborted) setChildren(data); })
+      .catch(err => { if (err.name !== "AbortError") setChildren([]); });
+
+    fetch(`/api/goals/${goal.id}/progress?limit=20`, { signal })
       .then(r => r.json())
-      .then(setProgress)
-      .catch(() => setProgress([]));
-    fetch(`/api/goals/check-ins?limit=50`)
-      .then(r => r.ok ? r.json() : [])
-      .then((all: CheckIn[]) => setCheckIns(all.filter(ci => ci.goals_reviewed?.includes(goal.id))))
-      .catch(() => setCheckIns([]));
+      .then(data => { if (!signal.aborted) setProgress(data); })
+      .catch(err => { if (err.name !== "AbortError") setProgress([]); });
+
+    return () => controller.abort();
   }, [goal.id]);
 
   // ----------------------------------------------------------------
@@ -504,35 +495,6 @@ export function GoalDetail({ goal, onClose, onUpdated }: Props) {
                       }
                     </div>
                     <div className="goals-progress-date">{dateStr}</div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Check-ins */}
-        {checkIns.length > 0 && (
-          <div className="goals-detail-section">
-            <div className="goals-detail-section-label">CHECK-INS ({checkIns.length})</div>
-            <div className="goals-progress-list">
-              {checkIns.slice(0, 5).map(ci => {
-                const dateStr = new Date(ci.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-                const timeStr = new Date(ci.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-                const label = ci.type === "morning_plan" ? "Morning Plan" : "Evening Review";
-                const labelColor = ci.type === "morning_plan" ? "var(--amber)" : "var(--violet)";
-                return (
-                  <div key={ci.id} className="goals-progress-entry">
-                    <div className="goals-progress-dot" style={{ background: labelColor }} />
-                    <div className="goals-progress-change" style={{ color: labelColor, fontSize: "9px", minWidth: "44px" }}>
-                      {label.split(" ")[0]}
-                    </div>
-                    <div className="goals-progress-desc">
-                      {ci.summary || `Reviewed in ${label}`}
-                      {ci.actions_planned.length > 0 && ` · ${ci.actions_planned.length} planned`}
-                      {ci.actions_completed.length > 0 && ` · ${ci.actions_completed.length} done`}
-                    </div>
-                    <div className="goals-progress-date">{dateStr} {timeStr}</div>
                   </div>
                 );
               })}

@@ -51,7 +51,7 @@ describe('Built-in Skills Integration', () => {
       if (result.matched && result.result.toolCalls) {
         expect(result.skill.id).toBe('read_file');
         validateToolCalls(result, 'read_file');
-        expect((result.result.toolCalls![0].args as any).path).toBe('config.json');
+        expect((result.result.toolCalls![0]!.args as any).path).toBe('config.json');
       }
     });
 
@@ -207,7 +207,7 @@ describe('Built-in Skills Integration', () => {
       const result = await brain.process('search for TODO in files');
       expect(result.matched).toBe(true);
       if (result.matched && result.result.toolCalls) {
-        expect((result.result.toolCalls![0].args.command as string).toLowerCase()).toContain('todo');
+        expect((result.result.toolCalls![0]!.args.command as string).toLowerCase()).toContain('todo');
       }
     });
   });

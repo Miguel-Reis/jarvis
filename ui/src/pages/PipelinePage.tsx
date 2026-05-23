@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useApiData, api } from "../hooks/useApi";
-import { useToast } from "../components/Toast";
 import { PipelineBodyEditor } from "../components/pipeline/PipelineBodyEditor";
 import { PipelineStageNotes } from "../components/pipeline/PipelineStageNotes";
 import { PipelineAttachments } from "../components/pipeline/PipelineAttachments";
@@ -42,7 +41,6 @@ type Props = {
 };
 
 export default function PipelinePage({ contentEvents, sendMessage }: Props) {
-  const { showToast } = useToast();
   const [refreshKey, setRefreshKey] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [stageFilter, setStageFilter] = useState("");
@@ -50,8 +48,7 @@ export default function PipelinePage({ contentEvents, sendMessage }: Props) {
   const [modalOpen, setModalOpen] = useState(false);
   const [recentlyUpdated, setRecentlyUpdated] = useState<Set<string>>(new Set());
   const lastProcessedRef = useRef(0);
-  const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [dragOverStage, setDragOverStage] = useState<string | null>(null);
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data: items, loading, refetch } = useApiData<ContentItem[]>("/api/content", [refreshKey]);
   const [localItems, setLocalItems] = useState<ContentItem[]>([]);
@@ -65,9 +62,10 @@ export default function PipelinePage({ contentEvents, sendMessage }: Props) {
     if (newEvents.length === 0) return;
     lastProcessedRef.current = newEvents[newEvents.length - 1]!.timestamp;
 
+    const newUpdatedIds = new Set<string>();
+
     setLocalItems(prev => {
       let updated = [...prev];
-      const newUpdatedIds = new Set<string>();
       for (const event of newEvents) {
         const { action, item } = event;
         const idx = updated.findIndex(t => t.id === item.id);
@@ -75,15 +73,26 @@ export default function PipelinePage({ contentEvents, sendMessage }: Props) {
         else if (action === "updated") { if (idx !== -1) updated[idx] = item; else updated.push(item); newUpdatedIds.add(item.id); }
         else if (action === "deleted") { if (idx !== -1) updated.splice(idx, 1); if (selectedId === item.id) setSelectedId(null); }
       }
-      if (newUpdatedIds.size > 0) {
-        setRecentlyUpdated(prev => new Set([...prev, ...newUpdatedIds]));
-        setTimeout(() => { setRecentlyUpdated(prev => { const next = new Set(prev); for (const id of newUpdatedIds) next.delete(id); return next; }); }, 1500);
-      }
       return updated;
     });
 
+    if (newUpdatedIds.size > 0) {
+      setRecentlyUpdated(prev => new Set([...prev, ...newUpdatedIds]));
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+      highlightTimerRef.current = setTimeout(() => {
+        setRecentlyUpdated(prev => { const next = new Set(prev); for (const id of newUpdatedIds) next.delete(id); return next; });
+      }, 1500);
+    }
+
     if (newEvents.some(e => e.item.id === selectedId && e.action === "updated")) setRefreshKey(k => k + 1);
   }, [contentEvents, selectedId]);
+
+  // Clear highlight timer on unmount
+  useEffect(() => {
+    return () => {
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+    };
+  }, []);
 
   // Stage counts
   const stageCounts = useMemo(() => {
@@ -115,49 +124,6 @@ export default function PipelinePage({ contentEvents, sendMessage }: Props) {
   const handleCreated = useCallback(() => { refetch(); }, [refetch]);
   const handleDeleted = useCallback(() => { setSelectedId(null); refetch(); }, [refetch]);
   const handleChanged = useCallback(() => { refetch(); }, [refetch]);
-
-  // ── Drag-and-drop handlers ──
-  const handleDragStart = useCallback((e: React.DragEvent, itemId: string) => {
-    e.dataTransfer.setData("contentItemId", itemId);
-    e.dataTransfer.effectAllowed = "move";
-    setDraggingId(itemId);
-  }, []);
-
-  const handleDragEnd = useCallback(() => {
-    setDraggingId(null);
-    setDragOverStage(null);
-  }, []);
-
-  const handleStageDragOver = useCallback((e: React.DragEvent, stage: string) => {
-    if (!draggingId) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    setDragOverStage(stage);
-  }, [draggingId]);
-
-  const handleStageDrop = useCallback(async (e: React.DragEvent, targetStage: string) => {
-    e.preventDefault();
-    const itemId = e.dataTransfer.getData("contentItemId");
-    setDraggingId(null);
-    setDragOverStage(null);
-    if (!itemId) return;
-
-    const current = localItems.find(i => i.id === itemId);
-    if (!current || current.stage === targetStage) return;
-
-    // Optimistic update
-    setLocalItems(prev => prev.map(i => i.id === itemId ? { ...i, stage: targetStage } : i));
-    try {
-      await api(`/api/content/${itemId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ stage: targetStage }),
-      });
-      refetch();
-    } catch {
-      showToast("Failed to move item", "error");
-      refetch();
-    }
-  }, [localItems, refetch, showToast]);
 
   return (
     <div className="pl-page">
@@ -191,21 +157,14 @@ export default function PipelinePage({ contentEvents, sendMessage }: Props) {
                 }} />
               )}
               <div
-                className={`pl-pipe-stage${isActive ? " active" : ""}${dragOverStage === stage.value ? " drag-over" : ""}`}
+                className={`pl-pipe-stage${isActive ? " active" : ""}`}
                 onClick={() => setStageFilter(isActive ? "" : stage.value)}
-                onDragOver={(e) => handleStageDragOver(e, stage.value)}
-                onDragLeave={() => setDragOverStage(null)}
-                onDrop={(e) => handleStageDrop(e, stage.value)}
               >
                 <div className="pl-pipe-node" style={{
                   borderColor: stage.color,
                   color: stage.color,
-                  background: dragOverStage === stage.value ? `${stage.color}30` : `${stage.color}15`,
-                  boxShadow: dragOverStage === stage.value
-                    ? `0 0 20px ${stage.color}80`
-                    : (isActive || count > 0) ? `0 0 10px ${stage.color}40` : "none",
-                  transform: dragOverStage === stage.value ? "scale(1.25)" : undefined,
-                  transition: "all 150ms",
+                  background: `${stage.color}15`,
+                  boxShadow: (isActive || count > 0) ? `0 0 10px ${stage.color}40` : "none",
                 }}>
                   {count}
                 </div>
@@ -218,14 +177,9 @@ export default function PipelinePage({ contentEvents, sendMessage }: Props) {
 
       {/* Content area */}
       {loading ? (
-        <div className="pl-skeleton-grid">
-          {[1,2,3,4,5,6].map((i) => (
-            <div key={i} className="pl-skeleton-card" style={{ animationDelay: `${(i-1)*0.07}s` }}>
-              <div className="pl-skeleton-line" style={{ width: "30%", height: "8px" }} />
-              <div className="pl-skeleton-line" style={{ width: "80%", marginTop: "8px" }} />
-              <div className="pl-skeleton-line" style={{ width: "50%", height: "8px", marginTop: "6px" }} />
-            </div>
-          ))}
+        <div className="pl-loading">
+          <div className="pl-loading-orb" />
+          <div className="pl-loading-text">Loading pipeline...</div>
         </div>
       ) : (
         <div className="pl-content-area">
@@ -244,11 +198,8 @@ export default function PipelinePage({ contentEvents, sendMessage }: Props) {
                   return (
                     <div
                       key={item.id}
-                      className={`pl-content-card${item.id === selectedId ? " selected" : ""}${recentlyUpdated.has(item.id) ? " just-updated" : ""}${draggingId === item.id ? " dragging" : ""}`}
+                      className={`pl-content-card${item.id === selectedId ? " selected" : ""}${recentlyUpdated.has(item.id) ? " just-updated" : ""}`}
                       style={{ animationDelay: `${0.03 + i * 0.03}s` }}
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, item.id)}
-                      onDragEnd={handleDragEnd}
                       onClick={() => setSelectedId(item.id)}
                     >
                       <div className="pl-cc-top">
@@ -295,7 +246,6 @@ function DetailPanel({ itemId, refreshKey, sendMessage, onDeleted, onChanged }: 
   onDeleted: () => void;
   onChanged: () => void;
 }) {
-  const { showToast } = useToast();
   const { data: item, refetch: refetchItem } = useApiData<ContentItem>(
     itemId ? `/api/content/${itemId}` : null, [itemId, refreshKey]
   );
@@ -317,33 +267,33 @@ function DetailPanel({ itemId, refreshKey, sendMessage, onDeleted, onChanged }: 
 
   const handleBodySave = useCallback(async (body: string) => {
     if (!itemId) return;
-    try { await api(`/api/content/${itemId}`, { method: "PATCH", body: JSON.stringify({ body }) }); } catch { showToast("Failed to save body", "error"); }
+    try { await api(`/api/content/${itemId}`, { method: "PATCH", body: JSON.stringify({ body }) }); } catch {}
   }, [itemId]);
 
   const handleTitleSave = async () => {
     if (!itemId || !titleValue.trim()) return;
     setEditingTitle(false);
-    try { await api(`/api/content/${itemId}`, { method: "PATCH", body: JSON.stringify({ title: titleValue.trim() }) }); onChanged(); } catch { showToast("Failed to save title", "error"); }
+    try { await api(`/api/content/${itemId}`, { method: "PATCH", body: JSON.stringify({ title: titleValue.trim() }) }); onChanged(); } catch {}
   };
 
   const handleTagsSave = async () => {
     if (!itemId) return;
     setEditingTags(false);
     const tags = tagsValue.split(",").map(t => t.trim()).filter(Boolean);
-    try { await api(`/api/content/${itemId}`, { method: "PATCH", body: JSON.stringify({ tags }) }); onChanged(); } catch { showToast("Failed to save tags", "error"); }
+    try { await api(`/api/content/${itemId}`, { method: "PATCH", body: JSON.stringify({ tags }) }); onChanged(); } catch {}
   };
 
   const handleAdvance = async () => {
     if (!itemId) return;
-    try { await api(`/api/content/${itemId}/advance`, { method: "POST" }); refetchItem(); onChanged(); } catch { showToast("Failed to advance stage", "error"); }
+    try { await api(`/api/content/${itemId}/advance`, { method: "POST" }); refetchItem(); onChanged(); } catch {}
   };
   const handleRegress = async () => {
     if (!itemId) return;
-    try { await api(`/api/content/${itemId}/regress`, { method: "POST" }); refetchItem(); onChanged(); } catch { showToast("Failed to regress stage", "error"); }
+    try { await api(`/api/content/${itemId}/regress`, { method: "POST" }); refetchItem(); onChanged(); } catch {}
   };
   const handleDelete = async () => {
     if (!itemId) return;
-    try { await api(`/api/content/${itemId}`, { method: "DELETE" }); onDeleted(); } catch { showToast("Failed to delete item", "error"); }
+    try { await api(`/api/content/${itemId}`, { method: "DELETE" }); onDeleted(); } catch {}
   };
 
   if (!itemId) {

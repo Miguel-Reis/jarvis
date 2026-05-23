@@ -474,6 +474,9 @@ export class WebSocketServer {
           // HMR proxy cleanup
           const proxyUpstream = ws.data?._proxyUpstream;
           if (proxyUpstream) {
+            proxyUpstream.onmessage = null;
+            proxyUpstream.onerror = null;
+            proxyUpstream.onclose = null;
             try { proxyUpstream.close(); } catch { /* ignore */ }
             return;
           }
@@ -517,6 +520,7 @@ export class WebSocketServer {
         sent++;
       } catch (error) {
         console.error('[WebSocketServer] Error broadcasting to client:', error);
+        this.clients.delete(client);
       }
     }
 

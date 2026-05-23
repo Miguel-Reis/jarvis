@@ -37,6 +37,11 @@ export type LaunchOptions = {
 
 export class AgentTaskManager {
   private tasks = new Map<string, AsyncTask>();
+  private cleanupTimer: ReturnType<typeof setInterval>;
+
+  constructor() {
+    this.cleanupTimer = setInterval(() => this.cleanup(), 5 * 60_000);
+  }
 
   /**
    * Launch a sub-agent task in the background. Returns task ID immediately.
@@ -132,6 +137,10 @@ export class AgentTaskManager {
       return all.filter(t => t.status === filter.status);
     }
     return all;
+  }
+
+  destroy(): void {
+    clearInterval(this.cleanupTimer);
   }
 
   /**

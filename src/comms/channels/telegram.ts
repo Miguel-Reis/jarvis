@@ -68,6 +68,7 @@ export class TelegramAdapter implements ChannelAdapter {
   private pollingInterval: number = 1000;
   private sttProvider: STTProvider | null = null;
   private allowedUsers: number[];
+  private pollAbortController: AbortController | null = null;
 
   constructor(token: string, opts?: { sttProvider?: STTProvider; allowedUsers?: number[] }) {
     this.token = token;
@@ -103,10 +104,13 @@ export class TelegramAdapter implements ChannelAdapter {
     }
 
     this.polling = true;
+    this.pollAbortController = new AbortController();
     this.startPolling();
   }
 
   async disconnect(): Promise<void> {
+    this.pollAbortController?.abort();
+    this.pollAbortController = null;
     this.polling = false;
     console.log('[TelegramAdapter] Disconnected');
   }
@@ -160,12 +164,15 @@ export class TelegramAdapter implements ChannelAdapter {
 
     while (this.polling) {
       try {
-        const updates = await this.getUpdates();
+        const updates = await this.getUpdates(this.pollAbortController?.signal);
 
         for (const update of updates) {
           await this.processUpdate(update);
         }
       } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          break;
+        }
         console.error('[TelegramAdapter] Polling error:', error);
       }
 
@@ -175,7 +182,7 @@ export class TelegramAdapter implements ChannelAdapter {
     console.log('[TelegramAdapter] Polling stopped');
   }
 
-  private async getUpdates(): Promise<TelegramUpdate[]> {
+  private async getUpdates(signal?: AbortSignal): Promise<TelegramUpdate[]> {
     const response = await fetch(`${this.baseUrl}/getUpdates`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -184,6 +191,7 @@ export class TelegramAdapter implements ChannelAdapter {
         timeout: 30,
         allowed_updates: ['message'],
       }),
+      signal,
     });
 
     const data: TelegramGetUpdatesResponse = await response.json() as TelegramGetUpdatesResponse;

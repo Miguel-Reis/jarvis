@@ -347,10 +347,10 @@ export class DeepMemorySynthesisService implements Service {
         const e1 = entities[i]!;
         const e2 = entities[j]!;
 
-        const tags1 = (e1.tags || '').split(',').map(t => t.trim()).filter(Boolean);
-        const tags2 = (e2.tags || '').split(',').map(t => t.trim()).filter(Boolean);
+        const tags1 = ((e1 as any).tags || '').split(',').map((t: string) => t.trim()).filter(Boolean);
+        const tags2 = ((e2 as any).tags || '').split(',').map((t: string) => t.trim()).filter(Boolean);
 
-        const commonTags = tags1.filter(t => tags2.includes(t));
+        const commonTags = tags1.filter((t: string) => tags2.includes(t));
         if (commonTags.length >= 2) {
           const strength = Math.min(1, commonTags.length / 5);
 

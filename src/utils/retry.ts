@@ -189,5 +189,5 @@ export async function parallelRetry<T extends (() => Promise<void>)[]>(
     console.error(`[${name}] failed after ${maxRetries + 1} attempts:`, lastErr?.message);
   };
 
-  await Promise.all(fns.map((fn, i) => runWithRetry(fn, names[i])));
+  await Promise.all(fns.map((fn, i) => runWithRetry(fn, names[i]!)));
 }

@@ -52,6 +52,13 @@ export function topologicalSort(definition: WorkflowDefinition): string[][] {
     queue = nextQueue;
   }
 
+  // Cycle detection: if any node never reached in-degree 0, a cycle exists
+  const processedNodes = new Set(levels.flat());
+  const cycleNodes = [...nodeIds].filter(id => !processedNodes.has(id));
+  if (cycleNodes.length > 0) {
+    throw new Error(`WorkflowError: Cycle detected involving nodes: ${cycleNodes.join(', ')}`);
+  }
+
   return levels;
 }
 

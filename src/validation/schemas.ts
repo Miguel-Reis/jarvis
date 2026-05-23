@@ -139,6 +139,15 @@ export const v = {
       }
       return { success: true, data: value as Record<string, unknown> };
     },
+    optional: (value: unknown, path: string[] = []): ValidationResult<Record<string, unknown> | undefined> => {
+      if (value === undefined || value === null) {
+        return { success: true, data: undefined };
+      }
+      if (typeof value !== 'object' || Array.isArray(value)) {
+        return { success: false, error: new ValidationError('Expected object', path, 'invalid_type') };
+      }
+      return { success: true, data: value as Record<string, unknown> };
+    },
   },
 
   array: {

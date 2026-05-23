@@ -237,9 +237,9 @@ export class MetricsCollector {
       const samples = counter.getSamples();
       if (samples.length > 0) {
         const last = samples[samples.length - 1];
-        const labelsStr = this.formatLabels(last.labels);
-        lines.push(`# TYPE ${last.name} counter`);
-        lines.push(`${last.name}${labelsStr} ${last.value}`);
+        const labelsStr = this.formatLabels(last!.labels);
+        lines.push(`# TYPE ${last!.name} counter`);
+        lines.push(`${last!.name}${labelsStr} ${last!.value}`);
       }
     }
 
@@ -261,9 +261,9 @@ export class MetricsCollector {
       const samples = gauge.getSamples();
       if (samples.length > 0) {
         const last = samples[samples.length - 1];
-        const labelsStr = this.formatLabels(last.labels);
-        lines.push(`# TYPE ${last.name} gauge`);
-        lines.push(`${last.name}${labelsStr} ${last.value}`);
+        const labelsStr = this.formatLabels(last!.labels);
+        lines.push(`# TYPE ${last!.name} gauge`);
+        lines.push(`${last!.name}${labelsStr} ${last!.value}`);
       }
     }
 

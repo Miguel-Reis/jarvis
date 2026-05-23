@@ -5,7 +5,7 @@
  * and a max timeout (detached execution). Resolves promises accordingly.
  */
 
-import type { RPCState, RPCTimeouts, RPCRequest } from './protocol.ts';
+import type { RPCState, RPCTimeouts } from './protocol.ts';
 import { DEFAULT_RPC_TIMEOUTS } from './protocol.ts';
 
 export interface PendingRPC {
