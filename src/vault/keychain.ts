@@ -8,6 +8,7 @@
  */
 
 import { randomBytes, createCipheriv, createDecipheriv } from 'node:crypto';
+import { logger } from '../logger.ts';
 import { existsSync, readFileSync, writeFileSync, mkdirSync, chmodSync, openSync, writeSync, closeSync, constants } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
@@ -77,7 +78,7 @@ function loadSecrets(): Record<string, string> {
     const json = decrypt(key, raw);
     return JSON.parse(json);
   } catch (err) {
-    console.warn('[Keychain] Failed to decrypt secrets file, starting fresh:', err);
+    logger.vault.warn('Failed to decrypt secrets file, starting fresh:', err);
     return {};
   }
 }
@@ -87,7 +88,7 @@ function saveSecrets(secrets: Record<string, string>): void {
   // Guard: refuse to write an empty map when a non-empty secrets file already exists.
   // This prevents a loadSecrets() failure from silently destroying all secrets on the next write.
   if (Object.keys(secrets).length === 0 && existsSync(SECRETS_PATH)) {
-    console.warn('[Keychain] Refusing to overwrite existing secrets file with an empty map — possible decrypt error earlier in this call chain.');
+    logger.vault.warn('Refusing to overwrite existing secrets file with an empty map — possible decrypt error earlier in this call chain.');
     return;
   }
   const key = getOrCreateKey();

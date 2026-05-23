@@ -1,4 +1,5 @@
 import { Database } from "bun:sqlite";
+import { logger } from '../logger.ts';
 
 let dbInstance: Database | null = null;
 
@@ -54,7 +55,7 @@ export function initDatabase(dbPath: string = ":memory:"): Database {
     // Create all tables
     createTables(dbInstance);
 
-    console.log(`Database initialized at: ${dbPath}`);
+    logger.vault.info(`Database initialized at: ${dbPath}`);
     return dbInstance;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

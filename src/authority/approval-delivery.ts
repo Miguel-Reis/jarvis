@@ -4,6 +4,7 @@
  */
 
 import type { ApprovalRequest } from './approval.ts';
+import { logger } from '../logger.ts';
 
 export type ApprovalBroadcaster = {
   broadcastApprovalRequest(request: ApprovalRequest): void;
@@ -38,7 +39,7 @@ export class ApprovalDelivery {
       try {
         await this.channelSender.broadcastToAll(message);
       } catch (err) {
-        console.error('[ApprovalDelivery] Failed to send to external channels:', err);
+        logger.authority.error('Failed to send to external channels:', err);
       }
     }
   }

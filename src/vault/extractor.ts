@@ -1,4 +1,5 @@
 import type { LLMProvider } from '../llm/provider.ts';
+import { logger } from '../logger.ts';
 import { createEntity, findEntities } from './entities.ts';
 import { createFact } from './facts.ts';
 import { createRelationship } from './relationships.ts';
@@ -169,7 +170,7 @@ export async function extractAndStore(
 
       // Validate type
       if (!isValidEntityType(type)) {
-        console.warn(`Invalid entity type: ${type}, skipping entity ${name}`);
+        logger.vault.warn(`Invalid entity type: ${type}, skipping entity ${name}`);
         continue;
       }
 
@@ -198,7 +199,7 @@ export async function extractAndStore(
       // Get subject entity ID
       const subjectId = entityMap.get(subject);
       if (!subjectId) {
-        console.warn(`Subject entity not found: ${subject}, skipping fact`);
+        logger.vault.warn(`Subject entity not found: ${subject}, skipping fact`);
         continue;
       }
 
@@ -217,7 +218,7 @@ export async function extractAndStore(
       const toId = entityMap.get(to);
 
       if (!fromId || !toId) {
-        console.warn(`Relationship entities not found: ${from} -> ${to}, skipping`);
+        logger.vault.warn(`Relationship entities not found: ${from} -> ${to}, skipping`);
         continue;
       }
 
@@ -240,7 +241,7 @@ export async function extractAndStore(
 
     return extraction;
   } catch (error) {
-    console.error('Failed to extract and store:', error);
+    logger.vault.error('Failed to extract and store:', error);
 
     // Return empty result on error
     return {
@@ -340,6 +341,6 @@ export function extractGoalCompletion(goal: {
       });
     }
   } catch (err) {
-    console.error('[Extractor] Failed to extract goal completion:', err);
+    logger.vault.error('Failed to extract goal completion:', err);
   }
 }

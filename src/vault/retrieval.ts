@@ -7,6 +7,7 @@
  */
 
 import { getDb } from './schema.ts';
+import { logger } from '../logger.ts';
 import { searchEntitiesByName, type Entity } from './entities.ts';
 import { findFacts, type Fact } from './facts.ts';
 import { getEntityRelationships } from './relationships.ts';
@@ -193,7 +194,7 @@ export function getKnowledgeForMessage(message: string): string {
     const profiles = retrieveForMessage(message);
     return formatKnowledgeContext(profiles);
   } catch (err) {
-    console.error('[Retrieval] Error querying vault:', err);
+    logger.vault.error('Error querying vault:', err);
     return '';
   }
 }

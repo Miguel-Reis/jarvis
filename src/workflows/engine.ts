@@ -11,6 +11,7 @@ import { VariableScope } from './variables.ts';
 import { topologicalSort, getOutgoingEdges, executeNode } from './executor.ts';
 import type { TemplateContext } from './template.ts';
 import * as vault from '../vault/workflows.ts';
+import { logger as log } from '../logger.ts';
 
 export class WorkflowEngine implements Service {
   name = 'workflow-engine';
@@ -86,7 +87,7 @@ export class WorkflowEngine implements Service {
 
     // Run in background (don't block the caller)
     this.runExecution(execution.id, workflowId, definition, triggerType, triggerData ?? {}).catch(err => {
-      console.error(`[WorkflowEngine] Execution ${execution.id} crashed: ${err.message}`);
+      log.workflow.error(`Execution ${execution.id} crashed: ${err.message}`);
     });
 
     return execution;
@@ -268,9 +269,9 @@ export class WorkflowEngine implements Service {
     };
 
     const logger: StepLogger = {
-      info: (msg) => console.log(`[Workflow:${nodeId}] ${msg}`),
-      warn: (msg) => console.warn(`[Workflow:${nodeId}] ${msg}`),
-      error: (msg) => console.error(`[Workflow:${nodeId}] ${msg}`),
+      info: (msg) => log.workflow.info(`[${nodeId}] ${msg}`),
+      warn: (msg) => log.workflow.warn(`[${nodeId}] ${msg}`),
+      error: (msg) => log.workflow.error(`[${nodeId}] ${msg}`),
     };
 
     const ctx: ExecutionContext = {
