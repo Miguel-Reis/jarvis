@@ -82,8 +82,8 @@ export class OllamaProvider implements LLMProvider {
   }
 
   async chat(messages: LLMMessage[], options: LLMOptions = {}): Promise<LLMResponse> {
-    const { model = this.defaultModel, temperature, tools, tool_choice } = options;
-    
+    const { model = this.defaultModel, temperature, max_tokens, tools, tool_choice } = options;
+
     // Compact history for Ollama's context limits
     const budget = calculateHistoryBudget(32000);
     const compactedMessages = compactHistory(messages, budget);
@@ -94,9 +94,10 @@ export class OllamaProvider implements LLMProvider {
       stream: false,
     };
 
-    if (temperature !== undefined) {
-      body.options = { temperature };
-    }
+    const ollamaOpts: Record<string, unknown> = {};
+    if (temperature !== undefined) ollamaOpts.temperature = temperature;
+    if (max_tokens !== undefined) ollamaOpts.num_predict = max_tokens;
+    if (Object.keys(ollamaOpts).length > 0) body.options = ollamaOpts;
 
     if (tools && tools.length > 0) {
       body.tools = this.convertTools(tools);
@@ -120,8 +121,8 @@ export class OllamaProvider implements LLMProvider {
   }
 
   async *stream(messages: LLMMessage[], options: LLMOptions = {}): AsyncIterable<LLMStreamEvent> {
-    const { model = this.defaultModel, temperature, tools, tool_choice } = options;
-    
+    const { model = this.defaultModel, temperature, max_tokens, tools, tool_choice } = options;
+
     // Compact history for Ollama's context limits
     const budget = calculateHistoryBudget(32000);
     const compactedMessages = compactHistory(messages, budget);
@@ -132,9 +133,10 @@ export class OllamaProvider implements LLMProvider {
       stream: true,
     };
 
-    if (temperature !== undefined) {
-      body.options = { temperature };
-    }
+    const ollamaOpts: Record<string, unknown> = {};
+    if (temperature !== undefined) ollamaOpts.temperature = temperature;
+    if (max_tokens !== undefined) ollamaOpts.num_predict = max_tokens;
+    if (Object.keys(ollamaOpts).length > 0) body.options = ollamaOpts;
 
     if (tools && tools.length > 0) {
       body.tools = this.convertTools(tools);

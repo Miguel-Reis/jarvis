@@ -352,9 +352,24 @@ export class GroqProvider implements LLMProvider {
       function: {
         name: tool.name,
         description: tool.description,
-        parameters: tool.parameters,
+        parameters: this.relaxOptionalParams(tool.parameters),
       },
     }));
+  }
+
+  // Groq's strict validator rejects optional parameters that are not nullable.
+  // Walk the schema and add nullable:true to any property absent from required[].
+  private relaxOptionalParams(schema: Record<string, unknown>): Record<string, unknown> {
+    if (schema.type !== 'object' || !schema.properties) return schema;
+    const required = (schema.required as string[]) ?? [];
+    const props: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(schema.properties as Record<string, unknown>)) {
+      let prop = val as Record<string, unknown>;
+      if (!required.includes(key)) prop = { ...prop, nullable: true };
+      if (prop.type === 'object') prop = this.relaxOptionalParams(prop);
+      props[key] = prop;
+    }
+    return { ...schema, properties: props };
   }
 
   private convertResponse(response: GroqResponse): LLMResponse {

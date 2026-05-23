@@ -8,9 +8,13 @@
  */
 
 import { randomBytes, createCipheriv, createDecipheriv } from 'node:crypto';
-import { existsSync, readFileSync, writeFileSync, mkdirSync, chmodSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, chmodSync, openSync, writeSync, closeSync, constants } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+
+// O_NOFOLLOW prevents symlink attacks when writing sensitive files.
+// Falls back to 0 on platforms that don't support it (Windows).
+const O_NOFOLLOW = constants.O_NOFOLLOW ?? 0;
 
 const JARVIS_DIR = join(homedir(), '.jarvis');
 const KEY_PATH = join(JARVIS_DIR, '.secrets.key');
@@ -21,7 +25,19 @@ const TAG_LENGTH = 16;
 
 function ensureDir(): void {
   if (!existsSync(JARVIS_DIR)) {
-    mkdirSync(JARVIS_DIR, { recursive: true });
+    mkdirSync(JARVIS_DIR, { recursive: true, mode: 0o700 });
+  } else {
+    try { chmodSync(JARVIS_DIR, 0o700); } catch {}
+  }
+}
+
+function writeSecure(filePath: string, data: string | Buffer): void {
+  const flags = constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | O_NOFOLLOW;
+  const fd = openSync(filePath, flags, 0o600);
+  try {
+    writeSync(fd, typeof data === 'string' ? Buffer.from(data) : data);
+  } finally {
+    closeSync(fd);
   }
 }
 
@@ -32,8 +48,7 @@ function getOrCreateKey(): Buffer {
     return Buffer.from(hex, 'hex');
   }
   const key = randomBytes(32);
-  writeFileSync(KEY_PATH, key.toString('hex'), { mode: 0o600 });
-  try { chmodSync(KEY_PATH, 0o600); } catch {}
+  writeSecure(KEY_PATH, key.toString('hex'));
   return key;
 }
 
@@ -78,8 +93,7 @@ function saveSecrets(secrets: Record<string, string>): void {
   const key = getOrCreateKey();
   const json = JSON.stringify(secrets);
   const encrypted = encrypt(key, json);
-  writeFileSync(SECRETS_PATH, encrypted, { mode: 0o600 });
-  try { chmodSync(SECRETS_PATH, 0o600); } catch {}
+  writeSecure(SECRETS_PATH, encrypted);
 }
 
 export function getSecret(name: string): string | null {
