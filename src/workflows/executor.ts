@@ -2,9 +2,54 @@
  * Graph Executor — topological sort, parallel branches, retry, fallback, self-heal
  */
 
-import type { WorkflowDefinition, WorkflowNode, WorkflowSettings, RetryPolicy } from './types.ts';
+import type { WorkflowDefinition, WorkflowNode, WorkflowSettings, RetryPolicy, NodeConfigField } from './types.ts';
 import type { NodeRegistry, NodeInput, NodeOutput, ExecutionContext } from './nodes/registry.ts';
 import { resolveAllTemplates, type TemplateContext } from './template.ts';
+
+export class WorkflowConfigError extends Error {
+  constructor(
+    public readonly nodeType: string,
+    public readonly errors: string[],
+  ) {
+    super(`Config validation failed for node '${nodeType}': ${errors.join('; ')}`);
+    this.name = 'WorkflowConfigError';
+  }
+}
+
+function validateNodeConfig(
+  schema: Record<string, NodeConfigField>,
+  config: Record<string, unknown>,
+): { valid: boolean; errors: string[] } {
+  const errors: string[] = [];
+
+  for (const [key, field] of Object.entries(schema)) {
+    const value = config[key];
+    const missing = value === undefined || value === null || value === '';
+
+    if (field.required && missing) {
+      errors.push(`required field '${key}' (${field.label}) is missing`);
+      continue;
+    }
+
+    if (!missing) {
+      const actual = typeof value;
+      if (field.type === 'number' && actual !== 'number') {
+        errors.push(`field '${key}' must be a number, got ${actual}`);
+      } else if (field.type === 'boolean' && actual !== 'boolean') {
+        errors.push(`field '${key}' must be a boolean, got ${actual}`);
+      } else if ((field.type === 'string' || field.type === 'code' || field.type === 'template') && actual !== 'string') {
+        errors.push(`field '${key}' must be a string, got ${actual}`);
+      } else if (field.type === 'select' && field.options) {
+        const valid = field.options.map(o => o.value);
+        if (!valid.includes(String(value))) {
+          errors.push(`field '${key}' must be one of [${valid.join(', ')}], got '${value}'`);
+        }
+      }
+    }
+  }
+
+  return { valid: errors.length === 0, errors };
+}
 
 /**
  * Topological sort of workflow nodes, grouped by execution level.
@@ -97,6 +142,14 @@ export async function executeNode(
 
   // Resolve template expressions in node config
   const resolvedConfig = resolveAllTemplates(node.config, templateCtx);
+
+  // Validate config against schema before executing
+  if (nodeDef.configSchema && Object.keys(nodeDef.configSchema).length > 0) {
+    const validation = validateNodeConfig(nodeDef.configSchema, resolvedConfig);
+    if (!validation.valid) {
+      throw new WorkflowConfigError(node.type, validation.errors);
+    }
+  }
 
   const retryPolicy: RetryPolicy = node.retryPolicy ?? {
     maxRetries: settings.maxRetries,
