@@ -218,7 +218,7 @@ Just A Rather Very Intelligent System
  */
 export async function startDaemon(userConfig?: Partial<DaemonConfig>): Promise<void> {
   // Load config from YAML (with defaults)
-  let jarvisConfig;
+  let jarvisConfig: Awaited<ReturnType<typeof loadConfig>>;
   try {
     jarvisConfig = await loadConfig();
   } catch (err) {

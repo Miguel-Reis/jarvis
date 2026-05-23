@@ -466,7 +466,7 @@ export function createApiRoutes(ctx: ApiContext): Record<string, unknown> {
         const limit = Math.min(parseInt(params.get('limit') ?? '20') || 20, 100);
 
         const db = getDb();
-        let rows;
+        let rows: unknown[];
         if (channel && channel !== 'all') {
           rows = db.prepare(
             'SELECT * FROM conversations WHERE channel = ? ORDER BY last_message_at DESC LIMIT ?'
