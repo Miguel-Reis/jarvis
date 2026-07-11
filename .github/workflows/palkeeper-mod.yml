@@ -24,6 +24,8 @@ jobs:
       - name: Clonar UE4SS (fork Palworld)
         shell: bash
         run: |
+          # os submódulos do UE4SS usam URLs SSH — reescrever para HTTPS
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
           git clone --recursive --depth 1 \
             -b "${{ github.event.inputs.ue4ss_ref || 'experimental-palworld' }}" \
             "https://github.com/${{ github.event.inputs.ue4ss_repo || 'Okaetsu/RE-UE4SS' }}" ue4ss
