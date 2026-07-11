@@ -51,8 +51,10 @@ export const DEFAULTS: AppConfig = {
       serverStatus: true,
       restarts: true,
       dailySummary: true,
+      events: true,
     },
   },
+  events: { enabled: true, countdownMinutes: [5, 2, 1], iniPath: "" },
   api: { port: 8300, host: "0.0.0.0", token: "" },
   messages: {
     restartWarning: "[PalKeeper] O servidor reinicia em {minutes} min!",
@@ -157,6 +159,10 @@ export function loadConfig(
   // Ordena os avisos por ordem decrescente para a contagem fazer sentido
   config.restart.countdownMinutes = [...config.restart.countdownMinutes].sort((a, b) => b - a);
   config.watchdog.countdownMinutes = [...config.watchdog.countdownMinutes].sort((a, b) => b - a);
+  config.events.countdownMinutes = [...config.events.countdownMinutes].sort((a, b) => b - a);
+  if (!config.events.iniPath) {
+    config.events.iniPath = `${config.palworld.savedPath}/Config/WindowsServer/PalWorldSettings.ini`;
+  }
   applyEnvOverrides(config, env);
   validate(config);
   return config;

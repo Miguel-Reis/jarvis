@@ -24,7 +24,47 @@ Não é um mod injetado: comunica **exclusivamente** via [REST API oficial](http
 - **Discord (webhooks, sem bot)** — join/leave, backups, alertas do watchdog, crash/restart do servidor e resumo diário (jogadores únicos, pico, uptime, playtime)
 - **API interna** — estado, jogadores online, histórico de métricas, leaderboard e CRUD de whitelist/bans, com auth por token
 
-Fases seguintes: event planner (eventos de settings com reversão automática) e dashboard web.
+**Fase 3 — Event planner:**
+
+- **Eventos `broadcast`** — sequências de mensagens announce (quiz, avisos de evento comunitário), únicos ou recorrentes por cron
+- **Eventos `settings-event`** — alteram valores do `PalWorldSettings.ini` (ex.: "Fim de semana XP x2" com `ExpRate`), reiniciam com avisos e **revertem automaticamente no fim** — a reversão fica persistida em SQLite e sobrevive a crashes/restarts do daemon
+- **Parser do INI byte-exato** — só as chaves pedidas mudam; espaçamento, ordem, chaves desconhecidas e line endings ficam intactos; backup do ficheiro antes de cada escrita
+- **CRUD via API** — criar/editar/apagar/disparar eventos em `/events`
+
+### Exemplos de eventos
+
+```bash
+# "Fim de semana XP x2": sextas 18h, dura 60h (até segunda 06h), reverte sozinho
+curl -X POST -H "Authorization: Bearer $PALKEEPER_API_TOKEN" -H "Content-Type: application/json" \
+  -d '{
+    "name": "Fim de semana XP x2",
+    "type": "settings-event",
+    "cronExpression": "0 18 * * 5",
+    "durationMinutes": 3600,
+    "payload": {
+      "settings": { "ExpRate": "2.000000", "PalCaptureRate": "1.500000" },
+      "startMessage": "Evento XP x2 ativo ate segunda de manha!",
+      "endMessage": "O evento XP x2 terminou. Obrigado a todos!"
+    }
+  }' http://127.0.0.1:8300/events
+
+# Quiz único no sábado às 21h
+curl -X POST -H "Authorization: Bearer $PALKEEPER_API_TOKEN" -H "Content-Type: application/json" \
+  -d '{
+    "name": "Quiz de sabado",
+    "type": "broadcast",
+    "startAt": "2026-07-18T21:00:00+01:00",
+    "payload": { "messages": [
+      { "text": "QUIZ! Primeira pergunta em 1 minuto...", "delaySeconds": 60 },
+      { "text": "Qual e o Pal numero 1 da Paldeck?" }
+    ]}
+  }' http://127.0.0.1:8300/events
+
+curl -H "Authorization: Bearer $PALKEEPER_API_TOKEN" http://127.0.0.1:8300/events
+curl -X POST -H "Authorization: Bearer $PALKEEPER_API_TOKEN" http://127.0.0.1:8300/events/1/trigger
+```
+
+Fase seguinte: dashboard web.
 
 ## Requisitos no servidor Palworld
 

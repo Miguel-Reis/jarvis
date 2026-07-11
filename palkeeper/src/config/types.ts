@@ -115,7 +115,16 @@ export interface DiscordConfig {
     serverStatus: boolean;
     restarts: boolean;
     dailySummary: boolean;
+    events: boolean;
   };
+}
+
+export interface EventsConfig {
+  enabled: boolean;
+  /** Countdown default dos restarts de settings-events */
+  countdownMinutes: number[];
+  /** Caminho do PalWorldSettings.ini (default: <savedPath>/Config/WindowsServer/PalWorldSettings.ini) */
+  iniPath: string;
 }
 
 export interface ApiConfig {
@@ -149,6 +158,7 @@ export interface AppConfig {
   motd: MotdConfig;
   leaderboard: LeaderboardConfig;
   discord: DiscordConfig;
+  events: EventsConfig;
   api: ApiConfig;
   messages: MessagesConfig;
 }

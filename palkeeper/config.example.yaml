@@ -100,6 +100,13 @@ discord:
     serverStatus: true
     restarts: true
     dailySummary: true
+    events: true
+
+# Event planner: eventos broadcast e settings-event (geridos via API /events)
+events:
+  enabled: true
+  countdownMinutes: [5, 2, 1] # avisos antes dos restarts dos settings-events
+  # iniPath: /palworld/Saved/Config/WindowsServer/PalWorldSettings.ini (default: derivado de savedPath)
 
 api:
   port: 8300

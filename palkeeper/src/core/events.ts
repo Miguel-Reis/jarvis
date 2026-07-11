@@ -19,7 +19,15 @@ export interface RestartEvent {
   ok?: boolean;
 }
 
+export interface GameEventLifecycle {
+  eventId: number;
+  name: string;
+  type: string;
+}
+
 export interface AppEventMap {
+  eventStarted: [event: GameEventLifecycle];
+  eventFinished: [event: GameEventLifecycle];
   playerJoined: [player: PalworldPlayer, meta: { firstVisit: boolean }];
   playerLeft: [player: PalworldPlayer];
   backupFinished: [event: BackupFinishedEvent];

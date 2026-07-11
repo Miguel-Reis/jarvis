@@ -7,6 +7,8 @@ import type { PlayerPoller } from "../core/player-poller.js";
 import type { RestartOrchestrator } from "../core/restart-orchestrator.js";
 import type { ServerState } from "../core/server-state.js";
 import type { AutosaveModule } from "../modules/autosave/index.js";
+import { validateEvent, type EventPlannerModule } from "../modules/events/index.js";
+import type { NewEvent } from "../modules/events/store.js";
 import type { LeaderboardModule } from "../modules/leaderboard/index.js";
 import type { MetricsModule } from "../modules/metrics/index.js";
 import type { ModerationModule } from "../modules/moderation/index.js";
@@ -25,6 +27,7 @@ export interface ApiDeps {
   leaderboard: LeaderboardModule | null;
   watchdog: WatchdogModule | null;
   metrics: MetricsModule | null;
+  planner: EventPlannerModule | null;
 }
 
 export function createApi(deps: ApiDeps): Express {
@@ -115,6 +118,64 @@ export function createApi(deps: ApiDeps): Express {
     if (!deps.moderation) return void res.status(503).json({ error: "moderação desativada" });
     const removed = await deps.moderation.unban(req.params.steamId, "api");
     res.status(removed ? 200 : 404).json({ ok: removed });
+  });
+
+  // ---- Event planner ----
+
+  app.get("/events", (_req, res) => {
+    res.json({ events: deps.planner?.store.list() ?? [] });
+  });
+
+  app.get("/events/:id", (req, res) => {
+    const event = deps.planner?.store.get(Number(req.params.id));
+    if (!event) return void res.status(404).json({ error: "evento não encontrado" });
+    res.json({ event, runs: deps.planner!.store.listRuns(event.id) });
+  });
+
+  app.post("/events", (req, res) => {
+    if (!deps.planner) return void res.status(503).json({ error: "event planner desativado" });
+    const body = req.body as NewEvent;
+    const errors = validateEvent(body);
+    if (errors.length > 0) return void res.status(400).json({ errors });
+    const event = deps.planner.store.create(body);
+    deps.planner.refreshSchedules();
+    res.status(201).json({ event });
+  });
+
+  app.put("/events/:id", (req, res) => {
+    if (!deps.planner) return void res.status(503).json({ error: "event planner desativado" });
+    const current = deps.planner.store.get(Number(req.params.id));
+    if (!current) return void res.status(404).json({ error: "evento não encontrado" });
+    const patch = req.body as Partial<NewEvent>;
+    const merged: NewEvent = {
+      name: patch.name ?? current.name,
+      type: current.type, // o tipo não muda depois de criado
+      cronExpression: patch.cronExpression !== undefined ? patch.cronExpression : current.cronExpression,
+      startAt: patch.startAt !== undefined ? patch.startAt : current.startAt,
+      durationMinutes: patch.durationMinutes !== undefined ? patch.durationMinutes : current.durationMinutes,
+      payload: patch.payload ?? current.payload,
+      enabled: patch.enabled ?? current.enabled,
+    };
+    const errors = validateEvent(merged);
+    if (errors.length > 0) return void res.status(400).json({ errors });
+    const event = deps.planner.store.update(current.id, merged);
+    deps.planner.refreshSchedules();
+    res.json({ event });
+  });
+
+  app.delete("/events/:id", (req, res) => {
+    if (!deps.planner) return void res.status(503).json({ error: "event planner desativado" });
+    const removed = deps.planner.store.delete(Number(req.params.id));
+    deps.planner.refreshSchedules();
+    res.status(removed ? 200 : 404).json({ ok: removed });
+  });
+
+  app.post("/events/:id/trigger", async (req, res) => {
+    if (!deps.planner) return void res.status(503).json({ error: "event planner desativado" });
+    const event = deps.planner.store.get(Number(req.params.id));
+    if (!event) return void res.status(404).json({ error: "evento não encontrado" });
+    const ok = await deps.planner.trigger(event.id);
+    res.status(ok ? 200 : 409).json({ ok });
   });
 
   app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {

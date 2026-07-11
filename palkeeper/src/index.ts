@@ -14,6 +14,7 @@ import { ServerState } from "./core/server-state.js";
 import { AutosaveModule } from "./modules/autosave/index.js";
 import { BackupService } from "./modules/backup/index.js";
 import { DiscordNotifyModule } from "./modules/discord-notify/index.js";
+import { EventPlannerModule } from "./modules/events/index.js";
 import { LeaderboardModule } from "./modules/leaderboard/index.js";
 import { MetricsModule } from "./modules/metrics/index.js";
 import { ModerationModule } from "./modules/moderation/index.js";
@@ -216,6 +217,22 @@ async function main(): Promise<void> {
     }).start();
   }
 
+  let planner: EventPlannerModule | null = null;
+  if (config.events.enabled) {
+    planner = new EventPlannerModule({
+      db,
+      logger: logger.child({ mod: "events" }),
+      events,
+      scheduler,
+      rest,
+      orchestrator,
+      serverState,
+      iniPath: config.events.iniPath,
+      defaultCountdownMinutes: config.events.countdownMinutes,
+    });
+    planner.start();
+  }
+
   // Poller de disponibilidade: alimenta o circuit breaker e o ServerState,
   // e garante a reconexão automática quando o servidor volta.
   await rest.probe();
@@ -260,6 +277,7 @@ async function main(): Promise<void> {
     leaderboard,
     watchdog,
     metrics,
+    planner,
   });
 
   const shutdown = (signal: string) => {
@@ -268,6 +286,7 @@ async function main(): Promise<void> {
     poller?.stop();
     watchdog?.stop();
     moderation?.stop();
+    planner?.stop();
     scheduler.stopAll();
     apiServer.close();
     db.close();
@@ -290,6 +309,7 @@ async function main(): Promise<void> {
       motd: config.motd.enabled ? `${config.motd.intervalMinutes}min` : "off",
       leaderboard: config.leaderboard.enabled ? config.leaderboard.cron : "off",
       discord: config.discord.enabled ? "on" : "off",
+      events: config.events.enabled ? config.events.iniPath : "off",
     },
     "PalKeeper pronto",
   );

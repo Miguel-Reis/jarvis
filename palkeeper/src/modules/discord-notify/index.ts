@@ -90,6 +90,19 @@ export class DiscordNotifyModule {
       });
     }
 
+    if (notify.events) {
+      events.on("eventStarted", (event) => {
+        void discord.send({
+          embeds: [{ title: `🎉 Evento iniciado: ${event.name}`, description: `Tipo: ${event.type}`, color: COLORS.blue }],
+        });
+      });
+      events.on("eventFinished", (event) => {
+        void discord.send({
+          embeds: [{ title: `🏁 Evento terminado: ${event.name}`, color: COLORS.grey }],
+        });
+      });
+    }
+
     if (notify.serverStatus) {
       events.on("serverOffline", () => {
         void discord.send({
