@@ -1,0 +1,22 @@
+services:
+  palkeeper:
+    build: .
+    container_name: palkeeper
+    restart: unless-stopped
+    # host networking: a REST API e o RCON do Palworld escutam em 127.0.0.1
+    network_mode: host
+    environment:
+      PALWORLD_ADMIN_PASSWORD: ${PALWORLD_ADMIN_PASSWORD:?define no .env}
+      PELICAN_API_KEY: ${PELICAN_API_KEY:-}
+      PALKEEPER_API_TOKEN: ${PALKEEPER_API_TOKEN:?define no .env}
+    volumes:
+      # config.yaml do PalKeeper
+      - ./config.yaml:/config/config.yaml:ro
+      # pasta Pal/Saved do servidor Palworld (ajusta ao volume do Pelican;
+      # rw porque a Fase 3 escreve o PalWorldSettings.ini)
+      - /var/lib/pelican/volumes/SEU-SERVIDOR/Pal/Saved:/palworld/Saved
+      # base de dados + backups do PalKeeper
+      - palkeeper-data:/data
+
+volumes:
+  palkeeper-data:

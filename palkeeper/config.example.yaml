@@ -1,0 +1,58 @@
+# Configuração do PalKeeper (copiar para config.yaml)
+# Secrets (passwords, tokens) vão SEMPRE por variáveis de ambiente:
+#   PALWORLD_ADMIN_PASSWORD  — AdminPassword do servidor Palworld
+#   PELICAN_API_KEY          — Client API key do Pelican Panel
+#   PALKEEPER_API_TOKEN      — token da API interna do PalKeeper
+
+timezone: Europe/Lisbon
+logLevel: info
+
+database:
+  path: /data/palkeeper.db
+
+palworld:
+  restUrl: http://127.0.0.1:8212
+  rcon:
+    enabled: true
+    host: 127.0.0.1
+    port: 25575
+  # Pasta Pal/Saved do servidor, montada read/write no container
+  savedPath: /palworld/Saved
+  requestTimeoutMs: 10000
+  maxRetries: 3
+  circuitBreaker:
+    failureThreshold: 5
+    cooldownSeconds: 30
+
+pelican:
+  enabled: true
+  url: https://painel.example.com
+  # Identificador curto do servidor (visível no URL do painel)
+  serverId: "abc123ef"
+
+autosave:
+  enabled: true
+  intervalMinutes: 15
+
+backup:
+  enabled: true
+  path: /data/backups
+  keep: 48
+
+restart:
+  enabled: true
+  cron: "0 6 * * *" # todos os dias às 06:00 (Europe/Lisbon)
+  countdownMinutes: [10, 5, 2, 1]
+  serverReturnTimeoutMinutes: 15
+
+api:
+  port: 8300
+  host: 0.0.0.0
+
+# Mensagens visíveis aos jogadores (PT-PT).
+# Nota: o announce do Palworld não suporta acentos de forma fiável em todos
+# os clientes — mantém as mensagens em ASCII simples se vires caracteres partidos.
+messages:
+  restartWarning: "[PalKeeper] O servidor reinicia em {minutes} min!"
+  restartNow: "[PalKeeper] O servidor vai reiniciar AGORA. Ate ja!"
+  restartDone: "[PalKeeper] Servidor de volta. Bom jogo!"
