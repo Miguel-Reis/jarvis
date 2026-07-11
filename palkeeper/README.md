@@ -4,15 +4,27 @@ Daemon nativo Linux de gestão para um servidor dedicado de **Palworld 1.0**.
 
 Não é um mod injetado: comunica **exclusivamente** via [REST API oficial](https://tech.palworldgame.com/api/rest-api/palwold-rest-api/) e RCON do servidor, por isso sobrevive a updates do jogo sem manutenção. Foi desenhado para correr semanas sem supervisão ao lado de um servidor gerido pelo **Pelican Panel** (binário Windows sob Proton-GE).
 
-## Funcionalidades (Fase 1 — MVP)
+## Funcionalidades
+
+**Fase 1 (MVP):**
 
 - **Auto-save agendado** — `POST /save` a cada N minutos (default 15)
 - **Backups** — após cada save, `tar.gz` da pasta `SaveGames/` com verificação de integridade (`Level.sav` presente e com tamanho > 0, dentro e fora do arquivo) e rotação (default: manter 48)
 - **Restart agendado** — cron configurável com contagem decrescente via announce (10/5/2/1 min), save final, shutdown gracioso e novo arranque via **API do Pelican**
 - **Resiliência** — retries exponenciais + circuit breaker: se o servidor estiver offline o daemon entra em modo de espera e reconecta sozinho; **nunca crasha**
-- **API interna** — `/healthz` e `/status` com auth por token
 
-Fases seguintes: watchdog de memória, tracking de sessões, boas-vindas, webhooks Discord, event planner (eventos de settings com reversão automática) e dashboard web.
+**Fase 2:**
+
+- **Watchdog de memória** — o Palworld tem memory leak conhecido: RAM do processo (via `/proc` do host) acima do limite OU FPS do servidor abaixo do limiar, sustentados N minutos, disparam a sequência de restart com avisos (com cooldown anti-loop)
+- **Tracking de sessões** — join/leave via polling de `/players` → playtime total, primeira/última visita, por jogador
+- **Boas-vindas** — announce personalizado ao entrar, com mensagem especial na primeira visita
+- **Moderação persistente** — whitelist/banlist em SQLite geridas pela API; em modo whitelist quem não está na lista é kickado automaticamente
+- **MOTD rotativo** — mensagens periódicas configuráveis
+- **Leaderboard** — top playtime semanal/mensal por announce e Discord
+- **Discord (webhooks, sem bot)** — join/leave, backups, alertas do watchdog, crash/restart do servidor e resumo diário (jogadores únicos, pico, uptime, playtime)
+- **API interna** — estado, jogadores online, histórico de métricas, leaderboard e CRUD de whitelist/bans, com auth por token
+
+Fases seguintes: event planner (eventos de settings com reversão automática) e dashboard web.
 
 ## Requisitos no servidor Palworld
 
@@ -123,9 +135,29 @@ Secrets **apenas** por variáveis de ambiente: `PALWORLD_ADMIN_PASSWORD`, `PELIC
 ```bash
 curl http://127.0.0.1:8300/healthz
 curl -H "Authorization: Bearer $PALKEEPER_API_TOKEN" http://127.0.0.1:8300/status
+curl -H "Authorization: Bearer $PALKEEPER_API_TOKEN" http://127.0.0.1:8300/players
+curl -H "Authorization: Bearer $PALKEEPER_API_TOKEN" "http://127.0.0.1:8300/leaderboard?period=weekly"
+curl -H "Authorization: Bearer $PALKEEPER_API_TOKEN" "http://127.0.0.1:8300/metrics/history?hours=24"
+
+# whitelist / bans
+curl -X POST -H "Authorization: Bearer $PALKEEPER_API_TOKEN" -H "Content-Type: application/json" \
+  -d '{"steamId":"steam_7656119...","name":"Miguel"}' http://127.0.0.1:8300/whitelist
+curl -X DELETE -H "Authorization: Bearer $PALKEEPER_API_TOKEN" http://127.0.0.1:8300/whitelist/steam_7656119...
+curl -X POST -H "Authorization: Bearer $PALKEEPER_API_TOKEN" -H "Content-Type: application/json" \
+  -d '{"steamId":"steam_7656119...","reason":"griefing"}' http://127.0.0.1:8300/bans
 ```
 
-`/status` devolve o estado do servidor (online/offline, circuito), o último save/backup e o resultado do último restart.
+`/status` devolve o estado do servidor (online/offline, circuito, jogadores online), o último save/backup, o estado do watchdog e o resultado do último restart.
+
+### Watchdog: acesso à RAM do processo
+
+O watchdog lê a RAM do `PalServer` no `/proc` do host. No `docker-compose.yml`, descomenta:
+
+```yaml
+- /proc:/host/proc:ro
+```
+
+Sem este volume o watchdog avisa no log e vigia apenas os FPS do servidor.
 
 ## Desenvolvimento
 

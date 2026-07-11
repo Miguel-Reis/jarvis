@@ -3,6 +3,7 @@
 #   PALWORLD_ADMIN_PASSWORD  — AdminPassword do servidor Palworld
 #   PELICAN_API_KEY          — Client API key do Pelican Panel
 #   PALKEEPER_API_TOKEN      — token da API interna do PalKeeper
+#   DISCORD_WEBHOOK_URL      — webhook do canal Discord (opcional)
 
 timezone: Europe/Lisbon
 logLevel: info
@@ -45,6 +46,61 @@ restart:
   countdownMinutes: [10, 5, 2, 1]
   serverReturnTimeoutMinutes: 15
 
+# Tracking de sessões (playtime, primeira/última visita) via polling de /players
+sessions:
+  enabled: true
+  pollIntervalSeconds: 15
+
+# Announce de boas-vindas ao entrar (mensagem especial na primeira visita)
+welcome:
+  enabled: true
+  delaySeconds: 5
+
+# Watchdog do memory leak: RAM do processo OU FPS baixos sustentados → restart
+watchdog:
+  enabled: false
+  checkIntervalSeconds: 60
+  memoryLimitMB: 28000        # ajusta à RAM do host
+  fpsThreshold: 15
+  sustainedMinutes: 5         # a condição tem de se manter este tempo
+  cooldownMinutes: 30         # intervalo mínimo entre restarts do watchdog
+  countdownMinutes: [5, 2, 1]
+  processName: PalServer      # procurado no /proc do host
+  procPath: /host/proc        # monta "- /proc:/host/proc:ro" no compose
+
+# Modo whitelist: quem não estiver na whitelist é kickado
+# (gerir via API: GET/POST/DELETE /whitelist)
+moderation:
+  whitelistEnabled: false
+
+# Mensagens periódicas rotativas
+motd:
+  enabled: false
+  intervalMinutes: 30
+  onlyWhenPlayersOnline: true
+  messages:
+    - "Dica: usa /save antes de sair de zona perigosa!"
+    - "Junta-te ao nosso Discord!"
+
+# Top playtime publicado por announce e Discord
+leaderboard:
+  enabled: false
+  cron: "0 21 * * 0" # domingos às 21:00
+  top: 5
+  period: weekly # weekly | monthly
+
+# Notificações Discord por webhook (DISCORD_WEBHOOK_URL via env)
+discord:
+  enabled: false
+  dailySummaryCron: "59 23 * * *"
+  notify:
+    joinLeave: true
+    backups: true
+    watchdog: true
+    serverStatus: true
+    restarts: true
+    dailySummary: true
+
 api:
   port: 8300
   host: 0.0.0.0
@@ -56,3 +112,6 @@ messages:
   restartWarning: "[PalKeeper] O servidor reinicia em {minutes} min!"
   restartNow: "[PalKeeper] O servidor vai reiniciar AGORA. Ate ja!"
   restartDone: "[PalKeeper] Servidor de volta. Bom jogo!"
+  welcome: "Bem-vindo de volta, {name}!"
+  welcomeFirst: "Bem-vindo ao servidor, {name}! Diverte-te!"
+  kickNotWhitelisted: "Nao estas na whitelist deste servidor."

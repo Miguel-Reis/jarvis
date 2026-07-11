@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from "node:f
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { logAction, type Db } from "../../core/db.js";
+import type { AppEvents } from "../../core/events.js";
 import type { Logger } from "../../core/logger.js";
 
 const execFileAsync = promisify(execFile);
@@ -25,6 +26,7 @@ export interface BackupServiceOptions {
   backupPath: string;
   /** Quantos backups válidos manter */
   keep: number;
+  events?: AppEvents;
 }
 
 /** Procura Level.sav dentro de SaveGames/ (fica em SaveGames/0/<world-guid>/Level.sav). */
@@ -88,6 +90,7 @@ export class BackupService {
       }
 
       this.rotate();
+      this.opts.events?.emit("backupFinished", { filePath, sizeBytes, valid, trigger });
       return { id: Number(inserted.lastInsertRowid), filePath, sizeBytes, valid };
     } catch (err) {
       logger.error({ err, trigger }, "falha ao criar backup");

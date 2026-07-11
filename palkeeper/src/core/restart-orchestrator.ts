@@ -4,6 +4,7 @@ import type { MessagesConfig } from "../config/types.js";
 import type { BackupService } from "../modules/backup/index.js";
 import { Mutex, sleep } from "../utils/async.js";
 import { logAction, type Db } from "./db.js";
+import type { AppEvents } from "./events.js";
 import type { Logger } from "./logger.js";
 import type { ServerState } from "./server-state.js";
 
@@ -17,6 +18,7 @@ export interface RestartOrchestratorOptions {
   messages: MessagesConfig;
   /** Minutos à espera que o servidor volte após o start */
   serverReturnTimeoutMinutes: number;
+  events?: AppEvents;
   /** Injetáveis para testes */
   sleepFn?: (ms: number) => Promise<void>;
   pollIntervalMs?: number;
@@ -63,6 +65,7 @@ export class RestartOrchestrator {
       const { db, logger } = this.opts;
       logger.info({ reason, countdownMinutes }, "sequência de restart iniciada");
       logAction(db, "system", "restart_started", { reason, countdownMinutes });
+      this.opts.events?.emit("restartStarted", { reason });
       try {
         if (this.opts.serverState.isOnline) {
           await this.countdown(countdownMinutes);
@@ -82,11 +85,13 @@ export class RestartOrchestrator {
           logger.error({ reason }, "restart falhou — servidor não voltou dentro do timeout");
         }
         this._lastResult = { at: new Date().toISOString(), reason, ok: backOnline };
+        this.opts.events?.emit("restartFinished", { reason, ok: backOnline });
         return backOnline;
       } catch (err) {
         logger.error({ err, reason }, "erro inesperado na sequência de restart");
         logAction(db, "system", "restart_failed", { reason, cause: String(err) });
         this._lastResult = { at: new Date().toISOString(), reason, ok: false };
+        this.opts.events?.emit("restartFinished", { reason, ok: false });
         return false;
       }
     });

@@ -24,11 +24,43 @@ export const DEFAULTS: AppConfig = {
     countdownMinutes: [10, 5, 2, 1],
     serverReturnTimeoutMinutes: 15,
   },
+  sessions: { enabled: true, pollIntervalSeconds: 15 },
+  welcome: { enabled: true, delaySeconds: 5 },
+  watchdog: {
+    enabled: false,
+    checkIntervalSeconds: 60,
+    memoryLimitMB: 28_000,
+    fpsThreshold: 15,
+    sustainedMinutes: 5,
+    cooldownMinutes: 30,
+    countdownMinutes: [5, 2, 1],
+    processName: "PalServer",
+    procPath: "/host/proc",
+  },
+  moderation: { whitelistEnabled: false },
+  motd: { enabled: false, intervalMinutes: 30, onlyWhenPlayersOnline: true, messages: [] },
+  leaderboard: { enabled: false, cron: "0 21 * * 0", top: 5, period: "weekly" },
+  discord: {
+    enabled: false,
+    webhookUrl: "",
+    dailySummaryCron: "59 23 * * *",
+    notify: {
+      joinLeave: true,
+      backups: true,
+      watchdog: true,
+      serverStatus: true,
+      restarts: true,
+      dailySummary: true,
+    },
+  },
   api: { port: 8300, host: "0.0.0.0", token: "" },
   messages: {
     restartWarning: "[PalKeeper] O servidor reinicia em {minutes} min!",
     restartNow: "[PalKeeper] O servidor vai reiniciar AGORA. Ate ja!",
     restartDone: "[PalKeeper] Servidor de volta. Bom jogo!",
+    welcome: "Bem-vindo de volta, {name}!",
+    welcomeFirst: "Bem-vindo ao servidor, {name}! Diverte-te!",
+    kickNotWhitelisted: "Nao estas na whitelist deste servidor.",
   },
 };
 
@@ -56,6 +88,7 @@ function applyEnvOverrides(config: AppConfig, env: NodeJS.ProcessEnv): void {
   if (env.PALWORLD_ADMIN_PASSWORD) config.palworld.adminPassword = env.PALWORLD_ADMIN_PASSWORD;
   if (env.PELICAN_API_KEY) config.pelican.apiKey = env.PELICAN_API_KEY;
   if (env.PALKEEPER_API_TOKEN) config.api.token = env.PALKEEPER_API_TOKEN;
+  if (env.DISCORD_WEBHOOK_URL) config.discord.webhookUrl = env.DISCORD_WEBHOOK_URL;
   if (env.PALKEEPER_LOG_LEVEL) config.logLevel = env.PALKEEPER_LOG_LEVEL;
 }
 
@@ -87,6 +120,19 @@ function validate(config: AppConfig): void {
   if (!config.api.token) {
     errors.push("api.token em falta — define a env PALKEEPER_API_TOKEN");
   }
+  if (config.discord.enabled && !config.discord.webhookUrl) {
+    errors.push("discord.webhookUrl em falta — define a env DISCORD_WEBHOOK_URL");
+  }
+  if (config.motd.enabled && config.motd.messages.length === 0) {
+    errors.push("motd.messages vazio com motd.enabled: true");
+  }
+  if (config.watchdog.enabled) {
+    if (config.watchdog.sustainedMinutes < 1) errors.push("watchdog.sustainedMinutes tem de ser >= 1");
+    if (config.watchdog.checkIntervalSeconds < 5) errors.push("watchdog.checkIntervalSeconds tem de ser >= 5");
+  }
+  if (config.leaderboard.enabled && !["weekly", "monthly"].includes(config.leaderboard.period)) {
+    errors.push(`leaderboard.period inválido: "${config.leaderboard.period}" (weekly|monthly)`);
+  }
   if (errors.length > 0) {
     throw new ConfigError(`Configuração inválida:\n  - ${errors.join("\n  - ")}`);
   }
@@ -110,6 +156,7 @@ export function loadConfig(
   const config = deepMerge(structuredClone(DEFAULTS), fileConfig);
   // Ordena os avisos por ordem decrescente para a contagem fazer sentido
   config.restart.countdownMinutes = [...config.restart.countdownMinutes].sort((a, b) => b - a);
+  config.watchdog.countdownMinutes = [...config.watchdog.countdownMinutes].sort((a, b) => b - a);
   applyEnvOverrides(config, env);
   validate(config);
   return config;

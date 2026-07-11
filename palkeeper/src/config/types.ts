@@ -55,6 +55,69 @@ export interface RestartConfig {
   serverReturnTimeoutMinutes: number;
 }
 
+export interface SessionsConfig {
+  enabled: boolean;
+  pollIntervalSeconds: number;
+}
+
+export interface WelcomeConfig {
+  enabled: boolean;
+  /** Segundos entre o join e o announce (deixa o jogador carregar) */
+  delaySeconds: number;
+}
+
+export interface WatchdogConfig {
+  enabled: boolean;
+  checkIntervalSeconds: number;
+  /** RAM do processo PalServer acima disto → restart (após sustentado) */
+  memoryLimitMB: number;
+  /** FPS do servidor abaixo disto → restart (após sustentado) */
+  fpsThreshold: number;
+  /** Quanto tempo a condição tem de se manter para disparar */
+  sustainedMinutes: number;
+  /** Tempo mínimo entre restarts do watchdog */
+  cooldownMinutes: number;
+  countdownMinutes: number[];
+  /** Nome do processo a procurar no /proc do host */
+  processName: string;
+  /** Ponto de montagem do /proc do host (":ro" no compose); vazio desativa a RAM */
+  procPath: string;
+}
+
+export interface ModerationConfig {
+  /** Modo whitelist: quem não estiver na whitelist é kickado */
+  whitelistEnabled: boolean;
+}
+
+export interface MotdConfig {
+  enabled: boolean;
+  intervalMinutes: number;
+  onlyWhenPlayersOnline: boolean;
+  messages: string[];
+}
+
+export interface LeaderboardConfig {
+  enabled: boolean;
+  cron: string;
+  top: number;
+  period: "weekly" | "monthly";
+}
+
+export interface DiscordConfig {
+  enabled: boolean;
+  /** URL do webhook (env DISCORD_WEBHOOK_URL) */
+  webhookUrl: string;
+  dailySummaryCron: string;
+  notify: {
+    joinLeave: boolean;
+    backups: boolean;
+    watchdog: boolean;
+    serverStatus: boolean;
+    restarts: boolean;
+    dailySummary: boolean;
+  };
+}
+
 export interface ApiConfig {
   port: number;
   host: string;
@@ -79,6 +142,13 @@ export interface AppConfig {
   autosave: AutosaveConfig;
   backup: BackupConfig;
   restart: RestartConfig;
+  sessions: SessionsConfig;
+  welcome: WelcomeConfig;
+  watchdog: WatchdogConfig;
+  moderation: ModerationConfig;
+  motd: MotdConfig;
+  leaderboard: LeaderboardConfig;
+  discord: DiscordConfig;
   api: ApiConfig;
   messages: MessagesConfig;
 }
