@@ -64,6 +64,8 @@ export interface WelcomeConfig {
   enabled: boolean;
   /** Segundos entre o join e o announce (deixa o jogador carregar) */
   delaySeconds: number;
+  /** true: entrega por mensagem privada via PalKeeperMod (fila /mod/pending-welcomes) */
+  viaMod: boolean;
 }
 
 export interface WatchdogConfig {
@@ -116,6 +118,8 @@ export interface DiscordConfig {
     restarts: boolean;
     dailySummary: boolean;
     events: boolean;
+    /** Relay do chat in-game (via PalKeeperMod) para o Discord */
+    chat: boolean;
   };
 }
 

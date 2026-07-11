@@ -1,0 +1,36 @@
+{
+  "_comentario": "Config do PalKeeperMod. Instalar em ue4ss/Mods/PalKeeperMod/config.json",
+
+  "palkeeperApi": {
+    "url": "http://127.0.0.1:8300",
+    "token": "MESMO-TOKEN-DA-ENV-PALKEEPER_API_TOKEN",
+    "timeoutMs": 3000
+  },
+
+  "commands": {
+    "prefix": "!",
+    "enabled": true
+  },
+
+  "adminSteamIds": ["steam_76561198000000000"],
+
+  "tags": {
+    "steam_76561198000000000": "[ADMIN]",
+    "steam_76561198000000001": "[VIP]"
+  },
+
+  "welcome": {
+    "enabled": true,
+    "privateMessage": "Bem-vindo, {name}! Escreve !help para veres os comandos.",
+    "privateMessageFirstVisit": "Bem-vindo pela primeira vez, {name}! Escreve !help para comecar."
+  },
+
+  "messages": {
+    "help": "Comandos: !playtime, !leaderboard, !eventos, !ping",
+    "helpAdmin": "Admin: !kick <steamId>, !ban <steamId> [razao], !broadcast <msg>, !save",
+    "unknownCommand": "Comando desconhecido. Escreve !help.",
+    "noPermission": "Nao tens permissao para esse comando.",
+    "saved": "Mundo gravado.",
+    "apiError": "Servico indisponivel, tenta mais tarde."
+  }
+}

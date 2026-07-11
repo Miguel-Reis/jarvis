@@ -1,0 +1,60 @@
+# Compila o PalKeeperMod.dll (mod C++ UE4SS) num runner Windows com MSVC.
+# Dispara manualmente ou quando o código do mod muda.
+name: palkeeper-mod
+
+on:
+  workflow_dispatch:
+    inputs:
+      ue4ss_repo:
+        description: "Repo do UE4SS (fork com suporte Palworld)"
+        default: "Okaetsu/RE-UE4SS"
+      ue4ss_ref:
+        description: "Branch/tag do UE4SS"
+        default: "experimental-palworld"
+  push:
+    paths:
+      - "palkeeper-mod/**"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Clonar UE4SS (fork Palworld)
+        shell: bash
+        run: |
+          git clone --recursive --depth 1 \
+            -b "${{ github.event.inputs.ue4ss_ref || 'experimental-palworld' }}" \
+            "https://github.com/${{ github.event.inputs.ue4ss_repo || 'Okaetsu/RE-UE4SS' }}" ue4ss
+
+      - name: Integrar o mod na árvore de cppmods
+        shell: bash
+        run: |
+          mkdir -p ue4ss/cppmods
+          cp -r palkeeper-mod ue4ss/cppmods/PalKeeperMod
+          echo 'includes("cppmods/PalKeeperMod")' >> ue4ss/xmake.lua
+
+      - uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: latest
+
+      - name: Compilar
+        shell: bash
+        working-directory: ue4ss
+        run: |
+          xmake f -m "Game__Shipping__Win64" -y
+          xmake build PalKeeperMod
+
+      - name: Recolher artefactos
+        shell: bash
+        working-directory: ue4ss
+        run: |
+          mkdir -p out/PalKeeperMod/dlls
+          find . -name "PalKeeperMod.dll" -exec cp {} out/PalKeeperMod/dlls/main.dll \;
+          cp cppmods/PalKeeperMod/config/palkeeper-mod.json out/PalKeeperMod/config.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PalKeeperMod
+          path: ue4ss/out/

@@ -119,14 +119,17 @@ async function main(): Promise<void> {
     scheduler.scheduleEveryMinutes("sessions-touch", 1, () => sessions!.touch());
   }
 
+  let welcome: WelcomeModule | null = null;
   if (config.welcome.enabled) {
-    new WelcomeModule({
+    welcome = new WelcomeModule({
       events,
       rest,
       logger: logger.child({ mod: "welcome" }),
       messages: config.messages,
       delaySeconds: config.welcome.delaySeconds,
-    }).start();
+      viaMod: config.welcome.viaMod,
+    });
+    welcome.start();
   }
 
   let moderation: ModerationModule | null = null;
@@ -278,6 +281,12 @@ async function main(): Promise<void> {
     watchdog,
     metrics,
     planner,
+    db,
+    sessions,
+    welcome,
+    discord,
+    discordChatRelay: config.discord.notify.chat,
+    restartCountdownMinutes: config.restart.countdownMinutes,
   });
 
   const shutdown = (signal: string) => {

@@ -25,7 +25,7 @@ export const DEFAULTS: AppConfig = {
     serverReturnTimeoutMinutes: 15,
   },
   sessions: { enabled: true, pollIntervalSeconds: 15 },
-  welcome: { enabled: true, delaySeconds: 5 },
+  welcome: { enabled: true, delaySeconds: 5, viaMod: false },
   watchdog: {
     enabled: false,
     checkIntervalSeconds: 60,
@@ -52,6 +52,7 @@ export const DEFAULTS: AppConfig = {
       restarts: true,
       dailySummary: true,
       events: true,
+      chat: false,
     },
   },
   events: { enabled: true, countdownMinutes: [5, 2, 1], iniPath: "" },

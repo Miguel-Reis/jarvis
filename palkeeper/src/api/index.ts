@@ -1,7 +1,9 @@
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import type { Server } from "node:http";
+import type { DiscordWebhookClient } from "../clients/discord-webhook.js";
 import type { PalworldRestClient } from "../clients/palworld-rest.js";
 import type { ApiConfig } from "../config/types.js";
+import { logAction, type Db } from "../core/db.js";
 import type { Logger } from "../core/logger.js";
 import type { PlayerPoller } from "../core/player-poller.js";
 import type { RestartOrchestrator } from "../core/restart-orchestrator.js";
@@ -12,7 +14,9 @@ import type { NewEvent } from "../modules/events/store.js";
 import type { LeaderboardModule } from "../modules/leaderboard/index.js";
 import type { MetricsModule } from "../modules/metrics/index.js";
 import type { ModerationModule } from "../modules/moderation/index.js";
+import type { SessionsModule } from "../modules/sessions/index.js";
 import type { WatchdogModule } from "../modules/watchdog/index.js";
+import type { WelcomeModule } from "../modules/welcome/index.js";
 
 export interface ApiDeps {
   config: ApiConfig;
@@ -28,6 +32,13 @@ export interface ApiDeps {
   watchdog: WatchdogModule | null;
   metrics: MetricsModule | null;
   planner: EventPlannerModule | null;
+  db: Db;
+  sessions: SessionsModule | null;
+  welcome: WelcomeModule | null;
+  discord: DiscordWebhookClient | null;
+  /** relay do chat in-game para o Discord (config discord.notify.chat) */
+  discordChatRelay: boolean;
+  restartCountdownMinutes: number[];
 }
 
 export function createApi(deps: ApiDeps): Express {
@@ -118,6 +129,98 @@ export function createApi(deps: ApiDeps): Express {
     if (!deps.moderation) return void res.status(503).json({ error: "moderação desativada" });
     const removed = await deps.moderation.unban(req.params.steamId, "api");
     res.status(removed ? 200 : 404).json({ ok: removed });
+  });
+
+  // ---- Ações administrativas (usadas pelo PalKeeperMod e pelo dashboard) ----
+
+  app.post("/actions/announce", async (req, res) => {
+    const { message } = req.body as { message?: string };
+    if (!message?.trim()) return void res.status(400).json({ error: "message em falta" });
+    try {
+      await deps.rest.announce(message);
+      logAction(deps.db, "api", "announce", { message });
+      res.json({ ok: true });
+    } catch {
+      res.status(503).json({ error: "servidor indisponível" });
+    }
+  });
+
+  app.post("/actions/save", async (_req, res) => {
+    try {
+      await deps.rest.save();
+      logAction(deps.db, "api", "save", { source: "api" });
+      res.json({ ok: true });
+    } catch {
+      res.status(503).json({ error: "servidor indisponível" });
+    }
+  });
+
+  app.post("/actions/kick", async (req, res) => {
+    const { steamId, message } = req.body as { steamId?: string; message?: string };
+    if (!steamId) return void res.status(400).json({ error: "steamId em falta" });
+    try {
+      await deps.rest.kick(steamId, message ?? "Kicked");
+      logAction(deps.db, "api", "kick", { steamId });
+      res.json({ ok: true });
+    } catch {
+      res.status(503).json({ error: "servidor indisponível" });
+    }
+  });
+
+  app.post("/actions/restart", (req, res) => {
+    if (deps.orchestrator.inProgress) return void res.status(409).json({ error: "restart já em curso" });
+    const { countdownMinutes } = req.body as { countdownMinutes?: number[] };
+    const countdown =
+      Array.isArray(countdownMinutes) && countdownMinutes.length > 0
+        ? countdownMinutes
+        : deps.restartCountdownMinutes;
+    void deps.orchestrator.execute("pedido pela API", countdown);
+    res.status(202).json({ ok: true, countdown });
+  });
+
+  // ---- Integração com o PalKeeperMod (mod C++ in-game) ----
+
+  app.get("/mod/playtime/:uid", (req, res) => {
+    const row = deps.db
+      .prepare(
+        `SELECT last_name AS name, steam_id AS steamId, total_playtime_seconds AS playtimeSeconds,
+                first_seen_at AS firstSeenAt
+         FROM players WHERE player_uid = ?`,
+      )
+      .get(req.params.uid) as { name: string; steamId: string; playtimeSeconds: number } | undefined;
+    if (!row) return void res.status(404).json({ error: "jogador desconhecido" });
+    res.json(row);
+  });
+
+  app.get("/mod/leaderboard", (_req, res) => {
+    if (!deps.sessions) return void res.status(503).json({ error: "sessões desativadas" });
+    const to = new Date();
+    const from = new Date(to.getTime() - 7 * 86_400_000);
+    res.json({ entries: deps.sessions.topPlaytime(from, to, 5) });
+  });
+
+  app.get("/mod/events/active", (_req, res) => {
+    const active = deps.planner?.store.list().filter((event) => event.status === "active") ?? [];
+    res.json({ events: active.map((event) => ({ id: event.id, name: event.name, type: event.type })) });
+  });
+
+  app.get("/mod/pending-welcomes", (_req, res) => {
+    res.json({ welcomes: deps.welcome?.drainPending() ?? [] });
+  });
+
+  app.post("/mod/chat", (req, res) => {
+    const { sender, playerUid, steamId, message } = req.body as {
+      sender?: string;
+      playerUid?: string;
+      steamId?: string;
+      message?: string;
+    };
+    if (!message) return void res.status(400).json({ error: "message em falta" });
+    logAction(deps.db, "mod", "chat", { sender, playerUid, steamId, message });
+    if (deps.discord && deps.discordChatRelay) {
+      void deps.discord.send({ content: `💬 **${sender ?? "?"}**: ${message.slice(0, 1500)}` });
+    }
+    res.json({ ok: true });
   });
 
   // ---- Event planner ----

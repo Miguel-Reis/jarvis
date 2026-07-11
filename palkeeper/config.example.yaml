@@ -55,6 +55,8 @@ sessions:
 welcome:
   enabled: true
   delaySeconds: 5
+  # true: entrega por mensagem privada através do PalKeeperMod (ver ../palkeeper-mod)
+  viaMod: false
 
 # Watchdog do memory leak: RAM do processo OU FPS baixos sustentados → restart
 watchdog:
@@ -101,6 +103,7 @@ discord:
     restarts: true
     dailySummary: true
     events: true
+    chat: false # relay do chat in-game (requer o PalKeeperMod)
 
 # Event planner: eventos broadcast e settings-event (geridos via API /events)
 events:
