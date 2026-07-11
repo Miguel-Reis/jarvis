@@ -1,0 +1,6 @@
+# artefactos de build (xmake/MSVC)
+.xmake/
+build/
+*.dll
+*.pdb
+*.obj
