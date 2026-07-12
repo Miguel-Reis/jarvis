@@ -64,7 +64,9 @@ curl -H "Authorization: Bearer $PALKEEPER_API_TOKEN" http://127.0.0.1:8300/event
 curl -X POST -H "Authorization: Bearer $PALKEEPER_API_TOKEN" http://127.0.0.1:8300/events/1/trigger
 ```
 
-Fase seguinte: dashboard web.
+**Fase 4 — Dashboard web:**
+
+Página única (HTML+JS vanilla, sem build) servida pelo próprio daemon em `http://<host>:8300/` — estado do servidor, jogadores online (com kick), métricas das últimas 24h (FPS, jogadores, RAM, com tooltip e vista de tabela), lista de eventos (com disparo manual) e ações rápidas (guardar mundo, announce, restart com avisos). Auth pelo mesmo token da API, pedido no primeiro acesso e guardado no browser. Suporta modo claro/escuro automático.
 
 ## Requisitos no servidor Palworld
 

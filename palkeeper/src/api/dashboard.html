@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PalKeeper</title>
+<style>
+  :root {
+    --surface: #fcfcfb; --page: #f9f9f7;
+    --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+    --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10);
+    --fps: #2a78d6; --players: #1baf7a; --ram: #4a3aa7;
+    --good: #0ca30c; --critical: #d03b3b; --warning: #fab219;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --surface: #1a1a19; --page: #0d0d0d;
+      --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+      --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+      --fps: #3987e5; --players: #199e70; --ram: #9085e9;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--page); color: var(--ink);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 1080px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 18px; margin: 8px 0 16px; }
+  h1 small { color: var(--muted); font-weight: normal; }
+  h2 { font-size: 13px; color: var(--ink-2); margin: 0 0 8px; text-transform: uppercase; letter-spacing: .04em; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 14px; margin-bottom: 14px;
+  }
+  .row { display: flex; flex-wrap: wrap; gap: 14px; }
+  .row > .card { flex: 1 1 140px; margin-bottom: 0; }
+  .tile-label { color: var(--muted); font-size: 12px; }
+  .tile-value { font-size: 26px; font-weight: 600; margin-top: 2px; }
+  .tile-sub { color: var(--ink-2); font-size: 12px; }
+  .ok { color: var(--good); } .bad { color: var(--critical); }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th { text-align: left; color: var(--muted); font-weight: 500; font-size: 12px; }
+  th, td { padding: 5px 8px 5px 0; border-bottom: 1px solid var(--grid); }
+  tr:last-child td { border-bottom: 0; }
+  button {
+    background: var(--surface); color: var(--ink); border: 1px solid var(--axis);
+    border-radius: 6px; padding: 6px 12px; cursor: pointer; font: inherit;
+  }
+  button:hover { border-color: var(--muted); }
+  button.danger { color: var(--critical); }
+  input[type=text], input[type=password] {
+    background: var(--surface); color: var(--ink); border: 1px solid var(--axis);
+    border-radius: 6px; padding: 6px 10px; font: inherit; flex: 1;
+  }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+  .chart-title { font-size: 12px; color: var(--ink-2); display: flex; justify-content: space-between; }
+  .chart-title b { color: var(--ink); font-variant-numeric: tabular-nums; }
+  svg text { font: 10px system-ui, sans-serif; fill: var(--muted); }
+  .tooltip {
+    position: fixed; pointer-events: none; background: var(--surface); color: var(--ink);
+    border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; font-size: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.15); display: none; z-index: 10; white-space: nowrap;
+  }
+  details summary { cursor: pointer; color: var(--muted); font-size: 12px; margin-top: 6px; }
+  .muted { color: var(--muted); }
+  #login { max-width: 420px; margin: 20vh auto; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <section id="login" class="card">
+    <h2>PalKeeper</h2>
+    <p class="muted">Introduz o token da API (env <code>PALKEEPER_API_TOKEN</code>).</p>
+    <div class="actions">
+      <input type="password" id="token-input" placeholder="token">
+      <button id="login-btn">Entrar</button>
+    </div>
+    <p id="login-error" class="bad hidden">Token inválido.</p>
+  </section>
+
+  <section id="app" class="hidden">
+    <h1>PalKeeper <small id="server-name"></small></h1>
+
+    <div class="row" id="tiles">
+      <div class="card"><div class="tile-label">Estado</div><div class="tile-value" id="t-status">—</div><div class="tile-sub" id="t-circuit"></div></div>
+      <div class="card"><div class="tile-label">Jogadores</div><div class="tile-value" id="t-players">—</div><div class="tile-sub" id="t-restart"></div></div>
+      <div class="card"><div class="tile-label">FPS do servidor</div><div class="tile-value" id="t-fps">—</div><div class="tile-sub">agora</div></div>
+      <div class="card"><div class="tile-label">RAM</div><div class="tile-value" id="t-ram">—</div><div class="tile-sub" id="t-uptime"></div></div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <h2>Ações</h2>
+      <div class="actions">
+        <button id="a-save">💾 Guardar mundo</button>
+        <button id="a-restart" class="danger">🔄 Reiniciar (com avisos)</button>
+        <input type="text" id="a-announce-text" placeholder="Mensagem para os jogadores…">
+        <button id="a-announce">📢 Announce</button>
+        <span id="a-feedback" class="muted"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Métricas — últimas 24h</h2>
+      <div class="charts">
+        <div><div class="chart-title"><span>FPS do servidor</span><b id="v-fps"></b></div><div id="c-fps"></div></div>
+        <div><div class="chart-title"><span>Jogadores online</span><b id="v-players"></b></div><div id="c-players"></div></div>
+        <div><div class="chart-title"><span>RAM (MB)</span><b id="v-ram"></b></div><div id="c-ram"></div></div>
+      </div>
+      <details><summary>Ver dados em tabela</summary><div id="metrics-table" style="max-height:240px;overflow:auto"></div></details>
+    </div>
+
+    <div class="row" style="align-items:flex-start">
+      <div class="card" style="flex:2 1 380px">
+        <h2>Jogadores online</h2>
+        <table id="players-table"><thead><tr><th>Nome</th><th>Nível</th><th>Ping</th><th></th></tr></thead><tbody></tbody></table>
+        <p id="players-empty" class="muted">Ninguém online.</p>
+      </div>
+      <div class="card" style="flex:3 1 420px">
+        <h2>Eventos</h2>
+        <table id="events-table"><thead><tr><th>Nome</th><th>Tipo</th><th>Agendamento</th><th>Estado</th><th></th></tr></thead><tbody></tbody></table>
+        <p id="events-empty" class="muted">Sem eventos configurados.</p>
+      </div>
+    </div>
+    <p class="muted" id="updated"></p>
+  </section>
+</main>
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+let token = localStorage.getItem("palkeeper-token") || "";
+
+async function api(path, options = {}) {
+  const response = await fetch(path, {
+    ...options,
+    headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json", ...(options.headers || {}) },
+  });
+  if (response.status === 401) throw new Error("401");
+  return response.json();
+}
+
+// ---------- login ----------
+$("login-btn").onclick = async () => {
+  token = $("token-input").value.trim();
+  try {
+    await api("/status");
+    localStorage.setItem("palkeeper-token", token);
+    start();
+  } catch {
+    $("login-error").classList.remove("hidden");
+  }
+};
+
+// ---------- refresh ----------
+async function refreshStatus() {
+  const [status, players] = await Promise.all([api("/status"), api("/players")]);
+  const online = status.server.status === "online";
+  $("t-status").textContent = online ? "online" : status.server.status;
+  $("t-status").className = "tile-value " + (online ? "ok" : "bad");
+  $("t-circuit").textContent = "circuito: " + status.server.circuit +
+    (status.restart.inProgress ? " · RESTART EM CURSO" : "");
+  $("t-players").textContent = players.players.length;
+  $("t-restart").textContent = status.restart.cron ? "restart: " + status.restart.cron : "";
+  if (status.watchdog) {
+    $("t-ram").textContent = status.watchdog.lastRamMB === null ? "n/d" : status.watchdog.lastRamMB + " MB";
+    $("t-fps").textContent = status.watchdog.lastFps ?? "—";
+  }
+  renderPlayers(players.players);
+  $("updated").textContent = "Atualizado às " + new Date().toLocaleTimeString("pt-PT");
+}
+
+function renderPlayers(players) {
+  const body = $("players-table").querySelector("tbody");
+  body.innerHTML = "";
+  $("players-empty").classList.toggle("hidden", players.length > 0);
+  for (const player of players) {
+    const row = document.createElement("tr");
+    row.innerHTML = `<td>${esc(player.name)}</td><td>${player.level ?? ""}</td><td>${player.ping ? Math.round(player.ping) : ""}</td>`;
+    const cell = document.createElement("td");
+    const kick = document.createElement("button");
+    kick.textContent = "Kick";
+    kick.className = "danger";
+    kick.onclick = async () => {
+      if (!confirm(`Kick ${player.name}?`)) return;
+      await api("/actions/kick", { method: "POST", body: JSON.stringify({ steamId: player.userId, message: "Kicked pelo administrador" }) });
+      feedback("kick enviado");
+    };
+    cell.appendChild(kick);
+    row.appendChild(cell);
+    body.appendChild(row);
+  }
+}
+
+async function refreshEvents() {
+  const { events } = await api("/events");
+  const body = $("events-table").querySelector("tbody");
+  body.innerHTML = "";
+  $("events-empty").classList.toggle("hidden", events.length > 0);
+  for (const event of events) {
+    const row = document.createElement("tr");
+    row.innerHTML = `<td>${esc(event.name)}</td><td>${event.type}</td>` +
+      `<td>${event.cronExpression ? esc(event.cronExpression) : new Date(event.startAt).toLocaleString("pt-PT")}</td>` +
+      `<td>${event.status}${event.enabled ? "" : " (desativado)"}</td>`;
+    const cell = document.createElement("td");
+    const trigger = document.createElement("button");
+    trigger.textContent = "Disparar";
+    trigger.onclick = async () => {
+      if (!confirm(`Disparar "${event.name}" agora?`)) return;
+      await api(`/events/${event.id}/trigger`, { method: "POST" });
+      feedback("evento disparado");
+      refreshEvents();
+    };
+    cell.appendChild(trigger);
+    row.appendChild(cell);
+    body.appendChild(row);
+  }
+}
+
+// ---------- gráficos (small multiples, série única, hover com crosshair) ----------
+const seriesColor = { fps: "var(--fps)", players: "var(--players)", ram: "var(--ram)" };
+
+async function refreshCharts() {
+  const { points } = await api("/metrics/history?hours=24");
+  drawChart("c-fps", "v-fps", points, (p) => p.server_fps, "");
+  drawChart("c-players", "v-players", points, (p) => p.player_count, "");
+  drawChart("c-ram", "v-ram", points, (p) => p.ram_bytes === null ? null : Math.round(p.ram_bytes / 1048576), " MB");
+  renderMetricsTable(points);
+  // tiles: sem watchdog ativo, usar o último ponto de métricas
+  const last = points[points.length - 1];
+  if (last) {
+    if (last.server_fps !== null) $("t-fps").textContent = last.server_fps;
+    if (last.ram_bytes !== null) $("t-ram").textContent = Math.round(last.ram_bytes / 1048576) + " MB";
+  }
+}
+
+function drawChart(containerId, valueId, points, pick, unit) {
+  const key = containerId.slice(2);
+  const container = $(containerId);
+  const data = points.map((p) => ({ ts: new Date(p.ts), value: pick(p) })).filter((d) => d.value !== null);
+  if (data.length === 0) { container.innerHTML = '<p class="muted">sem dados</p>'; $(valueId).textContent = ""; return; }
+  $(valueId).textContent = data[data.length - 1].value + unit;
+
+  const width = 320, height = 96, padLeft = 34, padBottom = 14, padTop = 6;
+  const t0 = data[0].ts.getTime(), t1 = data[data.length - 1].ts.getTime() || t0 + 1;
+  const max = Math.max(...data.map((d) => d.value), 1);
+  const x = (t) => padLeft + ((t - t0) / Math.max(1, t1 - t0)) * (width - padLeft - 4);
+  const y = (v) => padTop + (1 - v / max) * (height - padTop - padBottom);
+  const path = data.map((d, i) => (i ? "L" : "M") + x(d.ts.getTime()).toFixed(1) + "," + y(d.value).toFixed(1)).join("");
+
+  const gridY = [0, max / 2, max];
+  container.innerHTML =
+    `<svg viewBox="0 0 ${width} ${height}" style="width:100%;display:block" data-chart="${key}">` +
+    gridY.map((v) => `<line x1="${padLeft}" x2="${width - 4}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)" stroke-width="1"/>` +
+                     `<text x="${padLeft - 4}" y="${y(v) + 3}" text-anchor="end">${Math.round(v)}</text>`).join("") +
+    `<text x="${padLeft}" y="${height - 2}">${data[0].ts.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })}</text>` +
+    `<text x="${width - 4}" y="${height - 2}" text-anchor="end">${data[data.length - 1].ts.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })}</text>` +
+    `<path d="${path}" fill="none" stroke="${seriesColor[key]}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<line class="crosshair" y1="${padTop}" y2="${height - padBottom}" stroke="var(--axis)" stroke-width="1" style="display:none"/>` +
+    `<circle class="dot" r="4" fill="${seriesColor[key]}" stroke="var(--surface)" stroke-width="2" style="display:none"/>` +
+    `</svg>`;
+
+  const svg = container.firstChild;
+  svg.addEventListener("mousemove", (mouse) => {
+    const rect = svg.getBoundingClientRect();
+    const mx = ((mouse.clientX - rect.left) / rect.width) * width;
+    let best = data[0];
+    for (const d of data) if (Math.abs(x(d.ts.getTime()) - mx) < Math.abs(x(best.ts.getTime()) - mx)) best = d;
+    const cx = x(best.ts.getTime()), cy = y(best.value);
+    const crosshair = svg.querySelector(".crosshair"), dot = svg.querySelector(".dot"), tip = $("tooltip");
+    crosshair.setAttribute("x1", cx); crosshair.setAttribute("x2", cx); crosshair.style.display = "";
+    dot.setAttribute("cx", cx); dot.setAttribute("cy", cy); dot.style.display = "";
+    tip.style.display = "block";
+    tip.style.left = (mouse.clientX + 12) + "px"; tip.style.top = (mouse.clientY - 10) + "px";
+    tip.textContent = best.ts.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" }) + " · " + best.value + unit;
+  });
+  svg.addEventListener("mouseleave", () => {
+    svg.querySelector(".crosshair").style.display = "none";
+    svg.querySelector(".dot").style.display = "none";
+    $("tooltip").style.display = "none";
+  });
+}
+
+function renderMetricsTable(points) {
+  const rows = points.slice(-120).reverse().map((p) =>
+    `<tr><td>${new Date(p.ts).toLocaleTimeString("pt-PT")}</td><td>${p.server_fps ?? ""}</td>` +
+    `<td>${p.player_count ?? ""}</td><td>${p.ram_bytes ? Math.round(p.ram_bytes / 1048576) : ""}</td></tr>`).join("");
+  $("metrics-table").innerHTML =
+    `<table><thead><tr><th>Hora</th><th>FPS</th><th>Jogadores</th><th>RAM (MB)</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+// ---------- ações ----------
+function feedback(text) {
+  $("a-feedback").textContent = text + " ✓";
+  setTimeout(() => ($("a-feedback").textContent = ""), 4000);
+}
+$("a-save").onclick = async () => { await api("/actions/save", { method: "POST", body: "{}" }); feedback("save pedido"); };
+$("a-restart").onclick = async () => {
+  if (!confirm("Iniciar a sequência de restart (com contagem decrescente)?")) return;
+  await api("/actions/restart", { method: "POST", body: "{}" });
+  feedback("restart iniciado");
+};
+$("a-announce").onclick = async () => {
+  const message = $("a-announce-text").value.trim();
+  if (!message) return;
+  await api("/actions/announce", { method: "POST", body: JSON.stringify({ message }) });
+  $("a-announce-text").value = "";
+  feedback("announce enviado");
+};
+
+function esc(text) {
+  return String(text).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// ---------- arranque ----------
+async function start() {
+  $("login").classList.add("hidden");
+  $("app").classList.remove("hidden");
+  const tick = () => Promise.all([refreshStatus(), refreshEvents()]).catch(() => {});
+  const tickCharts = () => refreshCharts().catch(() => {});
+  await tick(); await tickCharts();
+  setInterval(tick, 15000);
+  setInterval(tickCharts, 60000);
+}
+
+if (token) {
+  api("/status").then(start).catch(() => localStorage.removeItem("palkeeper-token"));
+}
+</script>
+</body>
+</html>

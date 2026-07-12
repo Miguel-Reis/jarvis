@@ -1,5 +1,8 @@
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
+import { readFileSync } from "node:fs";
 import type { Server } from "node:http";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { DiscordWebhookClient } from "../clients/discord-webhook.js";
 import type { PalworldRestClient } from "../clients/palworld-rest.js";
 import type { ApiConfig } from "../config/types.js";
@@ -49,6 +52,15 @@ export function createApi(deps: ApiDeps): Express {
   app.get("/healthz", (_req, res) => {
     res.json({ ok: true });
   });
+
+  // Dashboard: página estática sem dados — os dados vêm dos endpoints
+  // autenticados via fetch com o token introduzido no browser.
+  const dashboardHtml = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "dashboard.html"), "utf8");
+  const serveDashboard = (_req: Request, res: Response) => {
+    res.type("html").send(dashboardHtml);
+  };
+  app.get("/", serveDashboard);
+  app.get("/dashboard", serveDashboard);
 
   // Auth por token em tudo o resto
   app.use((req: Request, res: Response, next: NextFunction) => {
