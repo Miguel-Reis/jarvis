@@ -21,14 +21,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Verificar acesso ao UEPseudo
+        shell: bash
+        run: |
+          # O submódulo deps/first/Unreal (Re-UE4SS/UEPseudo) é PRIVADO por
+          # licença da Epic: só contas GitHub ligadas a uma conta Epic Games
+          # (acesso ao código-fonte do UE) o conseguem clonar.
+          # Cria um PAT (repo read) numa conta com esse acesso e guarda-o no
+          # secret UEPSEUDO_TOKEN deste repositório.
+          if [ -z "${UEPSEUDO_TOKEN}" ]; then
+            echo "::error::Secret UEPSEUDO_TOKEN em falta — necessário para clonar o UEPseudo (privado; requer conta GitHub ligada à Epic Games). Ver palkeeper-mod/README.md."
+            exit 1
+          fi
+        env:
+          UEPSEUDO_TOKEN: ${{ secrets.UEPSEUDO_TOKEN }}
+
       - name: Clonar UE4SS (fork Palworld)
         shell: bash
         run: |
-          # os submódulos do UE4SS usam URLs SSH — reescrever para HTTPS
-          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          # submódulos declarados por SSH → HTTPS autenticado com o PAT
+          git config --global url."https://x-access-token:${UEPSEUDO_TOKEN}@github.com/".insteadOf "git@github.com:"
           git clone --recursive --depth 1 \
             -b "${{ github.event.inputs.ue4ss_ref || 'experimental-palworld' }}" \
             "https://github.com/${{ github.event.inputs.ue4ss_repo || 'Okaetsu/RE-UE4SS' }}" ue4ss
+        env:
+          UEPSEUDO_TOKEN: ${{ secrets.UEPSEUDO_TOKEN }}
 
       - name: Integrar o mod na árvore de cppmods
         shell: bash

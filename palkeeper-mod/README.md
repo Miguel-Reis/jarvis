@@ -35,6 +35,15 @@ jogador escreve no chat
 
 O UE4SS e os seus mods C++ compilam com **MSVC em Windows** (não há cross-compile suportado a partir de Linux).
 
+> **Pré-requisito obrigatório (licença da Epic):** o UE4SS depende do submódulo
+> privado [`Re-UE4SS/UEPseudo`](https://github.com/UE4SS-RE/RE-UE4SS/issues/577)
+> (pseudo-código do Unreal Engine). Para o clonar precisas de:
+> 1. Ligar a tua conta GitHub à tua conta **Epic Games** ([instruções da Epic](https://www.unrealengine.com/en-US/ue-on-github)) — dá-te acesso ao código-fonte do UE e ao UEPseudo;
+> 2. Para o CI: criar um Personal Access Token (scope `repo`) nessa conta e guardá-lo no secret **`UEPSEUDO_TOKEN`** do repositório.
+>
+> Sem isto, o clone falha com "Permission denied"/"could not read Username" — é
+> uma restrição de licença, não um erro do projeto.
+
 ### Via GitHub Actions (recomendado)
 
 O workflow `.github/workflows/palkeeper-mod.yml` (na raiz do repo) compila num runner Windows e publica o artefacto `PalKeeperMod` (com `dlls/main.dll` + `config.json`). Corre automaticamente quando o código do mod muda, ou manualmente (workflow_dispatch) escolhendo o fork/branch do UE4SS.
